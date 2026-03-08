@@ -6,7 +6,10 @@
       "Bash(gh *)",
       "Bash(grep *)",
       "Bash(cd *)",
-      "Bash(cd * && *)"      
+      "Bash(cd * && *)",
+      "Bash(cat *)",
+      "Bash(poetry run python manage.py check)",
+      "Bash(poetry run python manage.py makemigrations users associations)"
     ]
   }
 }

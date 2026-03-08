@@ -1,6 +1,0 @@
-[submodule "HusfelagAPI"]
-	path = HusfelagAPI
-	url = https://github.com/jonandri/husfelagAPI
-[submodule "HusfelagJS"]
-	path = HusfelagJS
-	url = https://github.com/jonandri/husfelagJS

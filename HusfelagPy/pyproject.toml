@@ -1,0 +1,32 @@
+[project]
+name = "husfelag-api"
+version = "0.1.0"
+description = "Húsfélag SaaS API"
+authors = [
+    {name = "jonandri"}
+]
+readme = "README.md"
+requires-python = "^3.10"
+dependencies = [
+    "django==4.1.*",
+    "djangorestframework==3.14.*",
+    "drf-spectacular>=0.27",
+    "django-cors-headers>=4.3",
+    "django-environ>=0.11",
+    "psycopg2-binary>=2.9",
+    "celery==5.3.4",
+    "redis>=5.0",
+    "gunicorn>=21.2",
+    "uvicorn[standard]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-django>=4.7",
+    "black>=24.0",
+    "flake8>=7.0",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

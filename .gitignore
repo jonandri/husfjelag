@@ -1,0 +1,17 @@
+# Python / Django
+HusfelagPy/.env
+HusfelagPy/__pycache__/
+HusfelagPy/**/__pycache__/
+HusfelagPy/**/*.pyc
+HusfelagPy/db.sqlite3
+
+# Node / React
+HusfelagJS/node_modules/
+HusfelagJS/.env.local
+HusfelagJS/.env.development.local
+HusfelagJS/.env.test.local
+HusfelagJS/.env.production.local
+HusfelagJS/build/
+
+# macOS
+.DS_Store
