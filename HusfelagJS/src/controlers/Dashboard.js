@@ -1,46 +1,40 @@
-import React, {useState} from 'react';
-import { Button, TextField, Box, Typography, ThemeProvider, Tabs, Tab } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserContext } from './UserContext';
 import { useEffect } from 'react';
+import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
+
 function Dashboard() {
-    const theme = useTheme();
     const navigate = useNavigate();
-    //check if user is logged in
     const { user } = React.useContext(UserContext);
 
-    useEffect(async () => {
+    useEffect(() => {
         if (!user) {
-            // Redirect to the dashboard
-            navigate('/');
+            navigate('/login');
+            return;
         }
-        let userId = user.id;
 
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/HouseAssociation/` + userId, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },            
-        })
-
-        if (response.ok && response.status === 200) {
-            console.log('Status: ' + response.status);
-            const data = await response.json();
-            if (data !== null) {
-                console.log('Form submitted successfully');
-                console.log(data);
-            } else {
-                console.log('No house association found for user');
-                // Redirect to the dashboard
-                navigate('HouseAssociation');
+        const fetchAssociation = async () => {
+            try {
+                const response = await fetch(`${API_URL}/Association/${user.id}`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data === null) {
+                        navigate('/houseassociation');
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch association:', err);
             }
-        } else {
-            console.log('Error: ' + response.status);
-        }
-      }, []); 
+        };
+
+        fetchAssociation();
+    }, [user]);
 
 
     return (

@@ -1,9 +1,12 @@
 import React from 'react';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './controlers/Login';
+import Logout from './controlers/Logout';
+import AuthCallback from './controlers/AuthCallback';
 import Dashboard from './controlers/Dashboard';
 import HouseAssociation from './controlers/HouseAssociation';
+import AssociationPage from './controlers/AssociationPage';
 import { UserContext } from './controlers/UserContext';
 
 // Create a custom theme
@@ -46,10 +49,13 @@ function App() {
       <ThemeProvider theme={theme}>
         <Router>
           <Routes>
-            <Route path="/" element={<Login />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/logout" element={<Logout />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/houseassociation" element={<HouseAssociation />} />
-            {/* other routes... */}
+            <Route path="/husfelag" element={<AssociationPage />} />
           </Routes>
         </Router> 
       </ThemeProvider>
