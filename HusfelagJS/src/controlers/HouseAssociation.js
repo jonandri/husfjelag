@@ -1,73 +1,130 @@
-import React, {useState} from 'react';
-import { Button, TextField, Box, Typography, ThemeProvider, Tabs, Tab } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import React, { useState } from 'react';
+import { Box, Button, TextField, Typography, CircularProgress, Alert, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from './UserContext';
 
-// Create a function to handle form submission
-function handleSubmit(event) {
-    event.preventDefault();
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
 
-    // Retrieve form inputs and validate data
+function HouseAssociationForm({ onCreated } = {}) {
+    const navigate = useNavigate();
+    const { user } = React.useContext(UserContext);
 
-    // Create a new HouseAssociation object with the entered details
+    const [ssn, setSsn] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [preview, setPreview] = useState(null);   // scraped data awaiting confirmation
+    const [saving, setSaving] = useState(false);
 
-    // Perform any additional actions (e.g., save to database)
+    const ssnError = ssn.length > 0 && ssn.length < 10
+        ? 'Kennitala verður að vera 10 tölustafir'
+        : '';
 
-    // Redirect or display success message
-}
+    const handleLookup = async () => {
+        setError('');
+        setPreview(null);
+        setLoading(true);
+        try {
+            const resp = await fetch(`${API_URL}/Association/lookup?ssn=${ssn}`);
+            const data = await resp.json();
+            if (!resp.ok) {
+                setError(data.detail || 'Villa við leit.');
+            } else {
+                setPreview(data);
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-function HouseAssociationForm() {
-    //onSubmit function
-    const [houseAssociationID, setPersonID] = useState('');
-    const handleHouseAssociationIDChange = (event) => {
-        setPersonID(event.target.value);
+    const handleConfirm = async () => {
+        setSaving(true);
+        setError('');
+        try {
+            const resp = await fetch(`${API_URL}/Association`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...preview, user_id: user.id }),
+            });
+            if (resp.ok) {
+                if (onCreated) { onCreated(); } else { navigate('/dashboard'); }
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við skráningu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
-        <div className='house-association'>
-            <br/>
-            <Box    
-                component="form"
-                onSubmit={handleSubmit}
-                sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center', // Add this line to center vertically
-                    border: '1px solid black',
-                    padding: '20px',
-                    width: '400px', // Set the width to 200px
-                    margin: '0 auto', // Add this line to center horizontally
-                }}
-                noValidate
-                autoComplete="off"
-            >
-
-                <img src={require('../assets/images/logo/logo-no-background.png')} alt="Logo" width={150}/>
-                <Typography variant="h4" component="h1">
-                    Húsfélag
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}>
+            <Box sx={{ width: 460, border: '1px solid #ccc', borderRadius: 2, p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <img src={require('../assets/images/logo/logo-no-background.png')} alt="Logo" width={120} style={{ alignSelf: 'center' }} />
+                <Typography variant="h5" textAlign="center">Skrá húsfélag</Typography>
+                <Typography variant="body2" color="text.secondary" textAlign="center">
+                    Sláðu inn kennitölu húsfélagsins til að fletta upp upplýsingum
                 </Typography>
-                
-                <Box p={3}>
-                    <div>
+
+                {!preview && (
+                    <>
                         <TextField
-                            required
-                            id="houseAssociationID"
-                            label="Kennitala"
-                            onChange={handleHouseAssociationIDChange}
-                            inputProps={{ pattern: "[0-9]{10}", title: "Setjið inn 10 stafa kennitölu (án bandstriks)" }}
-                            error={houseAssociationID.length > 10}
-                            helperText={houseAssociationID.length !== 10 ? "Sláið inn 10 stafa kennitölu" : ""}
+                            label="Kennitala húsfélagsins"
+                            value={ssn}
+                            onChange={e => setSsn(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                            inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                            error={!!ssnError}
+                            helperText={ssnError || `${ssn.length}/10`}
+                            fullWidth
                         />
-                    </div>
-                </Box>
+                        {error && <Alert severity="error">{error}</Alert>}
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            size="large"
+                            disabled={ssn.length !== 10 || loading}
+                            onClick={handleLookup}
+                            sx={{ color: '#fff' }}
+                        >
+                            {loading ? <CircularProgress size={22} color="inherit" /> : 'Fletta upp'}
+                        </Button>
+                    </>
+                )}
 
-                <Button variant="contained" type="submit">
-                    Innskrá
-                </Button>
-
-            </Box>          </div>
+                {preview && (
+                    <>
+                        <Divider />
+                        <Typography variant="subtitle1" fontWeight="bold">Staðfestið upplýsingarnar:</Typography>
+                        <Box sx={{ bgcolor: '#f5f5f5', borderRadius: 1, p: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography><strong>Nafn:</strong> {preview.name}</Typography>
+                            <Typography><strong>Kennitala:</strong> {preview.ssn}</Typography>
+                            <Typography><strong>Heimilisfang:</strong> {preview.address}</Typography>
+                            <Typography><strong>Póstnúmer:</strong> {preview.postal_code}</Typography>
+                            <Typography><strong>Borg:</strong> {preview.city}</Typography>
+                        </Box>
+                        {error && <Alert severity="error">{error}</Alert>}
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Button variant="outlined" fullWidth onClick={() => { setPreview(null); setError(''); }}>
+                                Til baka
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                fullWidth
+                                disabled={saving}
+                                onClick={handleConfirm}
+                                sx={{ color: '#fff' }}
+                            >
+                                {saving ? <CircularProgress size={22} color="inherit" /> : 'Staðfesta og skrá'}
+                            </Button>
+                        </Box>
+                    </>
+                )}
+            </Box>
+        </Box>
     );
 }
 

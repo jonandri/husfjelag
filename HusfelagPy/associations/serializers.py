@@ -1,8 +1,8 @@
 from rest_framework import serializers
-from .models import HouseAssociation
+from .models import Association
 
 
-class HouseAssociationSerializer(serializers.ModelSerializer):
+class AssociationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = HouseAssociation
-        fields = ["id", "kennitala", "name", "address", "email"]
+        model = Association
+        fields = ["id", "ssn", "name", "address", "postal_code", "city"]
