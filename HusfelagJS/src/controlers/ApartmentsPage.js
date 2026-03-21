@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Paper,
-    Table, TableHead, TableRow, TableCell, TableBody,
+    Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Button, TextField, Collapse, Chip, IconButton,
     Dialog, DialogTitle, DialogContent, DialogActions,
     Alert, Divider, Tooltip, DialogContentText,
@@ -107,6 +107,18 @@ function ApartmentsPage() {
                                     />
                                 ))}
                             </TableBody>
+                            <TableFooter>
+                                <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                    <TableCell>Samtals</TableCell>
+                                    <TableCell />
+                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share || 0), 0).toFixed(2)}%</TableCell>
+                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0).toFixed(2)}%</TableCell>
+                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0).toFixed(2)}%</TableCell>
+                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_eq || 0), 0).toFixed(2)}%</TableCell>
+                                    <TableCell />
+                                    <TableCell />
+                                </TableRow>
+                            </TableFooter>
                         </Table>
                     </Paper>
                 )}
@@ -421,7 +433,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDelete
             <DialogTitle>Eyða íbúð</DialogTitle>
             <DialogContent>
                 <DialogContentText>
-                    Ertu viss um að þú viljir eyða íbúð <strong>{apt.anr}</strong>? Þetta má ekki afturkalla.
+                    Ertu viss um að þú viljir eyða íbúð <strong>{apt.anr}</strong>? Þetta er ekki hægt að afturkalla.
                 </DialogContentText>
             </DialogContent>
             <DialogActions>
