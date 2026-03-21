@@ -6,7 +6,7 @@ from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models
 from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership
-from .serializers import AssociationSerializer, ApartmentSerializer
+from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer
 from .scraper import lookup_association
 from users.models import User
 
@@ -74,6 +74,14 @@ class AssociationLookupView(APIView):
             )
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+def _set_payer(apartment, ownership_id):
+    """Ensure only one payer per apartment. Clears all others, sets the given ownership."""
+    ApartmentOwnership.objects.filter(
+        apartment=apartment, deleted=False, is_payer=True
+    ).exclude(id=ownership_id).update(is_payer=False)
+    ApartmentOwnership.objects.filter(id=ownership_id).update(is_payer=True)
 
 
 def _recalc_share_eq(association):
@@ -260,10 +268,10 @@ class ApartmentOwnerView(APIView):
         except Apartment.DoesNotExist:
             return Response({"detail": "Apartment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            user = User.objects.get(kennitala=kennitala)
-        except User.DoesNotExist:
-            return Response({"detail": "Notandi með þessa kennitölu fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        user, _ = User.objects.get_or_create(
+            kennitala=kennitala,
+            defaults={"name": kennitala},
+        )
 
         _, created = ApartmentOwnership.objects.get_or_create(
             user=user, apartment=apartment,
@@ -275,10 +283,151 @@ class ApartmentOwnerView(APIView):
         return Response({"id": user.id, "name": user.name, "kennitala": user.kennitala}, status=status.HTTP_201_CREATED)
 
     def delete(self, request, apartment_id, owner_id):
-        """DELETE /Apartment/{apartment_id}/owner/{owner_id} — Remove an owner."""
+        """DELETE /Apartment/{apartment_id}/owner/{owner_id} — Soft-disable an owner."""
         try:
-            ownership = ApartmentOwnership.objects.get(id=owner_id, apartment_id=apartment_id)
-            ownership.delete()
+            ownership = ApartmentOwnership.objects.get(id=owner_id, apartment_id=apartment_id, deleted=False)
+            ownership.deleted = True
+            ownership.save(update_fields=["deleted"])
             return Response(status=status.HTTP_204_NO_CONTENT)
         except ApartmentOwnership.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class OwnerView(APIView):
+    def get(self, request, user_id):
+        """GET /Owner/{user_id} — List all ownerships for the user's association."""
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+        ownerships = ApartmentOwnership.objects.filter(
+            apartment__association=association
+        ).select_related("user", "apartment").order_by("apartment__anr", "user__name")
+        return Response(OwnershipSerializer(ownerships, many=True).data)
+
+    def post(self, request):
+        """POST /Owner — Create ownership. Body: {user_id, kennitala, apartment_id, share, is_payer}"""
+        requesting_user_id = request.data.get("user_id")
+        kennitala = request.data.get("kennitala", "").strip().replace("-", "")
+        apartment_id = request.data.get("apartment_id")
+        share = _parse_share(request.data.get("share", 0))
+        is_payer = request.data.get("is_payer", False)
+
+        if not kennitala or not apartment_id or share is None:
+            return Response({"detail": "kennitala, apartment_id og share eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            apartment = Apartment.objects.get(id=apartment_id, deleted=False)
+        except Apartment.DoesNotExist:
+            return Response({"detail": "Íbúð fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not Association.objects.filter(
+            id=apartment.association_id,
+            access_entries__user_id=requesting_user_id,
+            access_entries__active=True,
+        ).exists():
+            return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+
+        owner, created = User.objects.get_or_create(
+            kennitala=kennitala,
+            defaults={"name": kennitala},  # placeholder until they log in via Kenni
+        )
+
+        existing = ApartmentOwnership.objects.filter(user=owner, apartment=apartment).first()
+        if existing and not existing.deleted:
+            return Response({"detail": "Þessi eigandi er þegar skráður á þessa íbúð."}, status=status.HTTP_409_CONFLICT)
+
+        active_ownerships = ApartmentOwnership.objects.filter(apartment=apartment, deleted=False)
+        current_sum = active_ownerships.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0")
+        if current_sum + share > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall eigenda fer yfir 100% fyrir þessa íbúð."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # First owner always becomes payer
+        is_first = not active_ownerships.exists()
+        effective_payer = is_first or is_payer
+
+        if existing and existing.deleted:
+            existing.share = share
+            existing.is_payer = effective_payer
+            existing.deleted = False
+            existing.save(update_fields=["share", "is_payer", "deleted"])
+            if effective_payer:
+                _set_payer(apartment, existing.id)
+            return Response(OwnershipSerializer(existing).data, status=status.HTTP_200_OK)
+
+        ownership = ApartmentOwnership.objects.create(
+            user=owner, apartment=apartment, share=share, is_payer=effective_payer
+        )
+        if effective_payer:
+            _set_payer(apartment, ownership.id)
+        return Response(OwnershipSerializer(ownership).data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, ownership_id):
+        """PUT /Owner/update/{ownership_id} — Update share of an active ownership."""
+        try:
+            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=False)
+        except ApartmentOwnership.DoesNotExist:
+            return Response({"detail": "Eignarhald fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        share = _parse_share(request.data.get("share", ownership.share))
+        if share is None:
+            return Response({"detail": "Invalid share."}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_payer = request.data.get("is_payer", ownership.is_payer)
+
+        others = ApartmentOwnership.objects.filter(
+            apartment=ownership.apartment, deleted=False
+        ).exclude(id=ownership_id)
+        other_sum = others.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0")
+        if other_sum + share > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall eigenda fer yfir 100% fyrir þessa íbúð."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ownership.share = share
+        ownership.is_payer = is_payer
+        ownership.save(update_fields=["share", "is_payer"])
+        if is_payer:
+            _set_payer(ownership.apartment, ownership_id)
+        ownership.refresh_from_db()
+        return Response(OwnershipSerializer(ownership).data)
+
+    def delete(self, request, ownership_id):
+        """DELETE /Owner/delete/{ownership_id} — Soft-disable an ownership."""
+        try:
+            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=False)
+        except ApartmentOwnership.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        ownership.deleted = True
+        ownership.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, ownership_id):
+        """PATCH /Owner/enable/{ownership_id} — Re-enable an ownership with validation."""
+        try:
+            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=True)
+        except ApartmentOwnership.DoesNotExist:
+            return Response({"detail": "Óvirkt eignarhald fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        share = _parse_share(request.data.get("share", ownership.share))
+        if share is None:
+            return Response({"detail": "Invalid share."}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_payer = request.data.get("is_payer", ownership.is_payer)
+
+        active = ApartmentOwnership.objects.filter(apartment=ownership.apartment, deleted=False)
+        current_sum = active.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0")
+        if current_sum + share > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall eigenda fer yfir 100% fyrir þessa íbúð."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # If no active owners remain, this re-enabled owner becomes payer automatically
+        if not active.exists():
+            is_payer = True
+
+        ownership.share = share
+        ownership.is_payer = is_payer
+        ownership.deleted = False
+        ownership.save(update_fields=["share", "is_payer", "deleted"])
+        if is_payer:
+            _set_payer(ownership.apartment, ownership_id)
+        ownership.refresh_from_db()
+        return Response(OwnershipSerializer(ownership).data)

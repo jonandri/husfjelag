@@ -17,7 +17,9 @@ class AssociationSerializer(serializers.ModelSerializer):
         return obj.apartments.filter(deleted=False).count()
 
     def get_owner_count(self, obj):
-        return ApartmentOwnership.objects.filter(apartment__association=obj, apartment__deleted=False).values("user").distinct().count()
+        return ApartmentOwnership.objects.filter(
+            apartment__association=obj, apartment__deleted=False, deleted=False
+        ).values("user").distinct().count()
 
     def _get_role_name(self, obj, role):
         entry = AssociationAccess.objects.filter(
@@ -43,8 +45,27 @@ class ApartmentOwnerSerializer(serializers.ModelSerializer):
 
 
 class ApartmentSerializer(serializers.ModelSerializer):
-    owners = ApartmentOwnerSerializer(source="ownerships", many=True, read_only=True)
+    owners = serializers.SerializerMethodField()
+
+    def get_owners(self, obj):
+        active = obj.ownerships.filter(deleted=False)
+        return ApartmentOwnerSerializer(active, many=True).data
 
     class Meta:
         model = Apartment
         fields = ["id", "anr", "fnr", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]
+
+
+class OwnershipSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="user.id", read_only=True)
+    name = serializers.CharField(source="user.name", read_only=True)
+    kennitala = serializers.CharField(source="user.kennitala", read_only=True)
+    email = serializers.EmailField(source="user.email", read_only=True, allow_null=True)
+    phone = serializers.CharField(source="user.phone", read_only=True, allow_null=True)
+    apartment_id = serializers.IntegerField(source="apartment.id", read_only=True)
+    anr = serializers.CharField(source="apartment.anr", read_only=True)
+    fnr = serializers.CharField(source="apartment.fnr", read_only=True)
+
+    class Meta:
+        model = ApartmentOwnership
+        fields = ["id", "user_id", "name", "kennitala", "email", "phone", "apartment_id", "anr", "fnr", "share", "is_payer", "deleted"]

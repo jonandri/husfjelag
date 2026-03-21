@@ -59,6 +59,7 @@ class ApartmentOwnership(models.Model):
     apartment = models.ForeignKey(Apartment, on_delete=models.CASCADE, related_name="ownerships")
     share = models.DecimalField(max_digits=5, decimal_places=2)  # % of apartment this owner holds
     is_payer = models.BooleanField(default=False)  # Only one owner per apartment should be payer
+    deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = "associations_apartmentownership"

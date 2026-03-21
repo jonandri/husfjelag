@@ -47,6 +47,30 @@ class LoginView(APIView):
         )
 
 
+class UserView(APIView):
+    def get(self, request, user_id):
+        """GET /User/{user_id} — Return profile for a user."""
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(UserSerializer(user).data)
+
+    def patch(self, request, user_id):
+        """PATCH /User/{user_id} — Update email and/or phone."""
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        email = request.data.get("email", user.email)
+        phone = request.data.get("phone", user.phone)
+        user.email = email or None
+        user.phone = phone or None
+        user.save(update_fields=["email", "phone"])
+        return Response(UserSerializer(user).data)
+
+
 class OIDCLoginView(APIView):
     """
     GET /auth/login
