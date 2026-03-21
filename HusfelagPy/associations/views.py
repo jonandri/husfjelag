@@ -5,10 +5,33 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership
-from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer
+import datetime
+from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
+from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer
 from .scraper import lookup_association
 from users.models import User
+
+
+DEFAULT_CATEGORIES = [
+    ("Framkvæmdasjóður", "SHARED"),
+    ("Rafmagn",          "SHARED"),
+    ("Hitaveita",        "SHARED"),
+    ("Hiti í sameign",   "SHARE2"),
+    ("Tryggingar",       "SHARED"),
+    ("Garðsláttur",      "SHARE3"),
+    ("Snjómokstur",      "SHARE3"),
+    ("Þrif á sameign",   "SHARED"),
+    ("Sorptunnuþrif",    "EQUAL"),
+]
+
+def _create_default_categories(association):
+    """Create the default category set for a new association (skips any that already exist)."""
+    existing = set(association.categories.values_list("name", flat=True))
+    Category.objects.bulk_create([
+        Category(association=association, name=name, type=type_)
+        for name, type_ in DEFAULT_CATEGORIES
+        if name not in existing
+    ])
 
 
 class AssociationView(APIView):
@@ -43,6 +66,7 @@ class AssociationView(APIView):
             role=AssociationRole.CHAIR,
             active=True,
         )
+        _create_default_categories(association)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -431,3 +455,174 @@ class OwnerView(APIView):
             _set_payer(ownership.apartment, ownership_id)
         ownership.refresh_from_db()
         return Response(OwnershipSerializer(ownership).data)
+
+
+class CategoryView(APIView):
+    def _get_association(self, user_id):
+        return Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+
+    def get(self, request, user_id):
+        """GET /Category/{user_id} — List all categories for the association."""
+        association = self._get_association(user_id)
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+        categories = association.categories.all().order_by("name")
+        return Response(CategorySerializer(categories, many=True).data)
+
+    def post(self, request):
+        """POST /Category — Create a category. Body: {user_id, name, type}"""
+        user_id = request.data.get("user_id")
+        name = request.data.get("name", "").strip()
+        type_ = request.data.get("type", "")
+
+        if not name or not type_:
+            return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        category = Category.objects.create(association=association, name=name, type=type_)
+        return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, category_id):
+        """PUT /Category/update/{id} — Update name and/or type."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=False)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        category.name = request.data.get("name", category.name).strip()
+        category.type = request.data.get("type", category.type)
+        if not category.name or not category.type:
+            return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        category.save(update_fields=["name", "type"])
+        return Response(CategorySerializer(category).data)
+
+    def delete(self, request, category_id):
+        """DELETE /Category/delete/{id} — Soft-delete a category."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=False)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        category.deleted = True
+        category.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, category_id):
+        """PATCH /Category/enable/{id} — Re-enable a soft-deleted category."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=True)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        category.deleted = False
+        category.save(update_fields=["deleted"])
+        return Response(CategorySerializer(category).data)
+
+
+def _budget_with_items(budget):
+    return Budget.objects.prefetch_related("items__category").get(id=budget.id)
+
+
+def _create_budget_items(budget, source_budget=None):
+    """Create BudgetItems for all active categories. Copy amounts from source_budget if provided."""
+    association = budget.association
+    active_categories = association.categories.filter(deleted=False)
+    existing_ids = set(budget.items.values_list("category_id", flat=True))
+
+    source_amounts = {}
+    if source_budget:
+        source_amounts = {
+            item.category_id: item.amount
+            for item in source_budget.items.all()
+        }
+
+    new_items = [
+        BudgetItem(
+            budget=budget,
+            category=cat,
+            amount=source_amounts.get(cat.id, 0),
+        )
+        for cat in active_categories
+        if cat.id not in existing_ids
+    ]
+    if new_items:
+        BudgetItem.objects.bulk_create(new_items)
+
+
+class BudgetView(APIView):
+    def _get_association(self, user_id):
+        return Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+
+    def get(self, request, user_id):
+        """GET /Budget/{user_id} — Return active budget, auto-creating if none exists."""
+        association = self._get_association(user_id)
+        if not association:
+            return Response(None, status=status.HTTP_200_OK)
+
+        year = datetime.date.today().year
+        budget = Budget.objects.filter(
+            association=association, year=year, is_active=True
+        ).prefetch_related("items__category").first()
+
+        if not budget:
+            budget = Budget.objects.create(association=association, year=year, version=1, is_active=True)
+            _create_budget_items(budget)
+            budget = _budget_with_items(budget)
+
+        return Response(BudgetSerializer(budget).data)
+
+    def post(self, request):
+        """
+        POST /Budget — Create a new budget version for the current year.
+        Deactivates the current active budget, copies its amounts to the new one.
+        """
+        user_id = request.data.get("user_id")
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        year = datetime.date.today().year
+
+        # Find latest version and deactivate it
+        last_budget = Budget.objects.filter(
+            association=association, year=year
+        ).order_by("-version").first()
+
+        next_version = (last_budget.version + 1) if last_budget else 1
+
+        if last_budget:
+            Budget.objects.filter(association=association, year=year).update(is_active=False)
+
+        new_budget = Budget.objects.create(
+            association=association, year=year, version=next_version, is_active=True
+        )
+        _create_budget_items(new_budget, source_budget=last_budget)
+
+        return Response(BudgetSerializer(_budget_with_items(new_budget)).data, status=status.HTTP_201_CREATED)
+
+
+class BudgetItemView(APIView):
+    def put(self, request, item_id):
+        """PUT /BudgetItem/update/{id} — Update the amount of a budget item."""
+        try:
+            item = BudgetItem.objects.get(id=item_id)
+        except BudgetItem.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = _parse_share(request.data.get("amount", item.amount))
+        if amount is None or amount < 0:
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.amount = amount
+        item.save(update_fields=["amount"])
+        item.refresh_from_db()
+        return Response(BudgetItemSerializer(item).data)

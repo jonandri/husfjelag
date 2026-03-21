@@ -10,6 +10,8 @@ import AssociationPage from './controlers/AssociationPage';
 import ApartmentsPage from './controlers/ApartmentsPage';
 import OwnersPage from './controlers/OwnersPage';
 import ProfilePage from './controlers/ProfilePage';
+import BudgetPage from './controlers/BudgetPage';
+import CategoriesPage from './controlers/CategoriesPage';
 import { UserContext } from './controlers/UserContext';
 
 // Create a custom theme
@@ -69,6 +71,8 @@ function App() {
             <Route path="/ibudir" element={<ApartmentsPage />} />
             <Route path="/eigendur" element={<OwnersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/flokkar" element={<CategoriesPage />} />
           </Routes>
         </Router> 
       </ThemeProvider>

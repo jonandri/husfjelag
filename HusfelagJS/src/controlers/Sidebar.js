@@ -32,8 +32,8 @@ function SideBar() {
                         <li style={liStyle} onClick={() => navigate('/husfelag')}>Húsfélag</li>
                         <li style={liStyle} onClick={() => navigate('/ibudir')}>Íbúðir</li>
                         <li style={liStyle} onClick={() => navigate('/eigendur')}>Eigendur</li>
-                        <li style={liStyle} onClick={() => navigate('/item1')}>Bókhaldslyklar</li>
-                        <li style={liStyle} onClick={() => navigate('/item2')}>Áætlun</li>
+                        <li style={liStyle} onClick={() => navigate('/budget')}>Áætlun</li>
+                        <li style={liStyle} onClick={() => navigate('/flokkar')}>Flokkar</li>
                         <li style={liStyle} onClick={() => navigate('/item4')}>Verkefnalisti</li>
                     </ul>
                 </nav>

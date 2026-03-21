@@ -69,26 +69,49 @@ class ApartmentOwnership(models.Model):
         return f"{self.user} → {self.apartment} ({self.share}%)"
 
 
+class CategoryType(models.TextChoices):
+    SHARED = "SHARED", "Sameiginlegt"
+    SHARE2 = "SHARE2", "Sameign"
+    SHARE3 = "SHARE3", "Lóð"
+    EQUAL  = "EQUAL",  "Jafnskipt"
+
+
+class Category(models.Model):
+    association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="categories")
+    name = models.CharField(max_length=255)
+    type = models.CharField(max_length=20, choices=CategoryType.choices)
+    deleted = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "associations_category"
+
+    def __str__(self):
+        return f"{self.name} ({self.type})"
+
+
 class Budget(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="budgets")
     year = models.IntegerField()
+    version = models.IntegerField(default=1)
+    is_active = models.BooleanField(default=True)  # only the latest version is active
 
     class Meta:
         db_table = "associations_budget"
-        unique_together = [("association", "year")]
+        unique_together = [("association", "year", "version")]
 
     def __str__(self):
-        return f"{self.association} — {self.year}"
+        suffix = f" v{self.version}" if self.version > 1 else ""
+        return f"{self.association} — {self.year}{suffix}"
 
 
 class BudgetItem(models.Model):
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="items")
-    category = models.CharField(max_length=255)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    equally_divided = models.BooleanField(default=False)  # True = split equally; False = split by share %
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="budget_items", null=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     class Meta:
         db_table = "associations_budgetitem"
+        unique_together = [("budget", "category")]
 
     def __str__(self):
         return f"{self.budget} — {self.category}: {self.amount}"

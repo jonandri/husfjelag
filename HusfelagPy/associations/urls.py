@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import AssociationView, AssociationLookupView, ApartmentView, ApartmentOwnerView, OwnerView
+from .views import AssociationView, AssociationLookupView, ApartmentView, ApartmentOwnerView, OwnerView, CategoryView, BudgetView, BudgetItemView
 
 urlpatterns = [
     path("Association/lookup", AssociationLookupView.as_view(), name="association-lookup"),
@@ -17,4 +17,12 @@ urlpatterns = [
     path("Owner/update/<int:ownership_id>", OwnerView.as_view(), name="owner-update"),
     path("Owner/delete/<int:ownership_id>", OwnerView.as_view(), name="owner-delete"),
     path("Owner/enable/<int:ownership_id>", OwnerView.as_view(), name="owner-enable"),
+    path("Category/<int:user_id>", CategoryView.as_view(), name="category-list"),
+    path("Category", CategoryView.as_view(), name="category-create"),
+    path("Category/update/<int:category_id>", CategoryView.as_view(), name="category-update"),
+    path("Category/delete/<int:category_id>", CategoryView.as_view(), name="category-delete"),
+    path("Category/enable/<int:category_id>", CategoryView.as_view(), name="category-enable"),
+    path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
+    path("Budget", BudgetView.as_view(), name="budget-create"),
+    path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),
 ]

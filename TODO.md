@@ -2,6 +2,13 @@
 
 Outstanding tasks to revisit. Remove items when completed.
 
+## Budget
+
+- [ ] **Display older budget versions for users to view**
+  When multiple budget versions exist for a year (v2, v3, etc.), allow users to browse and view previous (inactive) versions. Currently only the active (latest) version is shown.
+  - The inactive budgets are already stored in the database with `is_active=False`
+  - Could be implemented as a dropdown or tab switcher on the Budget page
+
 ---
 
 ## Backend
