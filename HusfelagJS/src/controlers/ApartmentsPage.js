@@ -19,6 +19,7 @@ function ApartmentsPage() {
     const [apartments, setApartments] = useState(undefined);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [showDisabled, setShowDisabled] = useState(false);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -82,40 +83,6 @@ function ApartmentsPage() {
                     const disabled = apartments.filter(a => a.deleted);
                     return (
                         <>
-                            {disabled.length > 0 && (
-                                <Box sx={{ mt: 2, mb: 3 }}>
-                                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                                        Óvirkar íbúðir ({disabled.length})
-                                    </Typography>
-                                    <Paper variant="outlined">
-                                        <Table size="small">
-                                            <TableHead>
-                                                <TableRow>
-                                                    <TableCell>Merking</TableCell>
-                                                    <TableCell>Fastanúmer</TableCell>
-                                                    <TableCell>Matshlutfall (%)</TableCell>
-                                                    <TableCell>Matshlutfall hita (%)</TableCell>
-                                                    <TableCell>Matshlutfall lóðar (%)</TableCell>
-                                                    <TableCell />
-                                                </TableRow>
-                                            </TableHead>
-                                            <TableBody>
-                                                {disabled.map((apt) => (
-                                                    <ApartmentRow
-                                                        key={apt.id}
-                                                        apt={apt}
-                                                        apartments={active}
-                                                        onOwnersChanged={loadApartments}
-                                                        onSaved={loadApartments}
-                                                        isDisabled
-                                                    />
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </Paper>
-                                </Box>
-                            )}
-
                             {active.length === 0 ? (
                                 <Typography color="text.secondary" sx={{ mt: 2 }}>
                                     Engar íbúðir skráðar. Smelltu á „+ Bæta við íbúð" til að hefja skráningu.
@@ -160,6 +127,48 @@ function ApartmentsPage() {
                                         </TableFooter>
                                     </Table>
                                 </Paper>
+                            )}
+
+                            {disabled.length > 0 && (
+                                <Box sx={{ mt: 3 }}>
+                                    <Button
+                                        size="small"
+                                        variant="text"
+                                        color="inherit"
+                                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0 }}
+                                        onClick={() => setShowDisabled(v => !v)}
+                                    >
+                                        {showDisabled ? '▲' : '▼'} Óvirkar íbúðir ({disabled.length})
+                                    </Button>
+                                    <Collapse in={showDisabled}>
+                                        <Paper variant="outlined" sx={{ mt: 1 }}>
+                                            <Table size="small">
+                                                <TableHead>
+                                                    <TableRow>
+                                                        <TableCell>Merking</TableCell>
+                                                        <TableCell>Fastanúmer</TableCell>
+                                                        <TableCell>Matshlutfall (%)</TableCell>
+                                                        <TableCell>Matshlutfall hita (%)</TableCell>
+                                                        <TableCell>Matshlutfall lóðar (%)</TableCell>
+                                                        <TableCell />
+                                                    </TableRow>
+                                                </TableHead>
+                                                <TableBody>
+                                                    {disabled.map((apt) => (
+                                                        <ApartmentRow
+                                                            key={apt.id}
+                                                            apt={apt}
+                                                            apartments={active}
+                                                            onOwnersChanged={loadApartments}
+                                                            onSaved={loadApartments}
+                                                            isDisabled
+                                                        />
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </Paper>
+                                    </Collapse>
+                                </Box>
                             )}
                         </>
                     );
