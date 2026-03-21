@@ -1,56 +1,77 @@
-import React, {useState} from 'react';
-import { Button, TextField, Box, Typography, ThemeProvider, Tabs, Tab } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Box, Typography, Paper, Divider, Grid } from '@mui/material';
 import { UserContext } from './UserContext';
-import { useEffect } from 'react';
 import SideBar from './Sidebar';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
+
 function Dashboard() {
-    const theme = useTheme();
     const navigate = useNavigate();
-    //check if user is logged in
     const { user } = React.useContext(UserContext);
+    const [association, setAssociation] = useState(null);
 
-    useEffect(async () => {
+    useEffect(() => {
         if (!user) {
-            // Redirect to the dashboard
-            navigate('/');
+            navigate('/login');
+            return;
         }
-        let userId = user.id;
 
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/HouseAssociation/` + userId, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },            
-        })
-
-        if (response.ok && response.status === 200) {
-            console.log('Status: ' + response.status);
-            const data = await response.json();
-            if (data !== null) {
-                console.log('Form submitted successfully');
-                console.log(data);
-            } else {
-                console.log('No house association found for user');
-                // Redirect to the dashboard
-                navigate('HouseAssociation');
+        const fetchAssociation = async () => {
+            try {
+                const response = await fetch(`${API_URL}/Association/${user.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data === null) {
+                        navigate('/houseassociation');
+                    } else {
+                        setAssociation(data);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to fetch association:', err);
             }
-        } else {
-            console.log('Error: ' + response.status);
-        }
-      }, []); 
+        };
 
+        fetchAssociation();
+    }, [user]);
 
     return (
         <div className='dashboard'>
             <SideBar />
-            <h1>Dashboard</h1>
-            {/* Add your task list component here */}
-
+            <Box sx={{ p: 4, flex: 1 }}>
+                {association && (
+                    <>
+                        <Typography variant="h5" gutterBottom>
+                            {association.name}
+                        </Typography>
+                        <Divider sx={{ mb: 3 }} />
+                        <Grid container spacing={2}>
+                            <StatCard label="Íbúðir skráðar" value={association.apartment_count} />
+                            <StatCard label="Eigendur skráðir" value={association.owner_count} />
+                            <StatCard label="Formaður" value={association.chair || '—'} />
+                            <StatCard label="Gjaldkeri" value={association.cfo || '—'} />
+                        </Grid>
+                    </>
+                )}
+            </Box>
         </div>
     );
 };
+
+function StatCard({ label, value }) {
+    return (
+        <Grid item xs={12} sm={6} md={3}>
+            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+                <Typography variant="h4" color="secondary.main">
+                    {value}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {label}
+                </Typography>
+            </Paper>
+        </Grid>
+    );
+}
 
 export default Dashboard;
