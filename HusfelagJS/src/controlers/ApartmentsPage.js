@@ -496,20 +496,27 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between' }}>
-                {isDisabled ? (
+                <Box>
+                    {!isDisabled && (
+                        <Button
+                            onClick={() => setConfirmDelete(true)}
+                            sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
+                        >
+                            Óvirkja íbúð
+                        </Button>
+                    )}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button onClick={onClose}>Hætta við</Button>
-                ) : (
-                    <Button color="error" onClick={() => setConfirmDelete(true)}>Óvirkja íbúð</Button>
-                )}
-                <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    disabled={!isValid || saving} onClick={isDisabled ? handleEnable : handleSave}
-                >
-                    {saving
-                        ? <CircularProgress size={18} color="inherit" />
-                        : isDisabled ? 'Virkja íbúð' : 'Vista breytingar'}
-                </Button>
-                {!isDisabled && <Button onClick={onClose}>Hætta við</Button>}
+                    <Button
+                        variant="contained" color="secondary" sx={{ color: '#fff' }}
+                        disabled={!isValid || saving} onClick={isDisabled ? handleEnable : handleSave}
+                    >
+                        {saving
+                            ? <CircularProgress size={18} color="inherit" />
+                            : isDisabled ? 'Virkja íbúð' : 'Vista'}
+                    </Button>
+                </Box>
             </DialogActions>
         </Dialog>
 
