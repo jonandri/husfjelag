@@ -131,17 +131,22 @@ class ApartmentView(APIView):
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
         existing = association.apartments.filter(deleted=False)
-        if existing.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0") + share > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
-        if existing.aggregate(s=django_models.Sum("share_2"))["s"] or Decimal("0") + share_2 > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share 2) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
-        if existing.aggregate(s=django_models.Sum("share_3"))["s"] or Decimal("0") + share_3 > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share 3) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+        agg = existing.aggregate(
+            s=django_models.Sum("share"),
+            s2=django_models.Sum("share_2"),
+            s3=django_models.Sum("share_3"),
+        )
+        if (agg["s"] or Decimal("0")) + share > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall matshluta fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+        if (agg["s2"] or Decimal("0")) + share_2 > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall hita fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+        if (agg["s3"] or Decimal("0")) + share_3 > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall lóðar fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
 
         Apartment.objects.create(association=association, anr=anr, fnr=fnr, share=share, share_2=share_2, share_3=share_3, share_eq=0)
         _recalc_share_eq(association)
 
-        apartments = association.apartments.prefetch_related("ownerships__user").all()
+        apartments = association.apartments.filter(deleted=False).prefetch_related("ownerships__user").all()
         return Response(ApartmentSerializer(apartments, many=True).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, apartment_id):
@@ -170,11 +175,11 @@ class ApartmentView(APIView):
         other_share_2 = others.aggregate(s=django_models.Sum("share_2"))["s"] or Decimal("0")
         other_share_3 = others.aggregate(s=django_models.Sum("share_3"))["s"] or Decimal("0")
         if other_share + share > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Heildarhlutfall matshluta fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
         if other_share_2 + share_2 > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share 2) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Heildarhlutfall hita fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
         if other_share_3 + share_3 > Decimal("100"):
-            return Response({"detail": "Heildarhlutfall (share 3) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Heildarhlutfall lóðar fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
 
         apartment.anr = anr
         apartment.fnr = fnr
