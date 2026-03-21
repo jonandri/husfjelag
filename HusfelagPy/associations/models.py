@@ -40,8 +40,10 @@ class Apartment(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="apartments")
     fnr = models.CharField(max_length=8)   # Fasteignanúmer (government property ID)
     anr = models.CharField(max_length=7)   # Merking (apartment identifier)
-    size = models.DecimalField(max_digits=8, decimal_places=2)   # Size in sqm
-    share = models.DecimalField(max_digits=5, decimal_places=2)  # % share of association costs
+    share = models.DecimalField(max_digits=5, decimal_places=2, default=0)    # Matshlutfall skv. eignaskiptasamningi
+    share_2 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall hita
+    share_3 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall lóðar
+    share_eq = models.DecimalField(max_digits=5, decimal_places=2, default=0) # Jafnt hlutfall (reiknað)
 
     class Meta:
         db_table = "associations_apartment"

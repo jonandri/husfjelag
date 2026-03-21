@@ -7,6 +7,7 @@ import AuthCallback from './controlers/AuthCallback';
 import Dashboard from './controlers/Dashboard';
 import HouseAssociation from './controlers/HouseAssociation';
 import AssociationPage from './controlers/AssociationPage';
+import ApartmentsPage from './controlers/ApartmentsPage';
 import { UserContext } from './controlers/UserContext';
 
 // Create a custom theme
@@ -27,8 +28,15 @@ const theme = createTheme({
     },
   },
   typography: {
-    //fontFamily: 'Core Sans Light, sans-serif',
-    fontSize: 16, // Your custom font size
+    fontFamily: '"Inter", sans-serif',
+    fontSize: 16,
+    fontFeatureSettings: '"tnum"',
+    h1: { fontWeight: 200 },
+    h2: { fontWeight: 200 },
+    h3: { fontWeight: 200 },
+    h4: { fontWeight: 200 },
+    h5: { fontWeight: 200 },
+    h6: { fontWeight: 200 },
   },
 });
 
@@ -56,6 +64,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/houseassociation" element={<HouseAssociation />} />
             <Route path="/husfelag" element={<AssociationPage />} />
+            <Route path="/ibudir" element={<ApartmentsPage />} />
           </Routes>
         </Router> 
       </ThemeProvider>
