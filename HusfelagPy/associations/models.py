@@ -44,6 +44,7 @@ class Apartment(models.Model):
     share_2 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall hita
     share_3 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall lóðar
     share_eq = models.DecimalField(max_digits=5, decimal_places=2, default=0) # Jafnt hlutfall (reiknað)
+    deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = "associations_apartment"

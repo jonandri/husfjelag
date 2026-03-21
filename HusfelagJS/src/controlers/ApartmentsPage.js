@@ -5,7 +5,7 @@ import {
     Table, TableHead, TableRow, TableCell, TableBody,
     Button, TextField, Collapse, Chip, IconButton,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    Alert, Divider, Tooltip,
+    Alert, Divider, Tooltip, DialogContentText,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
@@ -195,7 +195,7 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                 label="Matshlutfall (%)"
                 value={share}
                 onChange={setShare}
-                helperText="Skrá skal matshluta hverrar íbúðar skv. eignaskiptasamningi fjölbýlis"
+                helperText="Matshluti hverrar íbúðar skv. eignaskiptasamningi"
                 error={shareOver ? 'Heildarhlutfall fer yfir 100%' : ''}
             />
             {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
@@ -203,7 +203,7 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                 label="Matshlutfall hita (%)"
                 value={share2}
                 onChange={setShare2}
-                helperText="Skrá skal matshluta hita í sameign skv. eignaskiptasamningi fjölbýlis"
+                helperText="Matshluti hita í sameign skv. eignaskiptasamningi"
                 error={share2Over ? 'Heildarhlutfall fer yfir 100%' : ''}
             />
             {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
@@ -211,7 +211,7 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                 label="Matshlutfall lóðar (%)"
                 value={share3}
                 onChange={setShare3}
-                helperText="Skrá skal matshluta lóðar skv. eignaskiptasamningi fjölbýlis"
+                helperText="Matshluti lóðar skv. eignaskiptasamningi"
                 error={share3Over ? 'Heildarhlutfall fer yfir 100%' : ''}
             />
             {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
@@ -284,18 +284,21 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved }) {
                 apt={apt}
                 apartments={apartments}
                 onSaved={() => { setEditDialogOpen(false); onSaved(); }}
+                onDeleted={() => { setEditDialogOpen(false); onSaved(); }}
             />
         </>
     );
 }
 
-function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
+function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDeleted }) {
     const [anr, setAnr] = useState(apt.anr);
     const [fnr, setFnr] = useState(apt.fnr);
     const [share, setShare] = useState(String(apt.share));
     const [share2, setShare2] = useState(String(apt.share_2));
     const [share3, setShare3] = useState(String(apt.share_3));
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const [error, setError] = useState('');
 
     React.useEffect(() => {
@@ -338,7 +341,28 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
         }
     };
 
+    const handleDelete = async () => {
+        setDeleting(true);
+        try {
+            const resp = await fetch(`${API_URL}/Apartment/delete/${apt.id}`, { method: 'DELETE' });
+            if (resp.ok) {
+                setConfirmDelete(false);
+                onDeleted();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við eyðingu.');
+                setConfirmDelete(false);
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+            setConfirmDelete(false);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     return (
+        <>
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
             <DialogTitle>Breyta íbúð — {apt.anr}</DialogTitle>
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
@@ -348,7 +372,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
                     label="Matshlutfall (%)"
                     value={share}
                     onChange={setShare}
-                    helperText="Skrá skal matshluta hverrar íbúðar skv. eignaskiptasamningi fjölbýlis"
+                    helperText="Matshluti hverrar íbúðar skv. eignaskiptasamningi"
                     error={shareOver}
                 />
                 {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
@@ -356,7 +380,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
                     label="Matshlutfall hita (%)"
                     value={share2}
                     onChange={setShare2}
-                    helperText="Skrá skal matshluta hita í sameign skv. eignaskiptasamningi fjölbýlis"
+                    helperText="Matshluti hita í sameign skv. eignaskiptasamningi"
                     error={share2Over}
                 />
                 {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
@@ -364,7 +388,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
                     label="Matshlutfall lóðar (%)"
                     value={share3}
                     onChange={setShare3}
-                    helperText="Skrá skal matshluta lóðar skv. eignaskiptasamningi fjölbýlis"
+                    helperText="Matshluti lóðar skv. eignaskiptasamningi"
                     error={share3Over}
                 />
                 {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
@@ -379,16 +403,35 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved }) {
                 />
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
+            <DialogActions sx={{ justifyContent: 'space-between' }}>
+                <Button color="error" onClick={() => setConfirmDelete(true)}>Eyða íbúð</Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button onClick={onClose}>Hætta við</Button>
+                    <Button
+                        variant="contained" color="secondary" sx={{ color: '#fff' }}
+                        disabled={!isValid || saving} onClick={handleSave}
+                    >
+                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista breytingar'}
+                    </Button>
+                </Box>
+            </DialogActions>
+        </Dialog>
+
+        <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
+            <DialogTitle>Eyða íbúð</DialogTitle>
+            <DialogContent>
+                <DialogContentText>
+                    Ertu viss um að þú viljir eyða íbúð <strong>{apt.anr}</strong>? Þetta má ekki afturkalla.
+                </DialogContentText>
+            </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>Hætta við</Button>
-                <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    disabled={!isValid || saving} onClick={handleSave}
-                >
-                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista breytingar'}
+                <Button onClick={() => setConfirmDelete(false)}>Hætta við</Button>
+                <Button color="error" variant="contained" disabled={deleting} onClick={handleDelete}>
+                    {deleting ? <CircularProgress size={18} color="inherit" /> : 'Já, eyða'}
                 </Button>
             </DialogActions>
         </Dialog>
+        </>
     );
 }
 

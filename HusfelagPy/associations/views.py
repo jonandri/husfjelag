@@ -77,8 +77,8 @@ class AssociationLookupView(APIView):
 
 
 def _recalc_share_eq(association):
-    """Recalculate equal share for all apartments in the association."""
-    apartments = list(association.apartments.all())
+    """Recalculate equal share for all active apartments in the association."""
+    apartments = list(association.apartments.filter(deleted=False))
     n = len(apartments)
     if n == 0:
         return
@@ -98,13 +98,13 @@ def _parse_share(value, default=None):
 
 class ApartmentView(APIView):
     def get(self, request, user_id):
-        """GET /Apartment/{user_id} — List apartments for the user's association."""
+        """GET /Apartment/{user_id} — List active apartments for the user's association."""
         association = Association.objects.filter(
             access_entries__user_id=user_id, access_entries__active=True
         ).first()
         if not association:
             return Response([], status=status.HTTP_200_OK)
-        apartments = association.apartments.prefetch_related("ownerships__user").all()
+        apartments = association.apartments.filter(deleted=False).prefetch_related("ownerships__user").all()
         return Response(ApartmentSerializer(apartments, many=True).data)
 
     def post(self, request):
@@ -130,7 +130,7 @@ class ApartmentView(APIView):
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        existing = association.apartments.all()
+        existing = association.apartments.filter(deleted=False)
         if existing.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0") + share > Decimal("100"):
             return Response({"detail": "Heildarhlutfall (share) fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
         if existing.aggregate(s=django_models.Sum("share_2"))["s"] or Decimal("0") + share_2 > Decimal("100"):
@@ -185,6 +185,18 @@ class ApartmentView(APIView):
 
         apartment.refresh_from_db()
         return Response(ApartmentSerializer(apartment).data)
+
+    def delete(self, request, apartment_id):
+        """DELETE /Apartment/delete/{apartment_id} — Soft-delete an apartment."""
+        try:
+            apartment = Apartment.objects.get(id=apartment_id, deleted=False)
+        except Apartment.DoesNotExist:
+            return Response({"detail": "Apartment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        apartment.deleted = True
+        apartment.save(update_fields=["deleted"])
+        _recalc_share_eq(apartment.association)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ApartmentOwnerView(APIView):
