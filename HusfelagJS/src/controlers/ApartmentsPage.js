@@ -70,58 +70,100 @@ function ApartmentsPage() {
                 <Collapse in={showForm}>
                     <AddApartmentForm
                         userId={user.id}
-                        apartments={apartments}
+                        apartments={apartments.filter(a => !a.deleted)}
                         onCreated={(updated) => { setShowForm(false); setApartments(updated); }}
                     />
                 </Collapse>
 
                 {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
 
-                {apartments.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Engar íbúðir skráðar. Smelltu á „+ Bæta við íbúð" til að hefja skráningu.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>Merking</TableCell>
-                                    <TableCell>Fastanúmer</TableCell>
-                                    <TableCell>Matshlutfall (%)</TableCell>
-                                    <TableCell>Matshlutfall hita (%)</TableCell>
-                                    <TableCell>Matshlutfall lóðar (%)</TableCell>
-                                    <TableCell>Jafnt hlutfall (%)</TableCell>
-                                    <TableCell>Eigendur</TableCell>
-                                    <TableCell />
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {apartments.map((apt) => (
-                                    <ApartmentRow
-                                        key={apt.id}
-                                        apt={apt}
-                                        apartments={apartments}
-                                        onOwnersChanged={loadApartments}
-                                        onSaved={loadApartments}
-                                    />
-                                ))}
-                            </TableBody>
-                            <TableFooter>
-                                <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                    <TableCell>Samtals</TableCell>
-                                    <TableCell />
-                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share || 0), 0).toFixed(2)}%</TableCell>
-                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0).toFixed(2)}%</TableCell>
-                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0).toFixed(2)}%</TableCell>
-                                    <TableCell>{apartments.reduce((s, a) => s + parseFloat(a.share_eq || 0), 0).toFixed(2)}%</TableCell>
-                                    <TableCell />
-                                    <TableCell />
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </Paper>
-                )}
+                {(() => {
+                    const active = apartments.filter(a => !a.deleted);
+                    const disabled = apartments.filter(a => a.deleted);
+                    return (
+                        <>
+                            {disabled.length > 0 && (
+                                <Box sx={{ mt: 2, mb: 3 }}>
+                                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                                        Óvirkar íbúðir ({disabled.length})
+                                    </Typography>
+                                    <Paper variant="outlined">
+                                        <Table size="small">
+                                            <TableHead>
+                                                <TableRow>
+                                                    <TableCell>Merking</TableCell>
+                                                    <TableCell>Fastanúmer</TableCell>
+                                                    <TableCell>Matshlutfall (%)</TableCell>
+                                                    <TableCell>Matshlutfall hita (%)</TableCell>
+                                                    <TableCell>Matshlutfall lóðar (%)</TableCell>
+                                                    <TableCell />
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {disabled.map((apt) => (
+                                                    <ApartmentRow
+                                                        key={apt.id}
+                                                        apt={apt}
+                                                        apartments={active}
+                                                        onOwnersChanged={loadApartments}
+                                                        onSaved={loadApartments}
+                                                        isDisabled
+                                                    />
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </Paper>
+                                </Box>
+                            )}
+
+                            {active.length === 0 ? (
+                                <Typography color="text.secondary" sx={{ mt: 2 }}>
+                                    Engar íbúðir skráðar. Smelltu á „+ Bæta við íbúð" til að hefja skráningu.
+                                </Typography>
+                            ) : (
+                                <Paper variant="outlined" sx={{ mt: 2 }}>
+                                    <Table>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Merking</TableCell>
+                                                <TableCell>Fastanúmer</TableCell>
+                                                <TableCell>Matshlutfall (%)</TableCell>
+                                                <TableCell>Matshlutfall hita (%)</TableCell>
+                                                <TableCell>Matshlutfall lóðar (%)</TableCell>
+                                                <TableCell>Jafnt hlutfall (%)</TableCell>
+                                                <TableCell>Eigendur</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {active.map((apt) => (
+                                                <ApartmentRow
+                                                    key={apt.id}
+                                                    apt={apt}
+                                                    apartments={active}
+                                                    onOwnersChanged={loadApartments}
+                                                    onSaved={loadApartments}
+                                                />
+                                            ))}
+                                        </TableBody>
+                                        <TableFooter>
+                                            <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                                <TableCell>Samtals</TableCell>
+                                                <TableCell />
+                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share || 0), 0).toFixed(2)}%</TableCell>
+                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0).toFixed(2)}%</TableCell>
+                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0).toFixed(2)}%</TableCell>
+                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_eq || 0), 0).toFixed(2)}%</TableCell>
+                                                <TableCell />
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    </Table>
+                                </Paper>
+                            )}
+                        </>
+                    );
+                })()}
             </Box>
         </div>
     );
@@ -247,36 +289,38 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
     );
 }
 
-function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved }) {
+function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved, isDisabled }) {
     const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
 
     return (
         <>
-            <TableRow hover>
+            <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{apt.anr}</TableCell>
                 <TableCell>{apt.fnr}</TableCell>
                 <TableCell>{apt.share}%</TableCell>
                 <TableCell>{apt.share_2}%</TableCell>
                 <TableCell>{apt.share_3}%</TableCell>
-                <TableCell>{apt.share_eq}%</TableCell>
-                <TableCell>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-                        {apt.owners.map(o => (
-                            <Chip key={o.id} label={o.name} size="small" />
-                        ))}
-                        <Chip
-                            label="+ Eigandi"
-                            size="small"
-                            variant="outlined"
-                            color="secondary"
-                            onClick={() => setOwnerDialogOpen(true)}
-                            sx={{ cursor: 'pointer' }}
-                        />
-                    </Box>
-                </TableCell>
+                {!isDisabled && <TableCell>{apt.share_eq}%</TableCell>}
+                {!isDisabled && (
+                    <TableCell>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {apt.owners.map(o => (
+                                <Chip key={o.id} label={o.name} size="small" />
+                            ))}
+                            <Chip
+                                label="+ Eigandi"
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => setOwnerDialogOpen(true)}
+                                sx={{ cursor: 'pointer' }}
+                            />
+                        </Box>
+                    </TableCell>
+                )}
                 <TableCell align="right" sx={{ width: 48 }}>
-                    <Tooltip title="Breyta">
+                    <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditDialogOpen(true)}>
                             <EditIcon fontSize="small" />
                         </IconButton>
@@ -284,17 +328,20 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved }) {
                 </TableCell>
             </TableRow>
 
-            <OwnerDialog
-                open={ownerDialogOpen}
-                onClose={() => setOwnerDialogOpen(false)}
-                apt={apt}
-                onChanged={() => { setOwnerDialogOpen(false); onOwnersChanged(); }}
-            />
+            {!isDisabled && (
+                <OwnerDialog
+                    open={ownerDialogOpen}
+                    onClose={() => setOwnerDialogOpen(false)}
+                    apt={apt}
+                    onChanged={() => { setOwnerDialogOpen(false); onOwnersChanged(); }}
+                />
+            )}
             <EditApartmentDialog
                 open={editDialogOpen}
                 onClose={() => setEditDialogOpen(false)}
                 apt={apt}
                 apartments={apartments}
+                isDisabled={isDisabled}
                 onSaved={() => { setEditDialogOpen(false); onSaved(); }}
                 onDeleted={() => { setEditDialogOpen(false); onSaved(); }}
             />
@@ -302,7 +349,7 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved }) {
     );
 }
 
-function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDeleted }) {
+function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSaved, onDeleted }) {
     const [anr, setAnr] = useState(apt.anr);
     const [fnr, setFnr] = useState(apt.fnr);
     const [share, setShare] = useState(String(apt.share));
@@ -353,7 +400,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDelete
         }
     };
 
-    const handleDelete = async () => {
+    const handleDisable = async () => {
         setDeleting(true);
         try {
             const resp = await fetch(`${API_URL}/Apartment/delete/${apt.id}`, { method: 'DELETE' });
@@ -362,7 +409,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDelete
                 onDeleted();
             } else {
                 const data = await resp.json();
-                setError(data.detail || 'Villa við eyðingu.');
+                setError(data.detail || 'Villa við óvirkjun.');
                 setConfirmDelete(false);
             }
         } catch {
@@ -373,10 +420,32 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDelete
         }
     };
 
+    const handleEnable = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/Apartment/enable/${apt.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ anr, fnr, share: parseFloat(share) || 0, share_2: parseFloat(share2) || 0, share_3: parseFloat(share3) || 0 }),
+            });
+            if (resp.ok) {
+                onSaved();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við virkjun.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <>
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-            <DialogTitle>Breyta íbúð — {apt.anr}</DialogTitle>
+            <DialogTitle>{isDisabled ? `Óvirk íbúð — ${apt.anr}` : `Breyta íbúð — ${apt.anr}`}</DialogTitle>
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
                 <TextField label="Merking" value={anr} onChange={e => setAnr(e.target.value)} size="small" fullWidth />
                 <TextField label="Fastanúmer" value={fnr} onChange={e => setFnr(e.target.value)} size="small" fullWidth />
@@ -404,42 +473,48 @@ function EditApartmentDialog({ open, onClose, apt, apartments, onSaved, onDelete
                     error={share3Over}
                 />
                 {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
-                <TextField
-                    label="Hlutfall í jafnskiptum kostnaði (%)"
-                    value={apt.share_eq}
-                    size="small"
-                    disabled
-                    helperText="Hlutfall í jafnskiptum kostnaði s.s. rafmagn í sameign"
-                    FormHelperTextProps={{ sx: { whiteSpace: 'normal' } }}
-                    fullWidth
-                />
+                {!isDisabled && (
+                    <TextField
+                        label="Hlutfall í jafnskiptum kostnaði (%)"
+                        value={apt.share_eq}
+                        size="small"
+                        disabled
+                        helperText="Hlutfall í jafnskiptum kostnaði s.s. rafmagn í sameign"
+                        FormHelperTextProps={{ sx: { whiteSpace: 'normal' } }}
+                        fullWidth
+                    />
+                )}
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between' }}>
-                <Button color="error" onClick={() => setConfirmDelete(true)}>Eyða íbúð</Button>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                {isDisabled ? (
                     <Button onClick={onClose}>Hætta við</Button>
-                    <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        disabled={!isValid || saving} onClick={handleSave}
-                    >
-                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista breytingar'}
-                    </Button>
-                </Box>
+                ) : (
+                    <Button color="error" onClick={() => setConfirmDelete(true)}>Óvirkja íbúð</Button>
+                )}
+                <Button
+                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    disabled={!isValid || saving} onClick={isDisabled ? handleEnable : handleSave}
+                >
+                    {saving
+                        ? <CircularProgress size={18} color="inherit" />
+                        : isDisabled ? 'Virkja íbúð' : 'Vista breytingar'}
+                </Button>
+                {!isDisabled && <Button onClick={onClose}>Hætta við</Button>}
             </DialogActions>
         </Dialog>
 
         <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
-            <DialogTitle>Eyða íbúð</DialogTitle>
+            <DialogTitle>Óvirkja íbúð</DialogTitle>
             <DialogContent>
                 <DialogContentText>
-                    Ertu viss um að þú viljir eyða íbúð <strong>{apt.anr}</strong>? Þetta er ekki hægt að afturkalla.
+                    Ertu viss um að þú viljir óvirkja íbúð <strong>{apt.anr}</strong>?
                 </DialogContentText>
             </DialogContent>
             <DialogActions>
                 <Button onClick={() => setConfirmDelete(false)}>Hætta við</Button>
-                <Button color="error" variant="contained" disabled={deleting} onClick={handleDelete}>
-                    {deleting ? <CircularProgress size={18} color="inherit" /> : 'Já, eyða'}
+                <Button color="error" variant="contained" disabled={deleting} onClick={handleDisable}>
+                    {deleting ? <CircularProgress size={18} color="inherit" /> : 'Já, óvirkja'}
                 </Button>
             </DialogActions>
         </Dialog>

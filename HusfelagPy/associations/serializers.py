@@ -47,4 +47,4 @@ class ApartmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Apartment
-        fields = ["id", "anr", "fnr", "share", "share_2", "share_3", "share_eq", "owners"]
+        fields = ["id", "anr", "fnr", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]

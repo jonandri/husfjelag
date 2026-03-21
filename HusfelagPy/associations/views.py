@@ -98,13 +98,13 @@ def _parse_share(value, default=None):
 
 class ApartmentView(APIView):
     def get(self, request, user_id):
-        """GET /Apartment/{user_id} — List active apartments for the user's association."""
+        """GET /Apartment/{user_id} — List all apartments (active + disabled) for the user's association."""
         association = Association.objects.filter(
             access_entries__user_id=user_id, access_entries__active=True
         ).first()
         if not association:
             return Response([], status=status.HTTP_200_OK)
-        apartments = association.apartments.filter(deleted=False).prefetch_related("ownerships__user").all()
+        apartments = association.apartments.prefetch_related("ownerships__user").all()
         return Response(ApartmentSerializer(apartments, many=True).data)
 
     def post(self, request):
@@ -146,7 +146,7 @@ class ApartmentView(APIView):
         Apartment.objects.create(association=association, anr=anr, fnr=fnr, share=share, share_2=share_2, share_3=share_3, share_eq=0)
         _recalc_share_eq(association)
 
-        apartments = association.apartments.filter(deleted=False).prefetch_related("ownerships__user").all()
+        apartments = association.apartments.prefetch_related("ownerships__user").all()
         return Response(ApartmentSerializer(apartments, many=True).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, apartment_id):
@@ -192,7 +192,7 @@ class ApartmentView(APIView):
         return Response(ApartmentSerializer(apartment).data)
 
     def delete(self, request, apartment_id):
-        """DELETE /Apartment/delete/{apartment_id} — Soft-delete an apartment."""
+        """DELETE /Apartment/delete/{apartment_id} — Disable an apartment."""
         try:
             apartment = Apartment.objects.get(id=apartment_id, deleted=False)
         except Apartment.DoesNotExist:
@@ -202,6 +202,47 @@ class ApartmentView(APIView):
         apartment.save(update_fields=["deleted"])
         _recalc_share_eq(apartment.association)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, apartment_id):
+        """PATCH /Apartment/enable/{apartment_id} — Re-enable a disabled apartment with validation."""
+        try:
+            apartment = Apartment.objects.get(id=apartment_id, deleted=True)
+        except Apartment.DoesNotExist:
+            return Response({"detail": "Disabled apartment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        anr = request.data.get("anr", apartment.anr).strip()
+        fnr = request.data.get("fnr", apartment.fnr).strip()
+        share = _parse_share(request.data.get("share", apartment.share))
+        share_2 = _parse_share(request.data.get("share_2", apartment.share_2))
+        share_3 = _parse_share(request.data.get("share_3", apartment.share_3))
+
+        if share is None or share_2 is None or share_3 is None:
+            return Response({"detail": "Invalid share value."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = apartment.association
+        active = association.apartments.filter(deleted=False)
+        agg = active.aggregate(
+            s=django_models.Sum("share"),
+            s2=django_models.Sum("share_2"),
+            s3=django_models.Sum("share_3"),
+        )
+        if (agg["s"] or Decimal("0")) + share > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall matshluta fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+        if (agg["s2"] or Decimal("0")) + share_2 > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall hita fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+        if (agg["s3"] or Decimal("0")) + share_3 > Decimal("100"):
+            return Response({"detail": "Heildarhlutfall lóðar fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
+
+        apartment.anr = anr
+        apartment.fnr = fnr
+        apartment.share = share
+        apartment.share_2 = share_2
+        apartment.share_3 = share_3
+        apartment.deleted = False
+        apartment.save(update_fields=["anr", "fnr", "share", "share_2", "share_3", "deleted"])
+        _recalc_share_eq(association)
+        apartment.refresh_from_db()
+        return Response(ApartmentSerializer(apartment).data)
 
 
 class ApartmentOwnerView(APIView):

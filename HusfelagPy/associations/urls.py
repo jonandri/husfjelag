@@ -9,6 +9,7 @@ urlpatterns = [
     path("Apartment", ApartmentView.as_view(), name="apartment-create"),
     path("Apartment/update/<int:apartment_id>", ApartmentView.as_view(), name="apartment-update"),
     path("Apartment/delete/<int:apartment_id>", ApartmentView.as_view(), name="apartment-delete"),
+    path("Apartment/enable/<int:apartment_id>", ApartmentView.as_view(), name="apartment-enable"),
     path("Apartment/<int:apartment_id>/owner/<int:owner_id>", ApartmentOwnerView.as_view(), name="apartment-owner-delete"),
     path("Apartment/<int:apartment_id>/owner", ApartmentOwnerView.as_view(), name="apartment-owner-create"),
 ]
