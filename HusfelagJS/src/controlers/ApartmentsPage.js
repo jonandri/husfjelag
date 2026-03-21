@@ -495,7 +495,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
                 )}
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
-            <DialogActions sx={{ justifyContent: 'space-between' }}>
+            <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
                 <Box>
                     {!isDisabled && (
                         <Button
