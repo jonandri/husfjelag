@@ -14,10 +14,10 @@ class AssociationSerializer(serializers.ModelSerializer):
                   "apartment_count", "owner_count", "chair", "cfo"]
 
     def get_apartment_count(self, obj):
-        return obj.apartments.count()
+        return obj.apartments.filter(deleted=False).count()
 
     def get_owner_count(self, obj):
-        return ApartmentOwnership.objects.filter(apartment__association=obj).values("user").distinct().count()
+        return ApartmentOwnership.objects.filter(apartment__association=obj, apartment__deleted=False).values("user").distinct().count()
 
     def _get_role_name(self, obj, role):
         entry = AssociationAccess.objects.filter(
