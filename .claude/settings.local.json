@@ -3,13 +3,33 @@
     "allow": [
       "Bash(git commit:*)",
       "Bash(git *)",
+      "Bash(cat*)",
       "Bash(gh *)",
       "Bash(grep *)",
       "Bash(cd *)",
       "Bash(cd * && *)",
       "Bash(cat *)",
       "Bash(poetry run python manage.py check)",
-      "Bash(poetry run python manage.py makemigrations users associations)"
+      "Bash(poetry run python manage.py makemigrations users associations)",
+      "Bash(npm start)",
+      "Bash(PORT=3003 npm start)",
+      "Bash(poetry run python manage.py runserver 8003)",
+      "Bash(poetry run python3 manage.py runserver 8003)",
+      "Bash(poetry install)",
+      "Bash(poetry install --no-root)",
+      "Bash(lsof -i :8003 -sTCP:LISTEN)",
+      "Bash(poetry run python3 manage.py makemigrations)",
+      "Bash(poetry run python3 manage.py migrate)",
+      "Bash(poetry run python3 manage.py migrate users zero --fake)",
+      "Bash(poetry run python3 manage.py migrate associations zero --fake)",
+      "Bash(git merge:*)",
+      "Bash(curl -sv \"http://localhost:8003/Association/1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8003/Association/2)",
+      "Bash(poetry run:*)",
+      "Skill(commit-commands:commit)",
+      "Skill(commit-commands:commit:*)",
+      "Bash(xargs kill:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8010/Association/2)"
     ]
   }
 }

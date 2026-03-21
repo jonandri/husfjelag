@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Typography, Box, CircularProgress } from '@mui/material';
 import { UserContext } from './UserContext';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
+
 /**
  * /auth/callback
  * The backend redirects here after a successful Kenni login with:
  *   ?token=<jwt>&uid=<user_id>
  *
- * Stores the token + user info in localStorage and context,
- * then redirects to the dashboard.
+ * Fetches the full user profile, stores it in localStorage and context,
+ * then redirects to /profile if email or phone are missing, otherwise /dashboard.
  */
 function AuthCallback() {
     const navigate = useNavigate();
@@ -26,14 +28,39 @@ function AuthCallback() {
             return;
         }
 
-        if (token && uid) {
-            const user = { id: parseInt(uid, 10), token };
-            localStorage.setItem('user', JSON.stringify(user));
-            setUser(user);
-            navigate('/dashboard');
-        } else {
+        if (!token || !uid) {
             navigate('/login?error=missing_params');
+            return;
         }
+
+        const fetchProfile = async () => {
+            try {
+                const resp = await fetch(`${API_URL}/User/${uid}`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (resp.ok) {
+                    const profile = await resp.json();
+                    const user = { ...profile, token };
+                    localStorage.setItem('user', JSON.stringify(user));
+                    setUser(user);
+                    const missingInfo = !profile.email || !profile.phone;
+                    navigate(missingInfo ? '/profile' : '/dashboard');
+                } else {
+                    // Fallback: store minimal user and go to dashboard
+                    const user = { id: parseInt(uid, 10), token };
+                    localStorage.setItem('user', JSON.stringify(user));
+                    setUser(user);
+                    navigate('/dashboard');
+                }
+            } catch {
+                const user = { id: parseInt(uid, 10), token };
+                localStorage.setItem('user', JSON.stringify(user));
+                setUser(user);
+                navigate('/dashboard');
+            }
+        };
+
+        fetchProfile();
     }, []);
 
     return (

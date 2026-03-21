@@ -8,6 +8,8 @@ import Dashboard from './controlers/Dashboard';
 import HouseAssociation from './controlers/HouseAssociation';
 import AssociationPage from './controlers/AssociationPage';
 import ApartmentsPage from './controlers/ApartmentsPage';
+import OwnersPage from './controlers/OwnersPage';
+import ProfilePage from './controlers/ProfilePage';
 import { UserContext } from './controlers/UserContext';
 
 // Create a custom theme
@@ -65,6 +67,8 @@ function App() {
             <Route path="/houseassociation" element={<HouseAssociation />} />
             <Route path="/husfelag" element={<AssociationPage />} />
             <Route path="/ibudir" element={<ApartmentsPage />} />
+            <Route path="/eigendur" element={<OwnersPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
         </Router> 
       </ThemeProvider>

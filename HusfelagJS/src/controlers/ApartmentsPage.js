@@ -103,7 +103,7 @@ function ApartmentsPage() {
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {active.map((apt) => (
+                                            {[...active].sort((a, b) => a.anr.localeCompare(b.anr, 'is')).map((apt) => (
                                                 <ApartmentRow
                                                     key={apt.id}
                                                     apt={apt}
@@ -154,7 +154,7 @@ function ApartmentsPage() {
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
-                                                    {disabled.map((apt) => (
+                                                    {[...disabled].sort((a, b) => a.anr.localeCompare(b.anr, 'is')).map((apt) => (
                                                         <ApartmentRow
                                                             key={apt.id}
                                                             apt={apt}
@@ -301,6 +301,7 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
 function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved, isDisabled }) {
     const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const { user } = React.useContext(UserContext);
 
     return (
         <>
@@ -342,6 +343,7 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved, isDisabled })
                     open={ownerDialogOpen}
                     onClose={() => setOwnerDialogOpen(false)}
                     apt={apt}
+                    userId={user?.id}
                     onChanged={() => { setOwnerDialogOpen(false); onOwnersChanged(); }}
                 />
             )}
@@ -538,22 +540,37 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
     );
 }
 
-function OwnerDialog({ open, onClose, apt, onChanged }) {
+function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
     const [kennitala, setKennitala] = useState('');
+    const [share, setShare] = useState('');
+    const [isPayer, setIsPayer] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    React.useEffect(() => {
+        if (open) { setKennitala(''); setShare(''); setIsPayer(false); setError(''); }
+    }, [open]);
+
+    const existingSum = apt.owners.reduce((s, o) => s + parseFloat(o.share || 0), 0);
+    const shareOver = parseFloat(share) > 0 && existingSum + parseFloat(share) > 100;
+    const isValid = kennitala.length === 10 && parseFloat(share) > 0 && !shareOver;
 
     const handleAdd = async () => {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/${apt.id}/owner`, {
+            const resp = await fetch(`${API_URL}/Owner`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ kennitala }),
+                body: JSON.stringify({
+                    user_id: userId,
+                    kennitala,
+                    apartment_id: apt.id,
+                    share: parseFloat(share),
+                    is_payer: isPayer,
+                }),
             });
             if (resp.ok) {
-                setKennitala('');
                 onChanged();
             } else {
                 const data = await resp.json();
@@ -568,7 +585,7 @@ function OwnerDialog({ open, onClose, apt, onChanged }) {
 
     const handleRemove = async (ownerId) => {
         try {
-            await fetch(`${API_URL}/Apartment/${apt.id}/owner/${ownerId}`, { method: 'DELETE' });
+            await fetch(`${API_URL}/Owner/delete/${ownerId}`, { method: 'DELETE' });
             onChanged();
         } catch { /* ignore */ }
     };
@@ -585,11 +602,14 @@ function OwnerDialog({ open, onClose, apt, onChanged }) {
                             <Box key={o.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Box>
                                     <Typography variant="body2" fontWeight={500}>{o.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{o.kennitala}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{o.kennitala} · {o.share}%{o.is_payer ? ' · Greiðandi' : ''}</Typography>
                                 </Box>
                                 <Button size="small" color="error" onClick={() => handleRemove(o.id)}>Fjarlægja</Button>
                             </Box>
                         ))}
+                        <Typography variant="caption" color="text.secondary">
+                            Núverandi hlutfall: {existingSum.toFixed(2)}% / 100%
+                        </Typography>
                     </Box>
                 )}
                 <Divider />
@@ -603,13 +623,36 @@ function OwnerDialog({ open, onClose, apt, onChanged }) {
                     size="small"
                     fullWidth
                 />
+                <TextField
+                    label="Hlutfall (%)"
+                    value={share}
+                    onChange={e => setShare(e.target.value.replace(/[^0-9.]/g, ''))}
+                    size="small"
+                    type="number"
+                    inputProps={{ min: 0, max: 100, step: 0.01 }}
+                    helperText="Hlutdeild þessa eiganda í íbúðinni"
+                    error={shareOver}
+                    fullWidth
+                />
+                {shareOver && <Alert severity="error">Heildarhlutfall eigenda myndi fara yfir 100% fyrir þessa íbúð.</Alert>}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                        label="Greiðandi"
+                        size="small"
+                        color={isPayer ? 'secondary' : 'default'}
+                        variant={isPayer ? 'filled' : 'outlined'}
+                        onClick={() => setIsPayer(v => !v)}
+                        sx={{ cursor: 'pointer' }}
+                    />
+                    <Typography variant="caption" color="text.secondary">Merkja sem greiðanda reikninga</Typography>
+                </Box>
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Loka</Button>
                 <Button
                     variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    disabled={kennitala.length !== 10 || saving} onClick={handleAdd}
+                    disabled={!isValid || saving} onClick={handleAdd}
                 >
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Skrá eiganda'}
                 </Button>
