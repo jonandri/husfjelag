@@ -10,12 +10,14 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
+import { fmtAmount } from '../format';
+import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 const TYPE_LABELS = {
     SHARED: 'Sameiginlegt',
-    SHARE2: 'Sameign',
+    SHARE2: 'Hiti',
     SHARE3: 'Lóð',
     EQUAL:  'Jafnskipt',
 };
@@ -27,6 +29,7 @@ function BudgetPage() {
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState('');
     const year = new Date().getFullYear();
+    const { sort, lbl } = useSort('category_name');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -84,7 +87,7 @@ function BudgetPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">{budgetTitle}</Typography>
                     <Button
@@ -103,32 +106,30 @@ function BudgetPage() {
                     </Typography>
                 ) : (
                     <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table>
-                            <TableHead>
+                        <Table size="small">
+                            <TableHead sx={HEAD_SX}>
                                 <TableRow>
-                                    <TableCell>Flokkur</TableCell>
-                                    <TableCell>Tegund</TableCell>
-                                    <TableCell align="right">Upphæð (kr.)</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('category_name', 'Flokkur')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('category_type', 'Tegund')}</TableCell>
+                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('amount', 'Upphæð')}</TableCell>
                                     <TableCell sx={{ width: 48 }} />
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {[...budget.items]
-                                    .sort((a, b) => a.category_name.localeCompare(b.category_name, 'is'))
-                                    .map(item => (
-                                        <BudgetItemRow
-                                            key={item.id}
-                                            item={item}
-                                            onSaved={loadBudget}
-                                        />
-                                    ))}
+                                {sort(budget.items).map(item => (
+                                    <BudgetItemRow
+                                        key={item.id}
+                                        item={item}
+                                        onSaved={loadBudget}
+                                    />
+                                ))}
                             </TableBody>
                             <TableFooter>
                                 <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
                                     <TableCell>Samtals</TableCell>
                                     <TableCell />
                                     <TableCell align="right">
-                                        {total.toLocaleString('is-IS', { minimumFractionDigits: 0 })} kr.
+                                        {fmtAmount(total)}
                                     </TableCell>
                                     <TableCell />
                                 </TableRow>
@@ -149,7 +150,7 @@ function BudgetItemRow({ item, onSaved }) {
                 <TableCell>{item.category_name}</TableCell>
                 <TableCell>{TYPE_LABELS[item.category_type] || item.category_type}</TableCell>
                 <TableCell align="right">
-                    {parseFloat(item.amount).toLocaleString('is-IS', { minimumFractionDigits: 0 })} kr.
+                    {fmtAmount(item.amount)}
                 </TableCell>
                 <TableCell align="right">
                     <Tooltip title="Breyta upphæð">
@@ -175,7 +176,7 @@ function EditAmountDialog({ open, onClose, item, onSaved }) {
     const [error, setError] = useState('');
 
     React.useEffect(() => {
-        if (open) { setAmount(String(item.amount)); setError(''); }
+        if (open) { setAmount(String(Math.round(parseFloat(item.amount || 0)))); setError(''); }
     }, [open, item]);
 
     const isValid = parseFloat(amount) >= 0 && !isNaN(parseFloat(amount));
@@ -209,14 +210,15 @@ function EditAmountDialog({ open, onClose, item, onSaved }) {
                     </Typography>
                 </Box>
                 <TextField
-                    label="Upphæð (kr.)"
+                    label="Upphæð"
                     value={amount}
-                    onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                    onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
                     size="small"
                     type="number"
                     inputProps={{ min: 0, step: 1 }}
                     fullWidth
                     autoFocus
+                    onFocus={e => e.target.select()}
                 />
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>

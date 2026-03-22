@@ -39,7 +39,7 @@ function Dashboard() {
     return (
         <div className='dashboard'>
             <SideBar />
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 {association && (
                     <>
                         <Typography variant="h5" gutterBottom>

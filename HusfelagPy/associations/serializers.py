@@ -21,17 +21,18 @@ class AssociationSerializer(serializers.ModelSerializer):
             apartment__association=obj, apartment__deleted=False, deleted=False
         ).values("user").distinct().count()
 
-    def _get_role_name(self, obj, role):
-        entry = AssociationAccess.objects.filter(
+    def _get_role_entry(self, obj, role):
+        return AssociationAccess.objects.filter(
             association=obj, role=role, active=True
         ).select_related("user").first()
-        return entry.user.name if entry else None
 
     def get_chair(self, obj):
-        return self._get_role_name(obj, AssociationRole.CHAIR)
+        e = self._get_role_entry(obj, AssociationRole.CHAIR)
+        return e.user.name if e else None
 
     def get_cfo(self, obj):
-        return self._get_role_name(obj, AssociationRole.CFO)
+        e = self._get_role_entry(obj, AssociationRole.CFO)
+        return e.user.name if e else None
 
 
 class ApartmentOwnerSerializer(serializers.ModelSerializer):
@@ -53,7 +54,7 @@ class ApartmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Apartment
-        fields = ["id", "anr", "fnr", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]
+        fields = ["id", "anr", "fnr", "size", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]
 
 
 class OwnershipSerializer(serializers.ModelSerializer):

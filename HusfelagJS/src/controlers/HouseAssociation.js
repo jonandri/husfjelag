@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Button, TextField, Typography, CircularProgress, Alert, Divider } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from './UserContext';
+import { fmtKennitala } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
 
@@ -100,7 +101,7 @@ function HouseAssociationForm({ onCreated } = {}) {
                         <Typography variant="subtitle1" fontWeight="bold">Staðfestið upplýsingarnar:</Typography>
                         <Box sx={{ bgcolor: '#f5f5f5', borderRadius: 1, p: 2, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                             <Typography><strong>Nafn:</strong> {preview.name}</Typography>
-                            <Typography><strong>Kennitala:</strong> {preview.ssn}</Typography>
+                            <Typography><strong>Kennitala:</strong> {fmtKennitala(preview.ssn)}</Typography>
                             <Typography><strong>Heimilisfang:</strong> {preview.address}</Typography>
                             <Typography><strong>Póstnúmer:</strong> {preview.postal_code}</Typography>
                             <Typography><strong>Borg:</strong> {preview.city}</Typography>

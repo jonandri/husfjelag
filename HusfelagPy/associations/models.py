@@ -40,6 +40,7 @@ class Apartment(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="apartments")
     fnr = models.CharField(max_length=8)   # Fasteignanúmer (government property ID)
     anr = models.CharField(max_length=7)   # Merking (apartment identifier)
+    size = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # Flatarmál í m²
     share = models.DecimalField(max_digits=5, decimal_places=2, default=0)    # Matshlutfall skv. eignaskiptasamningi
     share_2 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall hita
     share_3 = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # Matshlutfall lóðar
@@ -71,7 +72,7 @@ class ApartmentOwnership(models.Model):
 
 class CategoryType(models.TextChoices):
     SHARED = "SHARED", "Sameiginlegt"
-    SHARE2 = "SHARE2", "Sameign"
+    SHARE2 = "SHARE2", "Hiti"
     SHARE3 = "SHARE3", "Lóð"
     EQUAL  = "EQUAL",  "Jafnskipt"
 

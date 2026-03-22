@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=255)),
-                ('type', models.CharField(choices=[('SHARED', 'Sameiginlegt'), ('SHARE2', 'Sameign'), ('SHARE3', 'Lóð'), ('EQUAL', 'Jafnskipt')], max_length=20)),
+                ('type', models.CharField(choices=[('SHARED', 'Sameiginlegt'), ('SHARE2', 'Hiti'), ('SHARE3', 'Lóð'), ('EQUAL', 'Jafnskipt')], max_length=20)),
                 ('deleted', models.BooleanField(default=False)),
                 ('association', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='categories', to='associations.association')),
             ],

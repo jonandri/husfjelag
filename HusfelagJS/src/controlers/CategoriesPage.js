@@ -11,12 +11,13 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
+import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 const CATEGORY_TYPES = [
     { value: 'SHARED', label: 'Sameiginlegt' },
-    { value: 'SHARE2', label: 'Sameign' },
+    { value: 'SHARE2', label: 'Hiti' },
     { value: 'SHARE3', label: 'Lóð' },
     { value: 'EQUAL',  label: 'Jafnskipt' },
 ];
@@ -30,6 +31,7 @@ function CategoriesPage() {
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [showDisabled, setShowDisabled] = useState(false);
+    const { sort, lbl } = useSort('name');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -64,7 +66,7 @@ function CategoriesPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">Flokkar</Typography>
                     <Button
@@ -90,16 +92,16 @@ function CategoriesPage() {
                     </Typography>
                 ) : (
                     <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table>
-                            <TableHead>
+                        <Table size="small">
+                            <TableHead sx={HEAD_SX}>
                                 <TableRow>
-                                    <TableCell>Nafn</TableCell>
-                                    <TableCell>Tegund</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('type', 'Tegund')}</TableCell>
                                     <TableCell />
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {[...active].sort((a, b) => a.name.localeCompare(b.name, 'is')).map(c => (
+                                {sort(active).map(c => (
                                     <CategoryRow key={c.id} category={c} onSaved={loadCategories} />
                                 ))}
                             </TableBody>
@@ -119,15 +121,15 @@ function CategoriesPage() {
                         <Collapse in={showDisabled}>
                             <Paper variant="outlined" sx={{ mt: 1 }}>
                                 <Table size="small">
-                                    <TableHead>
+                                    <TableHead sx={HEAD_SX}>
                                         <TableRow>
-                                            <TableCell>Nafn</TableCell>
-                                            <TableCell>Tegund</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
                                             <TableCell />
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {[...disabled].sort((a, b) => a.name.localeCompare(b.name, 'is')).map(c => (
+                                        {sort(disabled).map(c => (
                                             <CategoryRow key={c.id} category={c} onSaved={loadCategories} isDisabled />
                                         ))}
                                     </TableBody>

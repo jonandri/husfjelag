@@ -12,6 +12,7 @@ import OwnersPage from './controlers/OwnersPage';
 import ProfilePage from './controlers/ProfilePage';
 import BudgetPage from './controlers/BudgetPage';
 import CategoriesPage from './controlers/CategoriesPage';
+import CollectionPage from './controlers/CollectionPage';
 import { UserContext } from './controlers/UserContext';
 
 // Create a custom theme
@@ -65,14 +66,15 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Navigate to="/husfelag" replace />} />
             <Route path="/houseassociation" element={<HouseAssociation />} />
             <Route path="/husfelag" element={<AssociationPage />} />
             <Route path="/ibudir" element={<ApartmentsPage />} />
             <Route path="/eigendur" element={<OwnersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/budget" element={<BudgetPage />} />
+            <Route path="/aaetlun" element={<BudgetPage />} />
             <Route path="/flokkar" element={<CategoriesPage />} />
+            <Route path="/innheimta" element={<CollectionPage />} />
           </Routes>
         </Router> 
       </ThemeProvider>
