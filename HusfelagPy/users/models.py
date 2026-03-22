@@ -6,6 +6,7 @@ class User(models.Model):
     name = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True, default=None)
     phone = models.CharField(max_length=20, blank=True, null=True, default=None)
+    is_superadmin = models.BooleanField(default=False)
 
     class Meta:
         db_table = "users_user"

@@ -18,7 +18,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function OwnersPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [ownerships, setOwnerships] = useState(undefined);
     const [apartments, setApartments] = useState([]);
     const [error, setError] = useState('');
@@ -34,8 +34,8 @@ function OwnersPage() {
     const loadAll = async () => {
         try {
             const [ownRes, aptRes] = await Promise.all([
-                fetch(`${API_URL}/Owner/${user.id}`),
-                fetch(`${API_URL}/Apartment/${user.id}`),
+                fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                fetch(`${API_URL}/Apartment/${user.id}${assocParam}`),
             ]);
             if (ownRes.ok) setOwnerships(await ownRes.json());
             else { setError('Villa við að sækja eigendur.'); setOwnerships([]); }
@@ -80,6 +80,7 @@ function OwnersPage() {
                 <Collapse in={showForm}>
                     <AddOwnerForm
                         userId={user.id}
+                        assocParam={assocParam}
                         apartments={apartments}
                         ownerships={active}
                         onCreated={() => { setShowForm(false); loadAll(); }}
@@ -165,7 +166,7 @@ function OwnersPage() {
     );
 }
 
-function AddOwnerForm({ userId, apartments, ownerships, onCreated }) {
+function AddOwnerForm({ userId, assocParam, apartments, ownerships, onCreated }) {
     const [kennitala, setKennitala] = useState('');
     const [apartmentId, setApartmentId] = useState('');
     const [share, setShare] = useState('');
@@ -183,7 +184,7 @@ function AddOwnerForm({ userId, apartments, ownerships, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Owner`, {
+            const resp = await fetch(`${API_URL}/Owner${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

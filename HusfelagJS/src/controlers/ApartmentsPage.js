@@ -18,7 +18,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function ApartmentsPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [apartments, setApartments] = useState(undefined);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -32,7 +32,7 @@ function ApartmentsPage() {
 
     const loadApartments = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Apartment/${user.id}`);
+            const resp = await fetch(`${API_URL}/Apartment/${user.id}${assocParam}`);
             if (resp.ok) {
                 setApartments(await resp.json());
             } else {
@@ -75,6 +75,7 @@ function ApartmentsPage() {
                 <Collapse in={showForm}>
                     <AddApartmentForm
                         userId={user.id}
+                        assocParam={assocParam}
                         apartments={apartments.filter(a => !a.deleted)}
                         onCreated={(updated) => { setShowForm(false); setApartments(updated); }}
                     />
@@ -219,7 +220,7 @@ function SameShareCheckbox({ checked, onChange }) {
     );
 }
 
-function AddApartmentForm({ userId, apartments, onCreated }) {
+function AddApartmentForm({ userId, assocParam, apartments, onCreated }) {
     const [anr, setAnr] = useState('');
     const [fnr, setFnr] = useState('');
     const [size, setSize] = useState('');
@@ -250,7 +251,7 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment`, {
+            const resp = await fetch(`${API_URL}/Apartment${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema
 from django.db import models as django_models
 import datetime
 from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
-from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer
+from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
 from .scraper import lookup_association
 from users.models import User
 
@@ -35,16 +35,46 @@ def _create_default_categories(association):
     ])
 
 
+def _resolve_assoc(user_id, request):
+    """
+    Returns the association for this request.
+    If ?as=<id> is in query params:
+      - superadmin: returns any association with that id
+      - regular user: returns that association only if they have active access
+    Otherwise: returns the first association the user has active access to.
+    """
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return None
+
+    as_id = request.query_params.get("as")
+    if as_id:
+        try:
+            as_id = int(as_id)
+        except (ValueError, TypeError):
+            return None
+        if user.is_superadmin:
+            return Association.objects.filter(id=as_id).first()
+        return Association.objects.filter(
+            id=as_id,
+            access_entries__user_id=user_id,
+            access_entries__active=True,
+        ).first()
+
+    return Association.objects.filter(
+        access_entries__user_id=user_id, access_entries__active=True
+    ).first()
+
+
 class AssociationView(APIView):
     @extend_schema(responses=AssociationSerializer)
     def get(self, request, user_id):
         """GET /Association/{user_id} — Get the active association for a user."""
-        associations = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        )
-        if not associations.exists():
+        association = _resolve_assoc(user_id, request)
+        if not association:
             return Response(None, status=status.HTTP_200_OK)
-        return Response(AssociationSerializer(associations.first()).data)
+        return Response(AssociationSerializer(association).data)
 
     @extend_schema(request=AssociationSerializer, responses=AssociationSerializer)
     def post(self, request):
@@ -87,9 +117,7 @@ class AssociationRoleView(APIView):
         if not kennitala:
             return Response({"detail": "kennitala er nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
 
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -176,9 +204,7 @@ def _parse_share(value, default=None):
 class ApartmentView(APIView):
     def get(self, request, user_id):
         """GET /Apartment/{user_id} — List all apartments (active + disabled) for the user's association."""
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
         apartments = association.apartments.prefetch_related("ownerships__user").all()
@@ -202,9 +228,7 @@ class ApartmentView(APIView):
         if not user_id or not anr or not fnr:
             return Response({"detail": "user_id, anr, and fnr are required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -370,9 +394,7 @@ class ApartmentOwnerView(APIView):
 class OwnerView(APIView):
     def get(self, request, user_id):
         """GET /Owner/{user_id} — List all ownerships for the user's association."""
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
         ownerships = ApartmentOwnership.objects.filter(
@@ -396,11 +418,8 @@ class OwnerView(APIView):
         except Apartment.DoesNotExist:
             return Response({"detail": "Íbúð fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
-        if not Association.objects.filter(
-            id=apartment.association_id,
-            access_entries__user_id=requesting_user_id,
-            access_entries__active=True,
-        ).exists():
+        resolved = _resolve_assoc(requesting_user_id, request)
+        if not resolved or resolved.id != apartment.association_id:
             return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
 
         owner, created = User.objects.get_or_create(
@@ -508,14 +527,12 @@ class OwnerView(APIView):
 
 
 class CategoryView(APIView):
-    def _get_association(self, user_id):
-        return Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+    def _get_association(self, user_id, request):
+        return _resolve_assoc(user_id, request)
 
     def get(self, request, user_id):
         """GET /Category/{user_id} — List all categories for the association."""
-        association = self._get_association(user_id)
+        association = self._get_association(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
         categories = association.categories.all().order_by("name")
@@ -530,9 +547,7 @@ class CategoryView(APIView):
         if not name or not type_:
             return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
 
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = self._get_association(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -605,14 +620,12 @@ def _create_budget_items(budget, source_budget=None):
 
 
 class BudgetView(APIView):
-    def _get_association(self, user_id):
-        return Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+    def _get_association(self, user_id, request):
+        return _resolve_assoc(user_id, request)
 
     def get(self, request, user_id):
         """GET /Budget/{user_id} — Return active budget, auto-creating if none exists."""
-        association = self._get_association(user_id)
+        association = self._get_association(user_id, request)
         if not association:
             return Response(None, status=status.HTTP_200_OK)
 
@@ -634,9 +647,7 @@ class BudgetView(APIView):
         Deactivates the current active budget, copies its amounts to the new one.
         """
         user_id = request.data.get("user_id")
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = self._get_association(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -681,9 +692,7 @@ class BudgetItemView(APIView):
 class CollectionView(APIView):
     def get(self, request, user_id):
         """GET /Collection/{user_id} — Annual and monthly amounts per apartment based on active budget."""
-        association = Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
-        ).first()
+        association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
 
@@ -754,3 +763,97 @@ class CollectionView(APIView):
         ]
 
         return Response({"rows": rows, "budget_summary": budget_summary})
+
+
+class AssociationListView(APIView):
+    def get(self, request, user_id):
+        """GET /Association/list/{user_id} — List all associations the user has access to.
+        Superadmin gets all associations in the system."""
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response([], status=status.HTTP_200_OK)
+
+        if user.is_superadmin:
+            associations = Association.objects.all().order_by("name")
+            serializer = AssociationAccessSerializer(associations, many=True, context={"user_id": None})
+        else:
+            associations = Association.objects.filter(
+                access_entries__user_id=user_id, access_entries__active=True
+            ).order_by("name")
+            serializer = AssociationAccessSerializer(associations, many=True, context={"user_id": user_id})
+
+        return Response(serializer.data)
+
+
+class AdminAssociationView(APIView):
+    def _check_superadmin(self, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            return user if user.is_superadmin else None
+        except User.DoesNotExist:
+            return None
+
+    def get(self, request):
+        """GET /admin/Association?user_id=X&q=search — Search all associations."""
+        user_id = request.query_params.get("user_id")
+        if not self._check_superadmin(user_id):
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+
+        q = request.query_params.get("q", "").strip()
+        qs = Association.objects.all().order_by("name")
+        if q:
+            qs = qs.filter(
+                django_models.Q(name__icontains=q) | django_models.Q(ssn__icontains=q)
+            )
+        return Response(AssociationAccessSerializer(qs[:50], many=True, context={"user_id": None}).data)
+
+    def post(self, request):
+        """
+        POST /admin/Association — Create an association and assign a chair.
+        Body: { admin_user_id, association_ssn, chair_ssn }
+        Looks up association info via scraper, finds chair user by kennitala.
+        """
+        admin_user_id = request.data.get("admin_user_id")
+        if not self._check_superadmin(admin_user_id):
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+
+        association_ssn = str(request.data.get("association_ssn", "")).strip().replace("-", "")
+        chair_ssn = str(request.data.get("chair_ssn", "")).strip().replace("-", "")
+
+        if not association_ssn.isdigit() or len(association_ssn) != 10:
+            return Response({"detail": "association_ssn verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
+        if not chair_ssn.isdigit() or len(chair_ssn) != 10:
+            return Response({"detail": "chair_ssn verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if Association.objects.filter(ssn=association_ssn).exists():
+            return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+
+        data = lookup_association(association_ssn)
+        if data is None:
+            return Response({"detail": "Ekkert húsfélag fannst með þessa kennitölu á skatturinn.is."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            chair_user = User.objects.get(kennitala=chair_ssn)
+        except User.DoesNotExist:
+            return Response({"detail": "Notandi með kennitölu formanns fannst ekki í kerfinu."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AssociationSerializer(data={
+            "ssn": data["ssn"],
+            "name": data["name"],
+            "address": data["address"],
+            "postal_code": data["postal_code"],
+            "city": data["city"],
+        })
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        association = serializer.save()
+        AssociationAccess.objects.create(
+            user=chair_user,
+            association=association,
+            role=AssociationRole.CHAIR,
+            active=True,
+        )
+        _create_default_categories(association)
+        return Response(AssociationAccessSerializer(association, context={"user_id": None}).data, status=status.HTTP_201_CREATED)
