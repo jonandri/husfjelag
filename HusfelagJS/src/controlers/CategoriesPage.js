@@ -26,7 +26,7 @@ const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label ||
 
 function CategoriesPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [categories, setCategories] = useState(undefined);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -40,7 +40,7 @@ function CategoriesPage() {
 
     const loadCategories = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Category/${user.id}`);
+            const resp = await fetch(`${API_URL}/Category/${user.id}${assocParam}`);
             if (resp.ok) setCategories(await resp.json());
             else { setError('Villa við að sækja flokka.'); setCategories([]); }
         } catch {
@@ -80,6 +80,7 @@ function CategoriesPage() {
                 <Collapse in={showForm}>
                     <AddCategoryForm
                         userId={user.id}
+                        assocParam={assocParam}
                         onCreated={() => { setShowForm(false); loadCategories(); }}
                     />
                 </Collapse>
@@ -143,7 +144,7 @@ function CategoriesPage() {
     );
 }
 
-function AddCategoryForm({ userId, onCreated }) {
+function AddCategoryForm({ userId, assocParam, onCreated }) {
     const [name, setName] = useState('');
     const [type, setType] = useState('');
     const [saving, setSaving] = useState(false);
@@ -155,7 +156,7 @@ function AddCategoryForm({ userId, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Category`, {
+            const resp = await fetch(`${API_URL}/Category${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, name: name.trim(), type }),

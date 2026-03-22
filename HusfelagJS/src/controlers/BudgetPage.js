@@ -24,7 +24,7 @@ const TYPE_LABELS = {
 
 function BudgetPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [budget, setBudget] = useState(undefined);  // undefined = loading, null = none
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState('');
@@ -38,7 +38,7 @@ function BudgetPage() {
 
     const loadBudget = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Budget/${user.id}`);
+            const resp = await fetch(`${API_URL}/Budget/${user.id}${assocParam}`);
             if (resp.ok) setBudget(await resp.json());
             else { setError('Villa við að sækja áætlun.'); setBudget(null); }
         } catch {
@@ -51,7 +51,7 @@ function BudgetPage() {
         setError('');
         setCreating(true);
         try {
-            const resp = await fetch(`${API_URL}/Budget`, {
+            const resp = await fetch(`${API_URL}/Budget${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),

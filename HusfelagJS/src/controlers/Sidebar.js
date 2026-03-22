@@ -16,6 +16,7 @@ import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined
 import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import { UserContext } from './UserContext';
 import { fmtKennitala, fmtPhone } from '../format';
 
@@ -116,11 +117,12 @@ function BottomItem({ label, icon, collapsed, onClick, hoverColor }) {
 function SideBar() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, setUser } = React.useContext(UserContext);
+    const { user, setUser, associations, currentAssociation, setCurrentAssociation, stopImpersonating, impersonating, assocParam } = React.useContext(UserContext);
     const [collapsed, setCollapsed] = useState(
         () => localStorage.getItem('sidebarCollapsed') === 'true'
     );
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
 
     const toggle = () => {
         const next = !collapsed;
@@ -181,6 +183,27 @@ function SideBar() {
                 }
             </Box>
 
+            {/* Association switcher */}
+            <Box
+                onClick={() => setSwitcherOpen(true)}
+                sx={{
+                    mx: 1, mb: 1, px: 1.5, py: 1, borderRadius: 2, cursor: 'pointer',
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.14)' },
+                    overflow: 'hidden',
+                    border: impersonating ? '1px solid rgba(255,165,0,0.6)' : 'none',
+                }}
+            >
+                {!collapsed && (
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', display: 'block', lineHeight: 1.2 }}>
+                        {impersonating ? 'Kerfisstjóri' : 'Húsfélag'}
+                    </Typography>
+                )}
+                <Typography variant="body2" sx={{ color: TEXT, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {collapsed ? '🏢' : (currentAssociation?.name || '—')}
+                </Typography>
+            </Box>
+
             {/* Nav items */}
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.25, pt: 0.5, overflowY: 'auto', overflowX: 'hidden' }}>
                 {NAV.map(item => (
@@ -192,6 +215,16 @@ function SideBar() {
                         onClick={() => navigate(item.path)}
                     />
                 ))}
+                {user?.is_superadmin && (
+                    <NavItem
+                        path="/superadmin"
+                        label="Kerfisstjóri"
+                        icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />}
+                        collapsed={collapsed}
+                        active={location.pathname === '/superadmin'}
+                        onClick={() => navigate('/superadmin')}
+                    />
+                )}
             </Box>
 
             {/* Bottom: settings + logout */}
@@ -212,6 +245,40 @@ function SideBar() {
             </Box>
 
             <UserSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} user={user} setUser={setUser} />
+
+            <Dialog open={switcherOpen} onClose={() => setSwitcherOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>Skipta um húsfélag</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
+                    {impersonating && (
+                        <Alert severity="warning" action={
+                            <Button size="small" onClick={() => { stopImpersonating(); setSwitcherOpen(false); }}>
+                                Hætta við
+                            </Button>
+                        }>
+                            Þú ert að skoða sem kerfisstjóri
+                        </Alert>
+                    )}
+                    {associations.map(a => (
+                        <Box
+                            key={a.id}
+                            onClick={() => { setCurrentAssociation(a); setSwitcherOpen(false); }}
+                            sx={{
+                                p: 1.5, borderRadius: 1, cursor: 'pointer',
+                                backgroundColor: currentAssociation?.id === a.id ? 'rgba(8,192,118,0.12)' : 'transparent',
+                                border: currentAssociation?.id === a.id ? '1px solid rgba(8,192,118,0.4)' : '1px solid rgba(0,0,0,0.1)',
+                                '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' },
+                            }}
+                        >
+                            <Typography variant="body2" fontWeight={500}>{a.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{a.role || ''}</Typography>
+                        </Box>
+                    ))}
+                    {user?.is_superadmin && <AdminSearch user={user} onSelect={(a) => { setCurrentAssociation(a); setSwitcherOpen(false); }} />}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setSwitcherOpen(false)}>Loka</Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }
@@ -321,6 +388,46 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
                 </Button>
             </DialogActions>
         </Dialog>
+    );
+}
+
+function AdminSearch({ user, onSelect }) {
+    const [q, setQ] = useState('');
+    const [results, setResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+
+    React.useEffect(() => {
+        if (q.length < 2) { setResults([]); return; }
+        setSearching(true);
+        fetch(`${API_URL}/admin/Association?user_id=${user.id}&q=${encodeURIComponent(q)}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { setResults(data); setSearching(false); })
+            .catch(() => setSearching(false));
+    }, [q]);
+
+    return (
+        <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                Leita að hvaða húsfélagi sem er
+            </Typography>
+            <TextField
+                size="small" fullWidth
+                placeholder="Nafn eða kennitala..."
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                InputProps={{ endAdornment: searching ? <CircularProgress size={14} /> : null }}
+            />
+            {results.map(a => (
+                <Box
+                    key={a.id}
+                    onClick={() => onSelect(a)}
+                    sx={{ p: 1, mt: 0.5, borderRadius: 1, cursor: 'pointer', '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }, border: '1px solid rgba(0,0,0,0.08)' }}
+                >
+                    <Typography variant="body2" fontWeight={500}>{a.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{a.ssn}</Typography>
+                </Box>
+            ))}
+        </Box>
     );
 }
 

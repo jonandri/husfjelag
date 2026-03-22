@@ -15,7 +15,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function AssociationPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
     const [budgetTotal, setBudgetTotal] = useState(null);
@@ -31,10 +31,10 @@ function AssociationPage() {
     const loadAll = async () => {
         try {
             const [assocResp, ownersResp, budgetResp, collectionResp] = await Promise.all([
-                fetch(`${API_URL}/Association/${user.id}`),
-                fetch(`${API_URL}/Owner/${user.id}`),
-                fetch(`${API_URL}/Budget/${user.id}`),
-                fetch(`${API_URL}/Collection/${user.id}`),
+                fetch(`${API_URL}/Association/${user.id}${assocParam}`),
+                fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
+                fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -144,6 +144,7 @@ function AssociationPage() {
                     currentName={roleDialog.currentName}
                     owners={owners}
                     userId={user.id}
+                    assocParam={assocParam}
                     onClose={() => setRoleDialog(null)}
                     onSaved={(updated) => { setAssociation(updated); setRoleDialog(null); }}
                 />
@@ -195,7 +196,7 @@ function RoleCard({ label, value, onEdit }) {
     );
 }
 
-function RoleDialog({ open, role, label, currentName, owners, userId, onClose, onSaved }) {
+function RoleDialog({ open, role, label, currentName, owners, userId, assocParam, onClose, onSaved }) {
     const [selected, setSelected] = useState(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -207,7 +208,7 @@ function RoleDialog({ open, role, label, currentName, owners, userId, onClose, o
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Association/roles/${userId}`, {
+            const resp = await fetch(`${API_URL}/Association/roles/${userId}${assocParam}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, kennitala: selected.kennitala }),
