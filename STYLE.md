@@ -171,6 +171,29 @@ Used for "add new" flows (apartments, owners):
 
 ---
 
+## Number Formatting
+
+All numbers use Icelandic locale: `.` as thousands separator, `,` as decimal separator.
+
+Use helpers from `src/format.js` — never use `.toFixed()` or `.toLocaleString()` directly.
+
+| Type | Format | Example | Helper |
+|------|--------|---------|--------|
+| Currency amount | `#.##0 kr.` | `981.500 kr.` | `fmtAmount(n)` |
+| Percentage | `#0,00%` | `33,33%` | `fmtPct(n)` |
+
+```js
+import { fmtAmount, fmtPct } from '../format';
+
+fmtAmount(981500)  // → "981.500 kr."
+fmtPct(33.33)      // → "33,33%"
+```
+
+- `fmtAmount` rounds to nearest integer — no decimals on currency
+- `fmtPct` always shows exactly 2 decimal places
+
+---
+
 ## Validation
 
 ### Email

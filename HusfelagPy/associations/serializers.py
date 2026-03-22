@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership
+from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
 
 
 class AssociationSerializer(serializers.ModelSerializer):
@@ -21,17 +21,18 @@ class AssociationSerializer(serializers.ModelSerializer):
             apartment__association=obj, apartment__deleted=False, deleted=False
         ).values("user").distinct().count()
 
-    def _get_role_name(self, obj, role):
-        entry = AssociationAccess.objects.filter(
+    def _get_role_entry(self, obj, role):
+        return AssociationAccess.objects.filter(
             association=obj, role=role, active=True
         ).select_related("user").first()
-        return entry.user.name if entry else None
 
     def get_chair(self, obj):
-        return self._get_role_name(obj, AssociationRole.CHAIR)
+        e = self._get_role_entry(obj, AssociationRole.CHAIR)
+        return e.user.name if e else None
 
     def get_cfo(self, obj):
-        return self._get_role_name(obj, AssociationRole.CFO)
+        e = self._get_role_entry(obj, AssociationRole.CFO)
+        return e.user.name if e else None
 
 
 class ApartmentOwnerSerializer(serializers.ModelSerializer):
@@ -53,7 +54,7 @@ class ApartmentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Apartment
-        fields = ["id", "anr", "fnr", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]
+        fields = ["id", "anr", "fnr", "size", "share", "share_2", "share_3", "share_eq", "deleted", "owners"]
 
 
 class OwnershipSerializer(serializers.ModelSerializer):
@@ -69,3 +70,27 @@ class OwnershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApartmentOwnership
         fields = ["id", "user_id", "name", "kennitala", "email", "phone", "apartment_id", "anr", "fnr", "share", "is_payer", "deleted"]
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "type", "deleted"]
+
+
+class BudgetItemSerializer(serializers.ModelSerializer):
+    category_id = serializers.IntegerField(source="category.id", read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    category_type = serializers.CharField(source="category.type", read_only=True)
+
+    class Meta:
+        model = BudgetItem
+        fields = ["id", "category_id", "category_name", "category_type", "amount"]
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    items = BudgetItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Budget
+        fields = ["id", "year", "version", "is_active", "items"]

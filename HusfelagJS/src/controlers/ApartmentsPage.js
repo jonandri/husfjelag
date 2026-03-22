@@ -6,10 +6,13 @@ import {
     Button, TextField, Collapse, Chip, IconButton,
     Dialog, DialogTitle, DialogContent, DialogActions,
     Alert, Divider, Tooltip, DialogContentText,
+    FormControlLabel, Checkbox,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
+import { fmtPct, fmtKennitala } from '../format';
+import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -20,6 +23,7 @@ function ApartmentsPage() {
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [showDisabled, setShowDisabled] = useState(false);
+    const { sort, lbl } = useSort('anr');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -55,7 +59,7 @@ function ApartmentsPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">Íbúðir</Typography>
                     <Button
@@ -89,21 +93,21 @@ function ApartmentsPage() {
                                 </Typography>
                             ) : (
                                 <Paper variant="outlined" sx={{ mt: 2 }}>
-                                    <Table>
-                                        <TableHead>
+                                    <Table size="small">
+                                        <TableHead sx={HEAD_SX}>
                                             <TableRow>
-                                                <TableCell>Merking</TableCell>
-                                                <TableCell>Fastanúmer</TableCell>
-                                                <TableCell>Matshlutfall (%)</TableCell>
-                                                <TableCell>Matshlutfall hita (%)</TableCell>
-                                                <TableCell>Matshlutfall lóðar (%)</TableCell>
-                                                <TableCell>Jafnt hlutfall (%)</TableCell>
-                                                <TableCell>Eigendur</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Merking')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('fnr', 'Fastanúmer')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('size', 'Stærð (m²)')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share_2', 'Hiti (%)')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share_3', 'Lóð (%)')}</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Eigendur</TableCell>
                                                 <TableCell />
                                             </TableRow>
                                         </TableHead>
                                         <TableBody>
-                                            {[...active].sort((a, b) => a.anr.localeCompare(b.anr, 'is')).map((apt) => (
+                                            {sort(active).map((apt) => (
                                                 <ApartmentRow
                                                     key={apt.id}
                                                     apt={apt}
@@ -117,10 +121,10 @@ function ApartmentsPage() {
                                             <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
                                                 <TableCell>Samtals</TableCell>
                                                 <TableCell />
-                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share || 0), 0).toFixed(2)}%</TableCell>
-                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0).toFixed(2)}%</TableCell>
-                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0).toFixed(2)}%</TableCell>
-                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.share_eq || 0), 0).toFixed(2)}%</TableCell>
+                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.size || 0), 0).toFixed(2)} m²</TableCell>
+                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share || 0), 0))}</TableCell>
+                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0))}</TableCell>
+                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0))}</TableCell>
                                                 <TableCell />
                                                 <TableCell />
                                             </TableRow>
@@ -143,18 +147,19 @@ function ApartmentsPage() {
                                     <Collapse in={showDisabled}>
                                         <Paper variant="outlined" sx={{ mt: 1 }}>
                                             <Table size="small">
-                                                <TableHead>
+                                                <TableHead sx={HEAD_SX}>
                                                     <TableRow>
-                                                        <TableCell>Merking</TableCell>
-                                                        <TableCell>Fastanúmer</TableCell>
-                                                        <TableCell>Matshlutfall (%)</TableCell>
-                                                        <TableCell>Matshlutfall hita (%)</TableCell>
-                                                        <TableCell>Matshlutfall lóðar (%)</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Merking</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Fastanúmer</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Stærð (m²)</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Matshlutfall (%)</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Hiti (%)</TableCell>
+                                                        <TableCell sx={HEAD_CELL_SX}>Lóð (%)</TableCell>
                                                         <TableCell />
                                                     </TableRow>
                                                 </TableHead>
                                                 <TableBody>
-                                                    {[...disabled].sort((a, b) => a.anr.localeCompare(b.anr, 'is')).map((apt) => (
+                                                    {sort(disabled).map((apt) => (
                                                         <ApartmentRow
                                                             key={apt.id}
                                                             apt={apt}
@@ -178,7 +183,7 @@ function ApartmentsPage() {
     );
 }
 
-function ShareField({ label, value, onChange, helperText, error }) {
+function ShareField({ label, value, onChange, helperText, error, disabled }) {
     return (
         <TextField
             label={label}
@@ -189,8 +194,27 @@ function ShareField({ label, value, onChange, helperText, error }) {
             inputProps={{ min: 0, max: 100, step: 0.01 }}
             helperText={helperText}
             error={!!error}
+            disabled={disabled}
             FormHelperTextProps={{ sx: { whiteSpace: 'normal' } }}
             fullWidth
+        />
+    );
+}
+
+function SameShareCheckbox({ checked, onChange }) {
+    return (
+        <FormControlLabel
+            control={
+                <Checkbox
+                    checked={checked}
+                    onChange={e => onChange(e.target.checked)}
+                    size="small"
+                    color="secondary"
+                    sx={{ py: 0 }}
+                />
+            }
+            label={<Typography variant="caption" color="text.secondary">Nota matshlutfall</Typography>}
+            sx={{ mt: -0.5, ml: 0.5 }}
         />
     );
 }
@@ -198,23 +222,29 @@ function ShareField({ label, value, onChange, helperText, error }) {
 function AddApartmentForm({ userId, apartments, onCreated }) {
     const [anr, setAnr] = useState('');
     const [fnr, setFnr] = useState('');
+    const [size, setSize] = useState('');
     const [share, setShare] = useState('');
     const [share2, setShare2] = useState('');
+    const [share2Same, setShare2Same] = useState(false);
     const [share3, setShare3] = useState('');
+    const [share3Same, setShare3Same] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const n = apartments.length + 1;
-    const shareEqPreview = (100 / n).toFixed(2);
+    const eff2 = share2Same ? share : share2;
+    const eff3 = share3Same ? share : share3;
 
     const existingShare = apartments.reduce((s, a) => s + parseFloat(a.share || 0), 0);
     const existingShare2 = apartments.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0);
     const existingShare3 = apartments.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0);
-    const shareOver = parseFloat(share) > 0 && existingShare + parseFloat(share) > 100;
-    const share2Over = parseFloat(share2) > 0 && existingShare2 + parseFloat(share2) > 100;
-    const share3Over = parseFloat(share3) > 0 && existingShare3 + parseFloat(share3) > 100;
+    const round2 = n => Math.round(n * 100) / 100;
+    const shareOver = parseFloat(share) > 0 && round2(existingShare + parseFloat(share)) > 100;
+    const share2Over = parseFloat(eff2) > 0 && round2(existingShare2 + parseFloat(eff2)) > 100;
+    const share3Over = parseFloat(eff3) > 0 && round2(existingShare3 + parseFloat(eff3)) > 100;
 
-    const isValid = anr.trim() && fnr.trim() && parseFloat(share) >= 0 && parseFloat(share2) >= 0 && parseFloat(share3) >= 0 && !shareOver && !share2Over && !share3Over;
+    const isValid = anr.trim() && fnr.trim()
+        && parseFloat(share) >= 0 && parseFloat(eff2) >= 0 && parseFloat(eff3) >= 0
+        && !shareOver && !share2Over && !share3Over;
 
     const handleSubmit = async () => {
         setError('');
@@ -227,14 +257,16 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                     user_id: userId,
                     anr,
                     fnr,
+                    size: parseFloat(size) || 0,
                     share: parseFloat(share) || 0,
-                    share_2: parseFloat(share2) || 0,
-                    share_3: parseFloat(share3) || 0,
+                    share_2: parseFloat(eff2) || 0,
+                    share_3: parseFloat(eff3) || 0,
                 }),
             });
             if (resp.ok) {
                 const updated = await resp.json();
-                setAnr(''); setFnr(''); setShare(''); setShare2(''); setShare3('');
+                setAnr(''); setFnr(''); setSize(''); setShare(''); setShare2(''); setShare3('');
+                setShare2Same(false); setShare3Same(false);
                 onCreated(updated);
             } else {
                 const data = await resp.json();
@@ -254,6 +286,16 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                 <TextField label="Merking" value={anr} onChange={e => setAnr(e.target.value)} size="small" fullWidth />
                 <TextField label="Fastanúmer" value={fnr} onChange={e => setFnr(e.target.value)} size="small" fullWidth />
             </Box>
+            <TextField
+                label="Stærð (m²)"
+                value={size}
+                onChange={e => setSize(e.target.value.replace(/[^0-9.]/g, ''))}
+                size="small"
+                type="number"
+                inputProps={{ min: 0, step: 0.01 }}
+                helperText="Flatarmál íbúðar í fermetrum"
+                fullWidth
+            />
             <ShareField
                 label="Matshlutfall (%)"
                 value={share}
@@ -262,31 +304,33 @@ function AddApartmentForm({ userId, apartments, onCreated }) {
                 error={shareOver ? 'Heildarhlutfall fer yfir 100%' : ''}
             />
             {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
-            <ShareField
-                label="Matshlutfall hita (%)"
-                value={share2}
-                onChange={setShare2}
-                helperText="Matshluti hita í sameign skv. eignaskiptasamningi"
-                error={share2Over ? 'Heildarhlutfall fer yfir 100%' : ''}
-            />
+
+            <Box>
+                <ShareField
+                    label="Matshlutfall hita (%)"
+                    value={eff2}
+                    onChange={setShare2}
+                    helperText="Matshluti hita skv. eignaskiptasamningi"
+                    error={share2Over ? 'Heildarhlutfall fer yfir 100%' : ''}
+                    disabled={share2Same}
+                />
+                <SameShareCheckbox checked={share2Same} onChange={setShare2Same} />
+            </Box>
             {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
-            <ShareField
-                label="Matshlutfall lóðar (%)"
-                value={share3}
-                onChange={setShare3}
-                helperText="Matshluti lóðar skv. eignaskiptasamningi"
-                error={share3Over ? 'Heildarhlutfall fer yfir 100%' : ''}
-            />
+
+            <Box>
+                <ShareField
+                    label="Matshlutfall lóðar (%)"
+                    value={eff3}
+                    onChange={setShare3}
+                    helperText="Matshluti lóðar skv. eignaskiptasamningi"
+                    error={share3Over ? 'Heildarhlutfall fer yfir 100%' : ''}
+                    disabled={share3Same}
+                />
+                <SameShareCheckbox checked={share3Same} onChange={setShare3Same} />
+            </Box>
             {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
-            <TextField
-                label="Hlutfall í jafnskiptum kostnaði (%)"
-                value={shareEqPreview}
-                size="small"
-                disabled
-                helperText="Hlutfall í jafnskiptum kostnaði s.s. rafmagn í sameign"
-                FormHelperTextProps={{ sx: { whiteSpace: 'normal' } }}
-                fullWidth
-            />
+
             {error && <Alert severity="error">{error}</Alert>}
             <Button
                 variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
@@ -308,10 +352,10 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved, isDisabled })
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{apt.anr}</TableCell>
                 <TableCell>{apt.fnr}</TableCell>
+                <TableCell>{apt.size} m²</TableCell>
                 <TableCell>{apt.share}%</TableCell>
                 <TableCell>{apt.share_2}%</TableCell>
                 <TableCell>{apt.share_3}%</TableCell>
-                {!isDisabled && <TableCell>{apt.share_eq}%</TableCell>}
                 {!isDisabled && (
                     <TableCell>
                         <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -363,9 +407,12 @@ function ApartmentRow({ apt, apartments, onOwnersChanged, onSaved, isDisabled })
 function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSaved, onDeleted }) {
     const [anr, setAnr] = useState(apt.anr);
     const [fnr, setFnr] = useState(apt.fnr);
+    const [size, setSize] = useState(String(apt.size || ''));
     const [share, setShare] = useState(String(apt.share));
     const [share2, setShare2] = useState(String(apt.share_2));
+    const [share2Same, setShare2Same] = useState(false);
     const [share3, setShare3] = useState(String(apt.share_3));
+    const [share3Same, setShare3Same] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -374,20 +421,33 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
     React.useEffect(() => {
         if (open) {
             setAnr(apt.anr); setFnr(apt.fnr);
-            setShare(String(apt.share)); setShare2(String(apt.share_2)); setShare3(String(apt.share_3));
+            setSize(String(apt.size || ''));
+            setShare(String(apt.share));
+            setShare2(String(apt.share_2));
+            setShare3(String(apt.share_3));
+            setShare2Same(false);
+            setShare3Same(false);
             setError('');
         }
     }, [open, apt]);
+
+    const eff2 = share2Same ? share : share2;
+    const eff3 = share3Same ? share : share3;
 
     const others = apartments.filter(a => a.id !== apt.id);
     const otherShare = others.reduce((s, a) => s + parseFloat(a.share || 0), 0);
     const otherShare2 = others.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0);
     const otherShare3 = others.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0);
-    const shareOver = parseFloat(share) >= 0 && otherShare + parseFloat(share) > 100;
-    const share2Over = parseFloat(share2) >= 0 && otherShare2 + parseFloat(share2) > 100;
-    const share3Over = parseFloat(share3) >= 0 && otherShare3 + parseFloat(share3) > 100;
+    const round2 = n => Math.round(n * 100) / 100;
+    const shareOver = parseFloat(share) >= 0 && round2(otherShare + parseFloat(share)) > 100;
+    const share2Over = parseFloat(eff2) >= 0 && round2(otherShare2 + parseFloat(eff2)) > 100;
+    const share3Over = parseFloat(eff3) >= 0 && round2(otherShare3 + parseFloat(eff3)) > 100;
 
-    const isValid = anr.trim() && fnr.trim() && parseFloat(share) >= 0 && parseFloat(share2) >= 0 && parseFloat(share3) >= 0 && !shareOver && !share2Over && !share3Over;
+    const isValid = anr.trim() && fnr.trim()
+        && parseFloat(share) >= 0 && parseFloat(eff2) >= 0 && parseFloat(eff3) >= 0
+        && !shareOver && !share2Over && !share3Over;
+
+    const payload = { anr, fnr, size: parseFloat(size) || 0, share: parseFloat(share) || 0, share_2: parseFloat(eff2) || 0, share_3: parseFloat(eff3) || 0 };
 
     const handleSave = async () => {
         setError('');
@@ -396,14 +456,10 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
             const resp = await fetch(`${API_URL}/Apartment/update/${apt.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ anr, fnr, share: parseFloat(share) || 0, share_2: parseFloat(share2) || 0, share_3: parseFloat(share3) || 0 }),
+                body: JSON.stringify(payload),
             });
-            if (resp.ok) {
-                onSaved();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við uppfærslu.');
-            }
+            if (resp.ok) { onSaved(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við uppfærslu.'); }
         } catch {
             setError('Tenging við þjón mistókst.');
         } finally {
@@ -415,14 +471,8 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
         setDeleting(true);
         try {
             const resp = await fetch(`${API_URL}/Apartment/delete/${apt.id}`, { method: 'DELETE' });
-            if (resp.ok) {
-                setConfirmDelete(false);
-                onDeleted();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við óvirkjun.');
-                setConfirmDelete(false);
-            }
+            if (resp.ok) { setConfirmDelete(false); onDeleted(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við óvirkjun.'); setConfirmDelete(false); }
         } catch {
             setError('Tenging við þjón mistókst.');
             setConfirmDelete(false);
@@ -438,14 +488,10 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
             const resp = await fetch(`${API_URL}/Apartment/enable/${apt.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ anr, fnr, share: parseFloat(share) || 0, share_2: parseFloat(share2) || 0, share_3: parseFloat(share3) || 0 }),
+                body: JSON.stringify(payload),
             });
-            if (resp.ok) {
-                onSaved();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við virkjun.');
-            }
+            if (resp.ok) { onSaved(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við virkjun.'); }
         } catch {
             setError('Tenging við þjón mistókst.');
         } finally {
@@ -458,8 +504,24 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
             <DialogTitle>{isDisabled ? `Óvirk íbúð — ${apt.anr}` : `Breyta íbúð — ${apt.anr}`}</DialogTitle>
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                <Box>
+                    <Typography variant="body1" fontWeight={500}>{apt.anr}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Fastanúmer: {apt.fnr}
+                    </Typography>
+                </Box>
                 <TextField label="Merking" value={anr} onChange={e => setAnr(e.target.value)} size="small" fullWidth />
                 <TextField label="Fastanúmer" value={fnr} onChange={e => setFnr(e.target.value)} size="small" fullWidth />
+                <TextField
+                    label="Stærð (m²)"
+                    value={size}
+                    onChange={e => setSize(e.target.value.replace(/[^0-9.]/g, ''))}
+                    size="small"
+                    type="number"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    helperText="Flatarmál íbúðar í fermetrum"
+                    fullWidth
+                />
                 <ShareField
                     label="Matshlutfall (%)"
                     value={share}
@@ -468,33 +530,33 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
                     error={shareOver}
                 />
                 {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
-                <ShareField
-                    label="Matshlutfall hita (%)"
-                    value={share2}
-                    onChange={setShare2}
-                    helperText="Matshluti hita í sameign skv. eignaskiptasamningi"
-                    error={share2Over}
-                />
-                {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
-                <ShareField
-                    label="Matshlutfall lóðar (%)"
-                    value={share3}
-                    onChange={setShare3}
-                    helperText="Matshluti lóðar skv. eignaskiptasamningi"
-                    error={share3Over}
-                />
-                {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
-                {!isDisabled && (
-                    <TextField
-                        label="Hlutfall í jafnskiptum kostnaði (%)"
-                        value={apt.share_eq}
-                        size="small"
-                        disabled
-                        helperText="Hlutfall í jafnskiptum kostnaði s.s. rafmagn í sameign"
-                        FormHelperTextProps={{ sx: { whiteSpace: 'normal' } }}
-                        fullWidth
+
+                <Box>
+                    <ShareField
+                        label="Matshlutfall hita (%)"
+                        value={eff2}
+                        onChange={setShare2}
+                        helperText="Matshluti hita skv. eignaskiptasamningi"
+                        error={share2Over}
+                        disabled={share2Same}
                     />
-                )}
+                    <SameShareCheckbox checked={share2Same} onChange={setShare2Same} />
+                </Box>
+                {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
+
+                <Box>
+                    <ShareField
+                        label="Matshlutfall lóðar (%)"
+                        value={eff3}
+                        onChange={setShare3}
+                        helperText="Matshluti lóðar skv. eignaskiptasamningi"
+                        error={share3Over}
+                        disabled={share3Same}
+                    />
+                    <SameShareCheckbox checked={share3Same} onChange={setShare3Same} />
+                </Box>
+                {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
+
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
@@ -602,13 +664,13 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
                             <Box key={o.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Box>
                                     <Typography variant="body2" fontWeight={500}>{o.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">{o.kennitala} · {o.share}%{o.is_payer ? ' · Greiðandi' : ''}</Typography>
+                                    <Typography variant="caption" color="text.secondary">{fmtKennitala(o.kennitala)} · {o.share}%{o.is_payer ? ' · Greiðandi' : ''}</Typography>
                                 </Box>
                                 <Button size="small" color="error" onClick={() => handleRemove(o.id)}>Fjarlægja</Button>
                             </Box>
                         ))}
                         <Typography variant="caption" color="text.secondary">
-                            Núverandi hlutfall: {existingSum.toFixed(2)}% / 100%
+                            Núverandi hlutfall: {fmtPct(existingSum)} / 100%
                         </Typography>
                     </Box>
                 )}

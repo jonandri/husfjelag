@@ -5,10 +5,34 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership
-from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer
+import datetime
+from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
+from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer
 from .scraper import lookup_association
 from users.models import User
+
+
+DEFAULT_CATEGORIES = [
+    ("Framkvæmdasjóður", "SHARED"),
+    ("Rafmagn í sameign","SHARED"),
+    ("Tryggingar",       "SHARED"),
+    ("Þrif á sameign",   "SHARED"),
+    ("Hitaveita",        "SHARE2"),
+    ("Hiti í sameign",   "SHARE2"),
+    ("Garðsláttur",      "SHARE3"),
+    ("Snjómokstur",      "SHARE3"),
+    ("Sorptunnuþrif",    "SHARED"),
+    ("Húsfjelag.is",     "EQUAL"),
+]
+
+def _create_default_categories(association):
+    """Create the default category set for a new association (skips any that already exist)."""
+    existing = set(association.categories.values_list("name", flat=True))
+    Category.objects.bulk_create([
+        Category(association=association, name=name, type=type_)
+        for name, type_ in DEFAULT_CATEGORIES
+        if name not in existing
+    ])
 
 
 class AssociationView(APIView):
@@ -43,7 +67,52 @@ class AssociationView(APIView):
             role=AssociationRole.CHAIR,
             active=True,
         )
+        _create_default_categories(association)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class AssociationRoleView(APIView):
+    def patch(self, request, user_id):
+        """
+        PATCH /Association/roles/{user_id}
+        Body: {role: "CHAIR"|"CFO", kennitala: "XXXXXXXXXX"}
+        Assigns the user identified by kennitala to the given role in the association.
+        The previous holder is demoted to MEMBER.
+        """
+        role = request.data.get("role", "").upper()
+        kennitala = request.data.get("kennitala", "").strip().replace("-", "")
+
+        if role not in (AssociationRole.CHAIR, AssociationRole.CFO):
+            return Response({"detail": "role verður að vera CHAIR eða CFO."}, status=status.HTTP_400_BAD_REQUEST)
+        if not kennitala:
+            return Response({"detail": "kennitala er nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            new_user = User.objects.get(kennitala=kennitala)
+        except User.DoesNotExist:
+            return Response({"detail": "Notandi með þessa kennitölu fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Demote current holder to MEMBER
+        AssociationAccess.objects.filter(
+            association=association, role=role, active=True
+        ).exclude(user=new_user).update(role=AssociationRole.MEMBER)
+
+        # Assign new holder
+        entry, _ = AssociationAccess.objects.get_or_create(
+            user=new_user, association=association,
+            defaults={"role": role, "active": True},
+        )
+        entry.role = role
+        entry.active = True
+        entry.save(update_fields=["role", "active"])
+
+        return Response(AssociationSerializer(association).data)
 
 
 class AssociationLookupView(APIView):
@@ -123,6 +192,7 @@ class ApartmentView(APIView):
         user_id = request.data.get("user_id")
         anr = request.data.get("anr", "").strip()
         fnr = request.data.get("fnr", "").strip()
+        size = _parse_share(request.data.get("size", 0))
         share = _parse_share(request.data.get("share", 0))
         share_2 = _parse_share(request.data.get("share_2", 0))
         share_3 = _parse_share(request.data.get("share_3", 0))
@@ -151,7 +221,7 @@ class ApartmentView(APIView):
         if (agg["s3"] or Decimal("0")) + share_3 > Decimal("100"):
             return Response({"detail": "Heildarhlutfall lóðar fer yfir 100%."}, status=status.HTTP_400_BAD_REQUEST)
 
-        Apartment.objects.create(association=association, anr=anr, fnr=fnr, share=share, share_2=share_2, share_3=share_3, share_eq=0)
+        Apartment.objects.create(association=association, anr=anr, fnr=fnr, size=size or 0, share=share, share_2=share_2, share_3=share_3, share_eq=0)
         _recalc_share_eq(association)
 
         apartments = association.apartments.prefetch_related("ownerships__user").all()
@@ -168,6 +238,7 @@ class ApartmentView(APIView):
 
         anr = request.data.get("anr", apartment.anr).strip()
         fnr = request.data.get("fnr", apartment.fnr).strip()
+        size = _parse_share(request.data.get("size", apartment.size))
         share = _parse_share(request.data.get("share", apartment.share))
         share_2 = _parse_share(request.data.get("share_2", apartment.share_2))
         share_3 = _parse_share(request.data.get("share_3", apartment.share_3))
@@ -178,7 +249,7 @@ class ApartmentView(APIView):
             return Response({"detail": "anr and fnr are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         association = apartment.association
-        others = association.apartments.exclude(id=apartment_id)
+        others = association.apartments.filter(deleted=False).exclude(id=apartment_id)
         other_share = others.aggregate(s=django_models.Sum("share"))["s"] or Decimal("0")
         other_share_2 = others.aggregate(s=django_models.Sum("share_2"))["s"] or Decimal("0")
         other_share_3 = others.aggregate(s=django_models.Sum("share_3"))["s"] or Decimal("0")
@@ -191,10 +262,11 @@ class ApartmentView(APIView):
 
         apartment.anr = anr
         apartment.fnr = fnr
+        apartment.size = size or 0
         apartment.share = share
         apartment.share_2 = share_2
         apartment.share_3 = share_3
-        apartment.save(update_fields=["anr", "fnr", "share", "share_2", "share_3"])
+        apartment.save(update_fields=["anr", "fnr", "size", "share", "share_2", "share_3"])
 
         apartment.refresh_from_db()
         return Response(ApartmentSerializer(apartment).data)
@@ -220,6 +292,7 @@ class ApartmentView(APIView):
 
         anr = request.data.get("anr", apartment.anr).strip()
         fnr = request.data.get("fnr", apartment.fnr).strip()
+        size = _parse_share(request.data.get("size", apartment.size))
         share = _parse_share(request.data.get("share", apartment.share))
         share_2 = _parse_share(request.data.get("share_2", apartment.share_2))
         share_3 = _parse_share(request.data.get("share_3", apartment.share_3))
@@ -243,11 +316,12 @@ class ApartmentView(APIView):
 
         apartment.anr = anr
         apartment.fnr = fnr
+        apartment.size = size or 0
         apartment.share = share
         apartment.share_2 = share_2
         apartment.share_3 = share_3
         apartment.deleted = False
-        apartment.save(update_fields=["anr", "fnr", "share", "share_2", "share_3", "deleted"])
+        apartment.save(update_fields=["anr", "fnr", "size", "share", "share_2", "share_3", "deleted"])
         _recalc_share_eq(association)
         apartment.refresh_from_db()
         return Response(ApartmentSerializer(apartment).data)
@@ -431,3 +505,252 @@ class OwnerView(APIView):
             _set_payer(ownership.apartment, ownership_id)
         ownership.refresh_from_db()
         return Response(OwnershipSerializer(ownership).data)
+
+
+class CategoryView(APIView):
+    def _get_association(self, user_id):
+        return Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+
+    def get(self, request, user_id):
+        """GET /Category/{user_id} — List all categories for the association."""
+        association = self._get_association(user_id)
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+        categories = association.categories.all().order_by("name")
+        return Response(CategorySerializer(categories, many=True).data)
+
+    def post(self, request):
+        """POST /Category — Create a category. Body: {user_id, name, type}"""
+        user_id = request.data.get("user_id")
+        name = request.data.get("name", "").strip()
+        type_ = request.data.get("type", "")
+
+        if not name or not type_:
+            return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        category = Category.objects.create(association=association, name=name, type=type_)
+        return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, category_id):
+        """PUT /Category/update/{id} — Update name and/or type."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=False)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        category.name = request.data.get("name", category.name).strip()
+        category.type = request.data.get("type", category.type)
+        if not category.name or not category.type:
+            return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        category.save(update_fields=["name", "type"])
+        return Response(CategorySerializer(category).data)
+
+    def delete(self, request, category_id):
+        """DELETE /Category/delete/{id} — Soft-delete a category."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=False)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        category.deleted = True
+        category.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, category_id):
+        """PATCH /Category/enable/{id} — Re-enable a soft-deleted category."""
+        try:
+            category = Category.objects.get(id=category_id, deleted=True)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        category.deleted = False
+        category.save(update_fields=["deleted"])
+        return Response(CategorySerializer(category).data)
+
+
+def _budget_with_items(budget):
+    return Budget.objects.prefetch_related("items__category").get(id=budget.id)
+
+
+def _create_budget_items(budget, source_budget=None):
+    """Create BudgetItems for all active categories. Copy amounts from source_budget if provided."""
+    association = budget.association
+    active_categories = association.categories.filter(deleted=False)
+    existing_ids = set(budget.items.values_list("category_id", flat=True))
+
+    source_amounts = {}
+    if source_budget:
+        source_amounts = {
+            item.category_id: item.amount
+            for item in source_budget.items.all()
+        }
+
+    new_items = [
+        BudgetItem(
+            budget=budget,
+            category=cat,
+            amount=source_amounts.get(cat.id, 0),
+        )
+        for cat in active_categories
+        if cat.id not in existing_ids
+    ]
+    if new_items:
+        BudgetItem.objects.bulk_create(new_items)
+
+
+class BudgetView(APIView):
+    def _get_association(self, user_id):
+        return Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+
+    def get(self, request, user_id):
+        """GET /Budget/{user_id} — Return active budget, auto-creating if none exists."""
+        association = self._get_association(user_id)
+        if not association:
+            return Response(None, status=status.HTTP_200_OK)
+
+        year = datetime.date.today().year
+        budget = Budget.objects.filter(
+            association=association, year=year, is_active=True
+        ).prefetch_related("items__category").first()
+
+        if not budget:
+            budget = Budget.objects.create(association=association, year=year, version=1, is_active=True)
+            _create_budget_items(budget)
+            budget = _budget_with_items(budget)
+
+        return Response(BudgetSerializer(budget).data)
+
+    def post(self, request):
+        """
+        POST /Budget — Create a new budget version for the current year.
+        Deactivates the current active budget, copies its amounts to the new one.
+        """
+        user_id = request.data.get("user_id")
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        year = datetime.date.today().year
+
+        # Find latest version and deactivate it
+        last_budget = Budget.objects.filter(
+            association=association, year=year
+        ).order_by("-version").first()
+
+        next_version = (last_budget.version + 1) if last_budget else 1
+
+        if last_budget:
+            Budget.objects.filter(association=association, year=year).update(is_active=False)
+
+        new_budget = Budget.objects.create(
+            association=association, year=year, version=next_version, is_active=True
+        )
+        _create_budget_items(new_budget, source_budget=last_budget)
+
+        return Response(BudgetSerializer(_budget_with_items(new_budget)).data, status=status.HTTP_201_CREATED)
+
+
+class BudgetItemView(APIView):
+    def put(self, request, item_id):
+        """PUT /BudgetItem/update/{id} — Update the amount of a budget item."""
+        try:
+            item = BudgetItem.objects.get(id=item_id)
+        except BudgetItem.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        amount = _parse_share(request.data.get("amount", item.amount))
+        if amount is None or amount < 0:
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.amount = amount
+        item.save(update_fields=["amount"])
+        item.refresh_from_db()
+        return Response(BudgetItemSerializer(item).data)
+
+
+class CollectionView(APIView):
+    def get(self, request, user_id):
+        """GET /Collection/{user_id} — Annual and monthly amounts per apartment based on active budget."""
+        association = Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).first()
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+
+        year = datetime.date.today().year
+        budget = Budget.objects.filter(
+            association=association, year=year, is_active=True
+        ).prefetch_related("items__category").first()
+
+        if not budget:
+            return Response([], status=status.HTTP_200_OK)
+
+        # Sum budget amounts by category type
+        totals = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
+        for item in budget.items.all():
+            if item.category and item.category.type in totals:
+                totals[item.category.type] += item.amount
+
+        apartments = association.apartments.filter(deleted=False).prefetch_related(
+            "ownerships__user"
+        ).order_by("anr")
+
+        # Sum shares across all active apartments per type (should each be 100)
+        share_sums = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
+        apt_list = list(apartments)
+        for apt in apt_list:
+            share_sums["SHARED"] += apt.share
+            share_sums["SHARE2"] += apt.share_2
+            share_sums["SHARE3"] += apt.share_3
+            share_sums["EQUAL"]  += apt.share_eq
+
+        rows = []
+        for apt in apt_list:
+            annual = (
+                totals["SHARED"]  * apt.share    / Decimal("100") +
+                totals["SHARE2"]  * apt.share_2  / Decimal("100") +
+                totals["SHARE3"]  * apt.share_3  / Decimal("100") +
+                totals["EQUAL"]   * apt.share_eq / Decimal("100")
+            ).quantize(Decimal("1"))
+            monthly = (annual / Decimal("12")).quantize(Decimal("1"))
+
+            payer = apt.ownerships.filter(is_payer=True, deleted=False).select_related("user").first()
+
+            shared_amt  = (totals["SHARED"] * apt.share    / Decimal("100")).quantize(Decimal("1"))
+            share2_amt  = (totals["SHARE2"] * apt.share_2  / Decimal("100")).quantize(Decimal("1"))
+            share3_amt  = (totals["SHARE3"] * apt.share_3  / Decimal("100")).quantize(Decimal("1"))
+            equal_amt   = (totals["EQUAL"]  * apt.share_eq / Decimal("100")).quantize(Decimal("1"))
+
+            rows.append({
+                "apartment_id": apt.id,
+                "anr": apt.anr,
+                "fnr": apt.fnr,
+                "payer_name": payer.user.name if payer else None,
+                "payer_kennitala": payer.user.kennitala if payer else None,
+                "payer_email": payer.user.email if payer else None,
+                "shared": shared_amt,
+                "share2": share2_amt,
+                "share3": share3_amt,
+                "equal": equal_amt,
+                "annual": annual,
+                "monthly": monthly,
+            })
+
+        # Budget totals per type (only for types that have budget items)
+        budget_summary = [
+            {"type": t, "budget": totals[t], "share_sum": share_sums[t]}
+            for t in ("SHARED", "SHARE2", "SHARE3", "EQUAL")
+            if totals[t] > 0
+        ]
+
+        return Response({"rows": rows, "budget_summary": budget_summary})

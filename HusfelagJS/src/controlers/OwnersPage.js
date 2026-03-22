@@ -11,6 +11,8 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
+import { fmtPct, fmtKennitala, fmtPhone } from '../format';
+import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -22,6 +24,7 @@ function OwnersPage() {
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [showDisabled, setShowDisabled] = useState(false);
+    const { sort, lbl } = useSort('name');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -63,7 +66,7 @@ function OwnersPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1 }}>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">Eigendur</Typography>
                     <Button
@@ -91,21 +94,21 @@ function OwnersPage() {
                     </Typography>
                 ) : (
                     <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table>
-                            <TableHead>
+                        <Table size="small">
+                            <TableHead sx={HEAD_SX}>
                                 <TableRow>
-                                    <TableCell>Nafn</TableCell>
-                                    <TableCell>Kennitala</TableCell>
-                                    <TableCell>Netfang</TableCell>
-                                    <TableCell>Símanúmer</TableCell>
-                                    <TableCell>Íbúð</TableCell>
-                                    <TableCell>Hlutfall (%)</TableCell>
-                                    <TableCell>Greiðandi</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('kennitala', 'Kennitala')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('email', 'Netfang')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('phone', 'Símanúmer')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Íbúð')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>{lbl('is_payer', 'Greiðandi')}</TableCell>
                                     <TableCell />
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {active.map(o => (
+                                {sort(active).map(o => (
                                     <OwnerRow
                                         key={o.id}
                                         ownership={o}
@@ -130,19 +133,19 @@ function OwnersPage() {
                         <Collapse in={showDisabled}>
                             <Paper variant="outlined" sx={{ mt: 1 }}>
                                 <Table size="small">
-                                    <TableHead>
+                                    <TableHead sx={HEAD_SX}>
                                         <TableRow>
-                                            <TableCell>Nafn</TableCell>
-                                            <TableCell>Kennitala</TableCell>
-                                            <TableCell>Netfang</TableCell>
-                                            <TableCell>Símanúmer</TableCell>
-                                            <TableCell>Íbúð</TableCell>
-                                            <TableCell>Hlutfall (%)</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Netfang</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Símanúmer</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Íbúð</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Hlutfall (%)</TableCell>
                                             <TableCell />
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {disabled.map(o => (
+                                        {sort(disabled).map(o => (
                                             <OwnerRow
                                                 key={o.id}
                                                 ownership={o}
@@ -172,7 +175,8 @@ function AddOwnerForm({ userId, apartments, ownerships, onCreated }) {
 
     const aptActive = ownerships.filter(o => String(o.apartment_id) === String(apartmentId));
     const existingSum = aptActive.reduce((s, o) => s + parseFloat(o.share || 0), 0);
-    const shareOver = parseFloat(share) > 0 && existingSum + parseFloat(share) > 100;
+    const round2 = n => Math.round(n * 100) / 100;
+    const shareOver = parseFloat(share) > 0 && round2(existingSum + parseFloat(share)) > 100;
     const isValid = kennitala.length === 10 && apartmentId && parseFloat(share) > 0 && !shareOver;
 
     const handleSubmit = async () => {
@@ -225,7 +229,7 @@ function AddOwnerForm({ userId, apartments, ownerships, onCreated }) {
                 </Select>
                 {apartmentId && (
                     <FormHelperText>
-                        Núverandi hlutfall: {existingSum.toFixed(2)}% / 100%
+                        Núverandi hlutfall: {fmtPct(existingSum)} / 100%
                     </FormHelperText>
                 )}
             </FormControl>
@@ -270,9 +274,9 @@ function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
         <>
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{ownership.name}</TableCell>
-                <TableCell>{ownership.kennitala}</TableCell>
+                <TableCell>{fmtKennitala(ownership.kennitala)}</TableCell>
                 <TableCell>{ownership.email || <span style={{ color: '#bbb' }}>—</span>}</TableCell>
-                <TableCell>{ownership.phone || <span style={{ color: '#bbb' }}>—</span>}</TableCell>
+                <TableCell>{ownership.phone ? fmtPhone(ownership.phone) : <span style={{ color: '#bbb' }}>—</span>}</TableCell>
                 <TableCell>{ownership.anr}</TableCell>
                 <TableCell>{ownership.share}%</TableCell>
                 {!isDisabled && (
@@ -325,7 +329,8 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
 
     const others = ownerships.filter(o => o.id !== ownership.id && o.apartment_id === ownership.apartment_id);
     const otherSum = others.reduce((s, o) => s + parseFloat(o.share || 0), 0);
-    const shareOver = parseFloat(share) > 0 && otherSum + parseFloat(share) > 100;
+    const round2 = n => Math.round(n * 100) / 100;
+    const shareOver = parseFloat(share) > 0 && round2(otherSum + parseFloat(share)) > 100;
 
     const emailValid = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     // Accepts: 7 digits as "XXX XXXX" or "XXXXXXX", or +CC then 7+ digits (spaces allowed)
@@ -349,13 +354,13 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                 fetch(`${API_URL}/User/${ownership.user_id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
+                    body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),
                 }),
             ]);
             if (ownerResp.ok && userResp.ok) {
                 // If editing the logged-in user's own contact info, sync context
                 if (user && ownership.user_id === user.id) {
-                    const updatedUser = { ...user, email: email.trim() || null, phone: phone.trim() || null };
+                    const updatedUser = { ...user, email: email.trim() || null, phone: fmtPhone(phone) || null };
                     localStorage.setItem('user', JSON.stringify(updatedUser));
                     setUser(updatedUser);
                 }
@@ -401,7 +406,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                     <Box>
                         <Typography variant="body1" fontWeight={500}>{ownership.name}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                            Kennitala: {ownership.kennitala} &nbsp;·&nbsp; Íbúð: {ownership.anr}
+                            Kennitala: {fmtKennitala(ownership.kennitala)} &nbsp;·&nbsp; Íbúð: {ownership.anr}
                         </Typography>
                     </Box>
                     <TextField
@@ -431,7 +436,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                         size="small"
                         type="number"
                         inputProps={{ min: 0, max: 100, step: 0.01 }}
-                        helperText={`Aðrir eigendur: ${otherSum.toFixed(2)}% / 100%`}
+                        helperText={`Aðrir eigendur: ${fmtPct(otherSum)} / 100%`}
                         error={shareOver}
                         fullWidth
                     />
