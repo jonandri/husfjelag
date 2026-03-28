@@ -912,7 +912,9 @@ class ApartmentImportSourcesView(APIView):
         association = _resolve_assoc(int(user_id), request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
-        sources = association.hms_sources.order_by("url").values("url", "last_imported_at")
+        sources = association.hms_sources.order_by("stadfang_id").values(
+            "url", "landeign_id", "stadfang_id", "last_imported_at"
+        )
         return Response(list(sources))
 
 
@@ -1042,12 +1044,15 @@ class ApartmentImportConfirmView(APIView):
                     id__in=deactivate_ids, association=association
                 ).update(deleted=True)
 
-            # Upsert HMS sources
+            # Upsert HMS sources — parse landeign_id and stadfang_id from URL
             for url in urls:
+                parts = url.rstrip("/").split("/")
+                landeign_id = int(parts[-2])
+                stadfang_id = int(parts[-1])
                 HMSImportSource.objects.update_or_create(
                     association=association,
-                    url=url,
-                    defaults={}  # last_imported_at uses auto_now=True, updated on save
+                    stadfang_id=stadfang_id,
+                    defaults={"url": url, "landeign_id": landeign_id},
                 )
 
         # Return updated apartment list

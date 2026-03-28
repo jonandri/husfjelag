@@ -146,11 +146,13 @@ class Collection(models.Model):
 class HMSImportSource(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="hms_sources")
     url = models.URLField()
+    landeign_id = models.IntegerField()   # e.g. 228369  → displayed as "L228369"
+    stadfang_id = models.IntegerField()   # e.g. 1203373 → displayed as "STF1203373"
     last_imported_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "associations_hmsimportsource"
-        unique_together = [("association", "url")]
+        unique_together = [("association", "stadfang_id")]
 
     def __str__(self):
-        return f"{self.association} — {self.url}"
+        return f"{self.association} — STF{self.stadfang_id}"

@@ -17,21 +17,29 @@ class HMSImportSourceModelTest(TestCase):
     def test_create_source(self):
         src = HMSImportSource.objects.create(
             association=self.association,
-            url="https://hms.is/fasteignaskra/228369/1203373"
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
         )
         self.assertEqual(src.association, self.association)
+        self.assertEqual(src.landeign_id, 228369)
+        self.assertEqual(src.stadfang_id, 1203373)
         self.assertIsNotNone(src.last_imported_at)
 
     def test_unique_together(self):
         HMSImportSource.objects.create(
             association=self.association,
-            url="https://hms.is/fasteignaskra/228369/1203373"
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
         )
         from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             HMSImportSource.objects.create(
                 association=self.association,
-                url="https://hms.is/fasteignaskra/228369/1203373"
+                url="https://hms.is/fasteignaskra/228369/1203373",
+                landeign_id=228369,
+                stadfang_id=1203373,
             )
 
 
@@ -160,13 +168,17 @@ class ImportPreviewViewTest(TestCase):
     def test_sources_returns_saved_urls(self):
         HMSImportSource.objects.create(
             association=self.association,
-            url="https://hms.is/fasteignaskra/228369/1203373"
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
         )
         resp = self.client.get(f"/Apartment/import/sources?user_id={self.user.id}")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["url"], "https://hms.is/fasteignaskra/228369/1203373")
+        self.assertEqual(data[0]["landeign_id"], 228369)
+        self.assertEqual(data[0]["stadfang_id"], 1203373)
 
 
 class ImportConfirmViewTest(TestCase):
@@ -249,9 +261,6 @@ class ImportConfirmViewTest(TestCase):
                 }),
                 content_type="application/json"
             )
-        self.assertTrue(
-            HMSImportSource.objects.filter(
-                association=self.association,
-                url="https://hms.is/fasteignaskra/100/200"
-            ).exists()
-        )
+        src = HMSImportSource.objects.get(association=self.association, stadfang_id=200)
+        self.assertEqual(src.landeign_id, 100)
+        self.assertEqual(src.url, "https://hms.is/fasteignaskra/100/200")
