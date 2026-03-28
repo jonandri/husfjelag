@@ -39,7 +39,7 @@ function ApartmentImportPage() {
         setError('');
         setLoading(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/import/preview`, {
+            const resp = await fetch(`${API_URL}/Apartment/import/preview${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, urls: urls.filter(u => u.trim()) }),
@@ -64,7 +64,7 @@ function ApartmentImportPage() {
         setError('');
         setLoading(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/import/confirm`, {
+            const resp = await fetch(`${API_URL}/Apartment/import/confirm${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
