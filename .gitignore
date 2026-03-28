@@ -14,4 +14,4 @@ HusfelagJS/.env.production.local
 HusfelagJS/build/
 
 # macOS
-.DS_Store
+.DS_Store.superpowers/
