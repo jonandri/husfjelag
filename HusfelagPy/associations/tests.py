@@ -1,3 +1,266 @@
-from django.test import TestCase
+from django.test import TestCase, Client
+from unittest.mock import patch, MagicMock
+from .models import Association, HMSImportSource, Apartment
+from .scraper import scrape_hms_apartments
+import json
+import logging
+from users.models import User
 
-# Create your tests here.
+
+class HMSImportSourceModelTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567890", name="Test Húsfélag",
+            address="Testgata 1", postal_code="101", city="Reykjavík"
+        )
+
+    def test_create_source(self):
+        src = HMSImportSource.objects.create(
+            association=self.association,
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
+        )
+        self.assertEqual(src.association, self.association)
+        self.assertEqual(src.landeign_id, 228369)
+        self.assertEqual(src.stadfang_id, 1203373)
+        self.assertIsNotNone(src.last_imported_at)
+
+    def test_unique_together(self):
+        HMSImportSource.objects.create(
+            association=self.association,
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            HMSImportSource.objects.create(
+                association=self.association,
+                url="https://hms.is/fasteignaskra/228369/1203373",
+                landeign_id=228369,
+                stadfang_id=1203373,
+            )
+
+
+class ScrapeHMSApartmentsTest(TestCase):
+
+    def _make_api_response(self, fasteignir):
+        """Minimal JSON mimicking the hms.is stadfang API response."""
+        return {"stadfangData": {"fasteignir": fasteignir}}
+
+    def test_scrape_returns_apartments(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = self._make_api_response([
+            {"fasteign_nr": 2011134, "merking": "010101", "einflm": 68.5},
+            {"fasteign_nr": 2011135, "merking": "020101", "einflm": 72.0},
+        ])
+        with patch("associations.scraper.requests.get", return_value=mock_resp):
+            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["fnr"], "2011134")
+        self.assertEqual(result[0]["anr"], "01 0101")
+        self.assertAlmostEqual(float(result[0]["size"]), 68.5)
+
+    def test_scrape_returns_none_on_error(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        with patch("associations.scraper.requests.get", return_value=mock_resp):
+            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertIsNone(result)
+
+    def test_scrape_returns_empty_list_when_no_rows(self):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = self._make_api_response([])
+        with patch("associations.scraper.requests.get", return_value=mock_resp):
+            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertEqual(result, [])
+
+    def test_scrape_returns_none_on_connection_error(self):
+        import requests as req_lib
+        with patch("associations.scraper.requests.get", side_effect=req_lib.RequestException):
+            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertIsNone(result)
+
+
+class ImportPreviewViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1234567890", name="Test User")
+        self.association = Association.objects.create(
+            ssn="0987654321", name="Test Húsfélag",
+            address="Testgata 1", postal_code="101", city="Reykjavík"
+        )
+        from associations.models import AssociationAccess, AssociationRole
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+
+    def test_preview_classifies_create_update_missing(self):
+        # existing apartment in DB
+        Apartment.objects.create(
+            association=self.association, fnr="2011135", anr="0201", size=70.0
+        )
+        scraped = [
+            {"fnr": "2011134", "anr": "0101", "size": 68.5},  # new
+            {"fnr": "2011135", "anr": "0201", "size": 72.0},  # update
+        ]
+        with patch("associations.views.scrape_hms_apartments", return_value=scraped):
+            resp = self.client.post(
+                "/Apartment/import/preview",
+                data=json.dumps({"user_id": self.user.id, "urls": ["https://hms.is/fasteignaskra/228369/1203373"]}),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["create"]), 1)
+        self.assertEqual(data["create"][0]["fnr"], "2011134")
+        self.assertEqual(len(data["update"]), 1)
+        self.assertEqual(data["update"][0]["fnr"], "2011135")
+        self.assertEqual(len(data["missing"]), 0)
+
+    def test_preview_reports_missing_apartment(self):
+        Apartment.objects.create(
+            association=self.association, fnr="2011099", anr="0301", size=55.0
+        )
+        with patch("associations.views.scrape_hms_apartments", return_value=[]):
+            resp = self.client.post(
+                "/Apartment/import/preview",
+                data=json.dumps({"user_id": self.user.id, "urls": ["https://hms.is/fasteignaskra/228369/1203373"]}),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["missing"]), 1)
+        self.assertEqual(data["missing"][0]["fnr"], "2011099")
+
+    def test_preview_invalid_url_returns_400(self):
+        resp = self.client.post(
+            "/Apartment/import/preview",
+            data=json.dumps({"user_id": self.user.id, "urls": ["https://example.com/bad"]}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_preview_returns_502_when_hms_unreachable(self):
+        # Suppress django.request logger to avoid Python 3.14/Django 4.1 debug-template crash on 5xx responses
+        with patch("associations.views.scrape_hms_apartments", return_value=None):
+            with self.assertLogs("django.request", level=logging.ERROR):
+                resp = self.client.post(
+                    "/Apartment/import/preview",
+                    data=json.dumps({"user_id": self.user.id, "urls": ["https://hms.is/fasteignaskra/228369/1203373"]}),
+                    content_type="application/json"
+                )
+        self.assertEqual(resp.status_code, 502)
+
+    def test_preview_missing_urls_returns_400(self):
+        resp = self.client.post(
+            "/Apartment/import/preview",
+            data=json.dumps({"user_id": self.user.id, "urls": []}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_sources_returns_saved_urls(self):
+        HMSImportSource.objects.create(
+            association=self.association,
+            url="https://hms.is/fasteignaskra/228369/1203373",
+            landeign_id=228369,
+            stadfang_id=1203373,
+        )
+        resp = self.client.get(f"/Apartment/import/sources?user_id={self.user.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["url"], "https://hms.is/fasteignaskra/228369/1203373")
+        self.assertEqual(data[0]["landeign_id"], 228369)
+        self.assertEqual(data[0]["stadfang_id"], 1203373)
+
+
+class ImportConfirmViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1111111111", name="Confirm User")
+        self.association = Association.objects.create(
+            ssn="2222222222", name="Confirm Húsfélag",
+            address="Confirmgata 2", postal_code="200", city="Kópavogur"
+        )
+        from associations.models import AssociationAccess, AssociationRole
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+
+    def test_confirm_creates_new_apartments(self):
+        scraped = [{"fnr": "3011100", "anr": "0101", "size": 50.0}]
+        with patch("associations.views.scrape_hms_apartments", return_value=scraped):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(
+            self.association.apartments.filter(fnr="3011100", deleted=False).exists()
+        )
+
+    def test_confirm_updates_existing_apartment(self):
+        apt = Apartment.objects.create(
+            association=self.association, fnr="3011101", anr="OLD", size=40.0
+        )
+        scraped = [{"fnr": "3011101", "anr": "NEW", "size": 45.0}]
+        with patch("associations.views.scrape_hms_apartments", return_value=scraped):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        apt.refresh_from_db()
+        self.assertEqual(apt.anr, "NEW")
+        self.assertAlmostEqual(float(apt.size), 45.0)
+
+    def test_confirm_deactivates_selected_apartments(self):
+        apt = Apartment.objects.create(
+            association=self.association, fnr="3011199", anr="0901", size=60.0
+        )
+        with patch("associations.views.scrape_hms_apartments", return_value=[]):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": [apt.id]
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        apt.refresh_from_db()
+        self.assertTrue(apt.deleted)
+
+    def test_confirm_saves_hms_source(self):
+        with patch("associations.views.scrape_hms_apartments", return_value=[]):
+            self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        src = HMSImportSource.objects.get(association=self.association, stadfang_id=200)
+        self.assertEqual(src.landeign_id, 100)
+        self.assertEqual(src.url, "https://hms.is/fasteignaskra/100/200")

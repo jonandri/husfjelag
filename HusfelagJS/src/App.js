@@ -8,6 +8,7 @@ import Dashboard from './controlers/Dashboard';
 import HouseAssociation from './controlers/HouseAssociation';
 import AssociationPage from './controlers/AssociationPage';
 import ApartmentsPage from './controlers/ApartmentsPage';
+import ApartmentImportPage from './controlers/ApartmentImportPage';
 import OwnersPage from './controlers/OwnersPage';
 import ProfilePage from './controlers/ProfilePage';
 import BudgetPage from './controlers/BudgetPage';
@@ -119,6 +120,7 @@ function App() {
             <Route path="/houseassociation" element={<HouseAssociation />} />
             <Route path="/husfelag" element={<AssociationPage />} />
             <Route path="/ibudir" element={<ApartmentsPage />} />
+            <Route path="/ibudir/innflutningur" element={<ApartmentImportPage />} />
             <Route path="/eigendur" element={<OwnersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/aaetlun" element={<BudgetPage />} />

@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from decimal import Decimal, ROUND_DOWN
 from rest_framework.views import APIView
@@ -5,11 +6,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
-from django.db import models as django_models
+from django.db import models as django_models, transaction
 import datetime
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
+from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem, HMSImportSource
 from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
-from .scraper import lookup_association
+from .scraper import lookup_association, scrape_hms_apartments
 from users.models import User
 
 
@@ -897,3 +898,163 @@ class AdminAssociationView(APIView):
         )
         _create_default_categories(association)
         return Response(AssociationAccessSerializer(association, context={"user_id": None}).data, status=status.HTTP_201_CREATED)
+
+
+HMS_URL_RE = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
+
+
+class ApartmentImportSourcesView(APIView):
+    def get(self, request):
+        """GET /Apartment/import/sources?user_id=N — Return saved HMS URLs for the association."""
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        association = _resolve_assoc(int(user_id), request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        sources = association.hms_sources.order_by("stadfang_id").values(
+            "url", "landeign_id", "stadfang_id", "last_imported_at"
+        )
+        return Response(list(sources))
+
+
+class ApartmentImportPreviewView(APIView):
+    def post(self, request):
+        """POST /Apartment/import/preview — Scrape URLs and return create/update/missing classification."""
+        user_id = request.data.get("user_id")
+        urls = request.data.get("urls", [])
+
+        if not user_id or not urls:
+            return Response({"detail": "user_id and urls are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        for url in urls:
+            if not HMS_URL_RE.match(url):
+                return Response(
+                    {"detail": f"Ógild HMS slóð: {url}. Dæmi: https://hms.is/fasteignaskra/228369/1203373"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        association = _resolve_assoc(int(user_id), request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Scrape and merge all URLs, deduplicate by fnr
+        scraped_by_fnr = {}
+        for url in urls:
+            result = scrape_hms_apartments(url)
+            if result is None:
+                return Response(
+                    {"detail": "Ekki tókst að ná sambandi við HMS. Reyndu aftur síðar."},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+            for apt in result:
+                scraped_by_fnr[apt["fnr"]] = apt
+
+        # Compare against existing DB apartments for this association
+        existing = {
+            apt.fnr: apt
+            for apt in association.apartments.filter(deleted=False)
+        }
+
+        create_list = []
+        update_list = []
+        scraped_fnrs = set(scraped_by_fnr.keys())
+
+        for fnr, scraped in scraped_by_fnr.items():
+            if fnr in existing:
+                db_apt = existing[fnr]
+                update_list.append({
+                    "id": db_apt.id,
+                    "fnr": fnr,
+                    "anr": scraped["anr"],
+                    "size": scraped["size"],
+                    "current_anr": db_apt.anr,
+                    "current_size": float(db_apt.size),
+                })
+            else:
+                create_list.append({"fnr": fnr, "anr": scraped["anr"], "size": scraped["size"]})
+
+        missing_list = [
+            {"id": apt.id, "fnr": apt.fnr, "anr": apt.anr}
+            for fnr, apt in existing.items()
+            if fnr not in scraped_fnrs
+        ]
+
+        return Response({"create": create_list, "update": update_list, "missing": missing_list})
+
+
+class ApartmentImportConfirmView(APIView):
+    def post(self, request):
+        """POST /Apartment/import/confirm — Apply the import: create, update, deactivate, save sources."""
+        user_id = request.data.get("user_id")
+        urls = request.data.get("urls", [])
+        deactivate_ids = request.data.get("deactivate_ids", [])
+
+        if not user_id or not urls:
+            return Response({"detail": "user_id and urls are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        for url in urls:
+            if not HMS_URL_RE.match(url):
+                return Response(
+                    {"detail": f"Ógild HMS slóð: {url}."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        if not isinstance(deactivate_ids, list) or not all(isinstance(i, int) for i in deactivate_ids):
+            return Response({"detail": "deactivate_ids must be a list of integers."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = _resolve_assoc(int(user_id), request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Re-scrape (don't trust client preview)
+        scraped_by_fnr = {}
+        for url in urls:
+            result = scrape_hms_apartments(url)
+            if result is None:
+                return Response(
+                    {"detail": "Ekki tókst að ná sambandi við HMS. Reyndu aftur síðar."},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+            for apt in result:
+                scraped_by_fnr[apt["fnr"]] = apt
+
+        existing = {apt.fnr: apt for apt in association.apartments.filter(deleted=False)}
+
+        with transaction.atomic():
+            # Create new apartments
+            to_create = [
+                Apartment(association=association, fnr=fnr, anr=data["anr"], size=data["size"])
+                for fnr, data in scraped_by_fnr.items()
+                if fnr not in existing
+            ]
+            Apartment.objects.bulk_create(to_create)
+
+            # Update existing apartments
+            for fnr, data in scraped_by_fnr.items():
+                if fnr in existing:
+                    apt = existing[fnr]
+                    apt.anr = data["anr"]
+                    apt.size = data["size"]
+                    apt.save(update_fields=["anr", "size"])
+
+            # Soft-delete requested apartments
+            if deactivate_ids:
+                Apartment.objects.filter(
+                    id__in=deactivate_ids, association=association
+                ).update(deleted=True)
+
+            # Upsert HMS sources — parse landeign_id and stadfang_id from URL
+            for url in urls:
+                parts = url.rstrip("/").split("/")
+                landeign_id = int(parts[-2])
+                stadfang_id = int(parts[-1])
+                HMSImportSource.objects.update_or_create(
+                    association=association,
+                    stadfang_id=stadfang_id,
+                    defaults={"url": url, "landeign_id": landeign_id},
+                )
+
+        # Return updated apartment list
+        apartments = association.apartments.filter(deleted=False)
+        return Response(ApartmentSerializer(apartments, many=True).data)

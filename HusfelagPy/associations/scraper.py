@@ -5,7 +5,6 @@ Fetches association info by SSN (kennitala) from:
 """
 import re
 import requests
-from bs4 import BeautifulSoup
 
 
 SKATTURINN_URL = "https://www.skatturinn.is/fyrirtaekjaskra/leit/kennitala/{ssn}"
@@ -106,3 +105,54 @@ def lookup_association(ssn: str) -> dict | None:
         "isat_code": isat_code,
         "isat_label": isat_label,
     }
+
+
+HMS_URL_PATTERN = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
+
+
+def scrape_hms_apartments(url: str) -> list[dict] | None:
+    """
+    Fetch apartment list from the hms.is JSON API.
+    The page at hms.is/fasteignaskra is a Next.js app (client-side rendered),
+    so HTML scraping returns an empty shell. We call the underlying API directly.
+
+    URL format: https://hms.is/fasteignaskra/{landeign_id}/{stadfang_id}
+    API:        GET /api/fasteignaskra/stadfang/{stadfang_id}?page=0&pageSize=200
+
+    Returns list of {fnr, anr, size} or None on HTTP/connection failure.
+    Returns [] if the API responds but lists no apartments.
+    """
+    # Extract stadfang_id from the URL path (last segment)
+    stadfang_id = url.rstrip("/").split("/")[-1]
+
+    api_url = f"https://hms.is/api/fasteignaskra/stadfang/{stadfang_id}?page=0&pageSize=200"
+    try:
+        resp = requests.get(
+            api_url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://hms.is/"},
+        )
+    except requests.RequestException:
+        return None
+
+    if resp.status_code != 200:
+        return None
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+
+    fasteignir = data.get("stadfangData", {}).get("fasteignir", [])
+
+    results = []
+    for apt in fasteignir:
+        fnr = str(apt.get("fasteign_nr", ""))
+        merking = apt.get("merking", "")
+        # Display format: "010101" → "01 0101"
+        anr = f"{merking[:2]} {merking[2:]}" if len(merking) >= 3 else merking
+        size = float(apt.get("einflm") or 0)
+        if fnr:
+            results.append({"fnr": fnr, "anr": anr, "size": size})
+
+    return results
