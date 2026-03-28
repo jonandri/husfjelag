@@ -140,3 +140,16 @@ class Collection(models.Model):
 
     def __str__(self):
         return f"{self.apartment} — {self.budget.year}/{self.month:02d}: {self.amount_total}"
+
+
+class HMSImportSource(models.Model):
+    association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="hms_sources")
+    url = models.URLField()
+    last_imported_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "associations_hmsimportsource"
+        unique_together = [("association", "url")]
+
+    def __str__(self):
+        return f"{self.association} — {self.url}"
