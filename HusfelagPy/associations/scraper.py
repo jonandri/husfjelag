@@ -5,7 +5,6 @@ Fetches association info by SSN (kennitala) from:
 """
 import re
 import requests
-from bs4 import BeautifulSoup
 
 
 SKATTURINN_URL = "https://www.skatturinn.is/fyrirtaekjaskra/leit/kennitala/{ssn}"
@@ -113,69 +112,46 @@ HMS_URL_PATTERN = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
 
 def scrape_hms_apartments(url: str) -> list[dict] | None:
     """
-    Scrape hms.is/fasteignaskra for apartment list.
+    Fetch apartment list from the hms.is JSON API.
+    The page at hms.is/fasteignaskra is a Next.js app (client-side rendered),
+    so HTML scraping returns an empty shell. We call the underlying API directly.
+
+    URL format: https://hms.is/fasteignaskra/{landeign_id}/{stadfang_id}
+    API:        GET /api/fasteignaskra/stadfang/{stadfang_id}?page=0&pageSize=200
+
     Returns list of {fnr, anr, size} or None on HTTP/connection failure.
-    Returns [] if page loads but no apartment rows found.
+    Returns [] if the API responds but lists no apartments.
     """
+    # Extract stadfang_id from the URL path (last segment)
+    stadfang_id = url.rstrip("/").split("/")[-1]
+
+    api_url = f"https://hms.is/api/fasteignaskra/stadfang/{stadfang_id}?page=0&pageSize=200"
     try:
-        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp = requests.get(
+            api_url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://hms.is/"},
+        )
     except requests.RequestException:
         return None
 
     if resp.status_code != 200:
         return None
 
-    soup = BeautifulSoup(resp.content, "html.parser")
-
-    # Find table whose thead contains Fasteignanúmer, Merking, Stærð
-    target_table = None
-    for table in soup.find_all("table"):
-        thead = table.find("thead")
-        if not thead:
-            continue
-        headers = [th.get_text(strip=True) for th in thead.find_all("th")]
-        if any("Fasteignanúmer" in h for h in headers):
-            target_table = table
-            break
-
-    if not target_table:
-        return []
-
-    # Map column index by header name
-    header_row = target_table.find("thead")
-    if not header_row:
-        return []
-    ths = [th.get_text(strip=True) for th in header_row.find_all("th")]
-
-    def col(name):
-        for i, h in enumerate(ths):
-            if name in h:
-                return i
+    try:
+        data = resp.json()
+    except ValueError:
         return None
 
-    fnr_col = col("Fasteignanúmer")
-    anr_col = col("Merking")
-    size_col = col("Stærð")
-
-    if fnr_col is None or anr_col is None or size_col is None:
-        return []
+    fasteignir = data.get("stadfangData", {}).get("fasteignir", [])
 
     results = []
-    tbody = target_table.find("tbody")
-    if not tbody:
-        return []
-
-    for tr in tbody.find_all("tr"):
-        cells = tr.find_all("td")
-        if len(cells) <= max(fnr_col, anr_col, size_col):
-            continue
-        fnr = cells[fnr_col].get_text(strip=True)
-        anr = cells[anr_col].get_text(strip=True)
-        size_raw = cells[size_col].get_text(strip=True).replace(",", ".")
-        try:
-            size = float(size_raw)
-        except ValueError:
-            size = 0.0
+    for apt in fasteignir:
+        fnr = str(apt.get("fasteign_nr", ""))
+        merking = apt.get("merking", "")
+        # Display format: "010101" → "01 0101"
+        anr = f"{merking[:2]} {merking[2:]}" if len(merking) >= 3 else merking
+        size = float(apt.get("einflm") or 0)
         if fnr:
             results.append({"fnr": fnr, "anr": anr, "size": size})
 

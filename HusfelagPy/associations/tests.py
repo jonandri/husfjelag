@@ -37,33 +37,24 @@ class HMSImportSourceModelTest(TestCase):
 
 class ScrapeHMSApartmentsTest(TestCase):
 
-    def _make_html(self):
-        """Minimal HTML mimicking the hms.is apartment table."""
-        return """
-        <html><body>
-        <table>
-          <thead><tr>
-            <th>Fasteignanúmer</th><th>Merking</th><th>Stærð</th>
-          </tr></thead>
-          <tbody>
-            <tr><td>2011134</td><td>0101</td><td>68,50</td></tr>
-            <tr><td>2011135</td><td>0201</td><td>72,00</td></tr>
-          </tbody>
-        </table>
-        </body></html>
-        """
+    def _make_api_response(self, fasteignir):
+        """Minimal JSON mimicking the hms.is stadfang API response."""
+        return {"stadfangData": {"fasteignir": fasteignir}}
 
     def test_scrape_returns_apartments(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.content = self._make_html().encode()
+        mock_resp.json.return_value = self._make_api_response([
+            {"fasteign_nr": 2011134, "merking": "010101", "einflm": 68.5},
+            {"fasteign_nr": 2011135, "merking": "020101", "einflm": 72.0},
+        ])
         with patch("associations.scraper.requests.get", return_value=mock_resp):
             result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["fnr"], "2011134")
-        self.assertEqual(result[0]["anr"], "0101")
-        self.assertAlmostEqual(float(result[0]["size"]), 68.50)
+        self.assertEqual(result[0]["anr"], "01 0101")
+        self.assertAlmostEqual(float(result[0]["size"]), 68.5)
 
     def test_scrape_returns_none_on_error(self):
         mock_resp = MagicMock()
@@ -73,10 +64,9 @@ class ScrapeHMSApartmentsTest(TestCase):
         self.assertIsNone(result)
 
     def test_scrape_returns_empty_list_when_no_rows(self):
-        html = "<html><body><table><thead><tr><th>Fasteignanúmer</th><th>Merking</th><th>Stærð</th></tr></thead><tbody></tbody></table></body></html>"
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        mock_resp.content = html.encode()
+        mock_resp.json.return_value = self._make_api_response([])
         with patch("associations.scraper.requests.get", return_value=mock_resp):
             result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
         self.assertEqual(result, [])
