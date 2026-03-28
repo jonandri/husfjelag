@@ -127,10 +127,13 @@ def scrape_hms_apartments(url: str) -> list[dict] | None:
 
     soup = BeautifulSoup(resp.content, "html.parser")
 
-    # Find table whose header row contains Fasteignanúmer, Merking, Stærð
+    # Find table whose thead contains Fasteignanúmer, Merking, Stærð
     target_table = None
     for table in soup.find_all("table"):
-        headers = [th.get_text(strip=True) for th in table.find_all("th")]
+        thead = table.find("thead")
+        if not thead:
+            continue
+        headers = [th.get_text(strip=True) for th in thead.find_all("th")]
         if any("Fasteignanúmer" in h for h in headers):
             target_table = table
             break

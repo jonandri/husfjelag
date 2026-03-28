@@ -77,3 +77,9 @@ class ScrapeHMSApartmentsTest(TestCase):
         with patch("associations.scraper.requests.get", return_value=mock_resp):
             result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
         self.assertEqual(result, [])
+
+    def test_scrape_returns_none_on_connection_error(self):
+        import requests as req_lib
+        with patch("associations.scraper.requests.get", side_effect=req_lib.RequestException):
+            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertIsNone(result)
