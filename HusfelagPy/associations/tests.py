@@ -177,3 +177,91 @@ class ImportPreviewViewTest(TestCase):
         data = resp.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["url"], "https://hms.is/fasteignaskra/228369/1203373")
+
+
+class ImportConfirmViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1111111111", name="Confirm User")
+        self.association = Association.objects.create(
+            ssn="2222222222", name="Confirm Húsfélag",
+            address="Confirmgata 2", postal_code="200", city="Kópavogur"
+        )
+        from associations.models import AssociationAccess, AssociationRole
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+
+    def test_confirm_creates_new_apartments(self):
+        scraped = [{"fnr": "3011100", "anr": "0101", "size": 50.0}]
+        with patch("associations.views.scrape_hms_apartments", return_value=scraped):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(
+            self.association.apartments.filter(fnr="3011100", deleted=False).exists()
+        )
+
+    def test_confirm_updates_existing_apartment(self):
+        apt = Apartment.objects.create(
+            association=self.association, fnr="3011101", anr="OLD", size=40.0
+        )
+        scraped = [{"fnr": "3011101", "anr": "NEW", "size": 45.0}]
+        with patch("associations.views.scrape_hms_apartments", return_value=scraped):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        apt.refresh_from_db()
+        self.assertEqual(apt.anr, "NEW")
+        self.assertAlmostEqual(float(apt.size), 45.0)
+
+    def test_confirm_deactivates_selected_apartments(self):
+        apt = Apartment.objects.create(
+            association=self.association, fnr="3011199", anr="0901", size=60.0
+        )
+        with patch("associations.views.scrape_hms_apartments", return_value=[]):
+            resp = self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": [apt.id]
+                }),
+                content_type="application/json"
+            )
+        self.assertEqual(resp.status_code, 200)
+        apt.refresh_from_db()
+        self.assertTrue(apt.deleted)
+
+    def test_confirm_saves_hms_source(self):
+        with patch("associations.views.scrape_hms_apartments", return_value=[]):
+            self.client.post(
+                "/Apartment/import/confirm",
+                data=json.dumps({
+                    "user_id": self.user.id,
+                    "urls": ["https://hms.is/fasteignaskra/100/200"],
+                    "deactivate_ids": []
+                }),
+                content_type="application/json"
+            )
+        self.assertTrue(
+            HMSImportSource.objects.filter(
+                association=self.association,
+                url="https://hms.is/fasteignaskra/100/200"
+            ).exists()
+        )
