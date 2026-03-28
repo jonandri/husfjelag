@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from .models import Association, HMSImportSource, Apartment
 from .scraper import scrape_hms_apartments
 import json
+import logging
 from users.models import User
 
 
@@ -143,6 +144,25 @@ class ImportPreviewViewTest(TestCase):
         resp = self.client.post(
             "/Apartment/import/preview",
             data=json.dumps({"user_id": self.user.id, "urls": ["https://example.com/bad"]}),
+            content_type="application/json"
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_preview_returns_502_when_hms_unreachable(self):
+        # Suppress django.request logger to avoid Python 3.14/Django 4.1 debug-template crash on 5xx responses
+        with patch("associations.views.scrape_hms_apartments", return_value=None):
+            with self.assertLogs("django.request", level=logging.ERROR):
+                resp = self.client.post(
+                    "/Apartment/import/preview",
+                    data=json.dumps({"user_id": self.user.id, "urls": ["https://hms.is/fasteignaskra/228369/1203373"]}),
+                    content_type="application/json"
+                )
+        self.assertEqual(resp.status_code, 502)
+
+    def test_preview_missing_urls_returns_400(self):
+        resp = self.client.post(
+            "/Apartment/import/preview",
+            data=json.dumps({"user_id": self.user.id, "urls": []}),
             content_type="application/json"
         )
         self.assertEqual(resp.status_code, 400)
