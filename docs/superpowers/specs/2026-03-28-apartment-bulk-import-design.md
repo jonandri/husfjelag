@@ -67,6 +67,27 @@ Summary chips above the table show counts: "8 íbúðir til að búa til", "2 ti
 
 ## Backend
 
+### New model — `HMSImportSource`
+
+```python
+class HMSImportSource(models.Model):
+    association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="hms_sources")
+    url = models.URLField()
+    last_imported_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "associations_hmsimportsource"
+        unique_together = [("association", "url")]
+```
+
+Stores the HMS URLs used for each import, one row per URL per association. `last_imported_at` is updated on every successful confirm. Provides a reference to where the apartment data came from and enables future re-imports with one click (URLs pre-filled from saved sources).
+
+On `confirm`, upsert all submitted URLs into `HMSImportSource` (create if new, update `last_imported_at` if existing).
+
+A new read endpoint `GET /Apartment/import/sources?user_id={id}` returns saved URLs for the association so Step 2 can pre-fill them on re-import.
+
+---
+
 ### New scraper function — `scraper.py`
 
 ```python
@@ -120,11 +141,13 @@ Logic:
 2. Bulk-create new apartments (`Apartment.objects.bulk_create`)
 3. Update existing apartments (loop `fnr` matches, update `anr` + `size`)
 4. Soft-delete apartments in `deactivate_ids` (set `deleted=True`)
-5. Return updated apartment list (same shape as `GET /Apartment/{user_id}`)
+5. Upsert each URL into `HMSImportSource` for the association
+6. Return updated apartment list (same shape as `GET /Apartment/{user_id}`)
 
 ### URL routing — `urls.py`
 
 ```python
+path('Apartment/import/sources', ApartmentImportSourcesView.as_view()),
 path('Apartment/import/preview', ApartmentImportPreviewView.as_view()),
 path('Apartment/import/confirm', ApartmentImportConfirmView.as_view()),
 ```
@@ -147,12 +170,14 @@ path('Apartment/import/confirm', ApartmentImportConfirmView.as_view()),
 
 ```
 step: 1 | 2 | 3
-urls: string[]          // Step 2 inputs
+urls: string[]          // Step 2 inputs (pre-filled from saved sources on load)
 preview: { create, update, missing } | null
 deactivateIds: Set<number>
 loading: boolean
 error: string
 ```
+
+On mount, `GET /Apartment/import/sources?user_id={id}` is called. If saved URLs exist, Step 2 is pre-filled — making re-imports frictionless.
 
 ---
 
@@ -172,5 +197,6 @@ error: string
 - **`fnr` (Fasteignanúmer) is the natural key** for matching scraped apartments to existing records.
 - **Re-scrape on confirm** — preview payload is not trusted; backend re-fetches to avoid stale data.
 - **Shares not imported** — `share`, `share_2`, `share_3` are not available on hms.is and must be filled in manually after import.
+- **HMS URLs are saved per association** — `HMSImportSource` records where the data came from and pre-fills URLs on re-import.
 - **Wizard is not a nav item** — it's a sub-flow off the Apartments page, not a permanent sidebar link.
 - **`.superpowers/` should be added to `.gitignore`**.
