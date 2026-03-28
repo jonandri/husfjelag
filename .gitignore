@@ -16,3 +16,6 @@ HusfelagJS/build/
 # macOS
 .DS_Store
 .superpowers/
+
+# Git worktrees
+.worktrees/
