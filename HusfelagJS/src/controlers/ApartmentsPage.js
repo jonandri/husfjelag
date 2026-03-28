@@ -62,14 +62,24 @@ function ApartmentsPage() {
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">Íbúðir</Typography>
-                    <Button
-                        variant="contained"
-                        color="secondary"
-                        sx={{ color: '#fff' }}
-                        onClick={() => setShowForm(v => !v)}
-                    >
-                        {showForm ? 'Loka skráningarformi' : '+ Bæta við íbúð'}
-                    </Button>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button
+                            variant="text"
+                            size="small"
+                            sx={{ color: 'text.secondary', textTransform: 'none', fontSize: '0.8rem' }}
+                            onClick={() => navigate('/ibudir/innflutningur')}
+                        >
+                            ⬇ HMS innflutningur
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            sx={{ color: '#fff' }}
+                            onClick={() => setShowForm(v => !v)}
+                        >
+                            {showForm ? 'Loka skráningarformi' : '+ Bæta við íbúð'}
+                        </Button>
+                    </Box>
                 </Box>
 
                 <Collapse in={showForm}>
@@ -89,9 +99,25 @@ function ApartmentsPage() {
                     return (
                         <>
                             {active.length === 0 ? (
-                                <Typography color="text.secondary" sx={{ mt: 2 }}>
-                                    Engar íbúðir skráðar. Smelltu á „+ Bæta við íbúð" til að hefja skráningu.
-                                </Typography>
+                                <Paper
+                                    variant="outlined"
+                                    sx={{ mt: 2, p: 3, borderColor: 'secondary.main', bgcolor: 'rgba(8,192,118,0.05)' }}
+                                >
+                                    <Typography variant="subtitle1" color="secondary" sx={{ mb: 0.5 }}>
+                                        Setja upp íbúðir sjálfkrafa
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                        Enginn búinn að skrá íbúðir. Notaðu HMS fasteignaskrána til að flytja inn lista yfir íbúðir sjálfkrafa.
+                                    </Typography>
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        sx={{ color: '#fff' }}
+                                        onClick={() => navigate('/ibudir/innflutningur')}
+                                    >
+                                        Flytja inn frá HMS →
+                                    </Button>
+                                </Paper>
                             ) : (
                                 <Paper variant="outlined" sx={{ mt: 2 }}>
                                     <Table size="small">
