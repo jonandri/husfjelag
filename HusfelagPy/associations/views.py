@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
-from django.db import models as django_models
+from django.db import models as django_models, transaction
 import datetime
 from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem, HMSImportSource
 from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
@@ -911,7 +911,7 @@ class ApartmentImportSourcesView(APIView):
             return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
         association = _resolve_assoc(int(user_id), request)
         if not association:
-            return Response([], status=status.HTTP_200_OK)
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
         sources = association.hms_sources.order_by("url").values("url", "last_imported_at")
         return Response(list(sources))
 
@@ -998,6 +998,9 @@ class ApartmentImportConfirmView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+        if not isinstance(deactivate_ids, list) or not all(isinstance(i, int) for i in deactivate_ids):
+            return Response({"detail": "deactivate_ids must be a list of integers."}, status=status.HTTP_400_BAD_REQUEST)
+
         association = _resolve_assoc(int(user_id), request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -1016,36 +1019,37 @@ class ApartmentImportConfirmView(APIView):
 
         existing = {apt.fnr: apt for apt in association.apartments.filter(deleted=False)}
 
-        # Create new apartments
-        to_create = [
-            Apartment(association=association, fnr=fnr, anr=data["anr"], size=data["size"])
-            for fnr, data in scraped_by_fnr.items()
-            if fnr not in existing
-        ]
-        Apartment.objects.bulk_create(to_create)
+        with transaction.atomic():
+            # Create new apartments
+            to_create = [
+                Apartment(association=association, fnr=fnr, anr=data["anr"], size=data["size"])
+                for fnr, data in scraped_by_fnr.items()
+                if fnr not in existing
+            ]
+            Apartment.objects.bulk_create(to_create)
 
-        # Update existing apartments
-        for fnr, data in scraped_by_fnr.items():
-            if fnr in existing:
-                apt = existing[fnr]
-                apt.anr = data["anr"]
-                apt.size = data["size"]
-                apt.save(update_fields=["anr", "size"])
+            # Update existing apartments
+            for fnr, data in scraped_by_fnr.items():
+                if fnr in existing:
+                    apt = existing[fnr]
+                    apt.anr = data["anr"]
+                    apt.size = data["size"]
+                    apt.save(update_fields=["anr", "size"])
 
-        # Soft-delete requested apartments
-        if deactivate_ids:
-            Apartment.objects.filter(
-                id__in=deactivate_ids, association=association
-            ).update(deleted=True)
+            # Soft-delete requested apartments
+            if deactivate_ids:
+                Apartment.objects.filter(
+                    id__in=deactivate_ids, association=association
+                ).update(deleted=True)
 
-        # Upsert HMS sources
-        for url in urls:
-            HMSImportSource.objects.update_or_create(
-                association=association,
-                url=url,
-                defaults={}  # last_imported_at uses auto_now=True, updated on save
-            )
+            # Upsert HMS sources
+            for url in urls:
+                HMSImportSource.objects.update_or_create(
+                    association=association,
+                    url=url,
+                    defaults={}  # last_imported_at uses auto_now=True, updated on save
+                )
 
         # Return updated apartment list
-        apartments = association.apartments.all()
+        apartments = association.apartments.filter(deleted=False)
         return Response(ApartmentSerializer(apartments, many=True).data)

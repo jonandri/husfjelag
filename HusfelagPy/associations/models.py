@@ -49,6 +49,7 @@ class Apartment(models.Model):
 
     class Meta:
         db_table = "associations_apartment"
+        unique_together = [("association", "fnr")]
 
     def __str__(self):
         return f"{self.anr} ({self.fnr})"
