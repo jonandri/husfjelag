@@ -34,7 +34,7 @@ function BudgetPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadBudget();
-    }, [user]);
+    }, [user, assocParam]);
 
     const loadBudget = async () => {
         try {

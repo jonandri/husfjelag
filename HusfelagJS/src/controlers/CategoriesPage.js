@@ -36,7 +36,7 @@ function CategoriesPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadCategories();
-    }, [user]);
+    }, [user, assocParam]);
 
     const loadCategories = async () => {
         try {

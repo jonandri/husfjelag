@@ -28,7 +28,7 @@ function ApartmentsPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadApartments();
-    }, [user]);
+    }, [user, assocParam]);
 
     const loadApartments = async () => {
         try {

@@ -12,6 +12,7 @@ function Logout() {
 
     useEffect(() => {
         localStorage.removeItem('user');
+        localStorage.removeItem('currentAssociation');
         setUser(null);
         navigate('/login');
     }, []);

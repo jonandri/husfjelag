@@ -61,10 +61,48 @@ def lookup_association(ssn: str) -> dict | None:
     if not name or not address:
         return None
 
+    # ÍSAT code — try several strategies to handle different page layouts
+    isat_code = None
+    isat_label = None
+
+    def _parse_isat(raw):
+        raw = raw.strip()
+        parts = raw.split(" ", 1)
+        return parts[0], (parts[1] if len(parts) > 1 else raw)
+
+    # Strategy 1: <th> sibling → <td> in same <tr>
+    for th in soup.find_all("th"):
+        if "SAT" in th.get_text() or "Atvinnugrein" in th.get_text():
+            tr = th.find_parent("tr")
+            td = tr.find("td") if tr else None
+            if td:
+                isat_code, isat_label = _parse_isat(td.get_text(" ", strip=True))
+                break
+
+    # Strategy 2: <dt> → next <dd> (definition list layout)
+    if not isat_code:
+        for dt in soup.find_all("dt"):
+            if "SAT" in dt.get_text() or "Atvinnugrein" in dt.get_text():
+                dd = dt.find_next_sibling("dd")
+                if dd:
+                    isat_code, isat_label = _parse_isat(dd.get_text(" ", strip=True))
+                    break
+
+    # Strategy 3: scan all text for the ÍSAT pattern (e.g. "68.20.1 Leiga...")
+    if not isat_code:
+        isat_pattern = re.compile(r'\b(\d{2,3}\.\d{2}\.\d)\s+(.+)')
+        for tag in soup.find_all(string=isat_pattern):
+            m = isat_pattern.search(tag)
+            if m:
+                isat_code, isat_label = m.group(1), m.group(2).strip()
+                break
+
     return {
         "ssn": ssn,
         "name": name,
         "address": address,
         "postal_code": postal_code,
         "city": city,
+        "isat_code": isat_code,
+        "isat_label": isat_label,
     }

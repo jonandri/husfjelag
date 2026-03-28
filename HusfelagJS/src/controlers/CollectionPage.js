@@ -33,7 +33,7 @@ function CollectionPage() {
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(setData)
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], budget_summary: [] }); });
-    }, [user]);
+    }, [user, assocParam]);
 
     if (data === undefined) {
         return (

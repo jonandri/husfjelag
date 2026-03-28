@@ -2136,5 +2136,5 @@ dev = ["black", "flake8", "pytest-django"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = "^3.10"
-content-hash = "c32f3274cf086eb31e802e37d917b411d1ee221727837cff808f7cc171be828e"
+python-versions = ">=3.10,<4"
+content-hash = "1e2663c1f8bd421a757e8c7669bbd2a2d0dcd3c3a8d3d1c79bf1bcb2bc5e58c4"

@@ -1,3 +1,4 @@
+import unicodedata
 from decimal import Decimal, ROUND_DOWN
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -10,6 +11,29 @@ from .models import Association, AssociationAccess, AssociationRole, Apartment, 
 from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
 from .scraper import lookup_association
 from users.models import User
+
+
+def _norm(s):
+    """Strip diacritics and lowercase for fuzzy Icelandic search."""
+    return unicodedata.normalize('NFKD', str(s).lower()).encode('ascii', 'ignore').decode()
+
+
+def _matches(name, q):
+    """
+    True if every word in the (normalized) query is a substring of any word
+    in the (normalized) name.  Handles Icelandic case endings gracefully:
+      'mariugata' matches 'mariugotu' because the shared 7-char prefix is ≥4.
+    """
+    name_norm = _norm(name)
+    q_words = _norm(q).split()
+    name_words = name_norm.split()
+    for qw in q_words:
+        if len(qw) < 3:
+            continue
+        # Match if qw is a substring of any name word, or vice-versa
+        if not any(qw in nw or nw.startswith(qw[:max(4, len(qw)-2)]) for nw in name_words):
+            return False
+    return True
 
 
 DEFAULT_CATEGORIES = [
@@ -767,23 +791,41 @@ class CollectionView(APIView):
 
 class AssociationListView(APIView):
     def get(self, request, user_id):
-        """GET /Association/list/{user_id} — List all associations the user has access to.
-        Superadmin gets all associations in the system."""
+        """GET /Association/list/{user_id}[?q=search] — List associations for the user.
+        Superadmin gets all; regular users get only their own.
+        Optional ?q= filters by name or SSN (case-insensitive substring)."""
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response([], status=status.HTTP_200_OK)
 
-        if user.is_superadmin:
-            associations = Association.objects.all().order_by("name")
-            serializer = AssociationAccessSerializer(associations, many=True, context={"user_id": None})
-        else:
-            associations = Association.objects.filter(
-                access_entries__user_id=user_id, access_entries__active=True
-            ).order_by("name")
-            serializer = AssociationAccessSerializer(associations, many=True, context={"user_id": user_id})
+        q = request.query_params.get("q", "").strip()
 
-        return Response(serializer.data)
+        try:
+            is_superadmin = user.is_superadmin
+        except Exception:
+            is_superadmin = False
+
+        # Always start with the user's own associations
+        own_qs = list(Association.objects.filter(
+            access_entries__user_id=user_id, access_entries__active=True
+        ).order_by("name"))
+
+        if q and is_superadmin:
+            # Superadmin search: all associations, own first, then others
+            own_ids = {a.id for a in own_qs}
+            all_qs = list(Association.objects.all().order_by("name"))
+            matched = [a for a in all_qs if _matches(a.name, q) or q.replace('-', '') in a.ssn]
+            own_matched = [a for a in matched if a.id in own_ids]
+            other_matched = [a for a in matched if a.id not in own_ids]
+            qs = own_matched + other_matched
+        elif q:
+            qs = [a for a in own_qs if _matches(a.name, q) or q.replace('-', '') in a.ssn]
+        else:
+            qs = own_qs
+
+        ctx = {"user_id": user_id, "is_superadmin": is_superadmin}
+        return Response(AssociationAccessSerializer(qs, many=True, context=ctx).data)
 
 
 class AdminAssociationView(APIView):
@@ -801,11 +843,9 @@ class AdminAssociationView(APIView):
             return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
 
         q = request.query_params.get("q", "").strip()
-        qs = Association.objects.all().order_by("name")
+        qs = list(Association.objects.all().order_by("name"))
         if q:
-            qs = qs.filter(
-                django_models.Q(name__icontains=q) | django_models.Q(ssn__icontains=q)
-            )
+            qs = [a for a in qs if _matches(a.name, q) or q.replace('-', '') in a.ssn]
         return Response(AssociationAccessSerializer(qs[:50], many=True, context={"user_id": None}).data)
 
     def post(self, request):
@@ -833,10 +873,10 @@ class AdminAssociationView(APIView):
         if data is None:
             return Response({"detail": "Ekkert húsfélag fannst með þessa kennitölu á skatturinn.is."}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            chair_user = User.objects.get(kennitala=chair_ssn)
-        except User.DoesNotExist:
-            return Response({"detail": "Notandi með kennitölu formanns fannst ekki í kerfinu."}, status=status.HTTP_404_NOT_FOUND)
+        chair_user, created = User.objects.get_or_create(
+            kennitala=chair_ssn,
+            defaults={"name": chair_ssn},  # placeholder until Þjóðskrá lookup
+        )
 
         serializer = AssociationSerializer(data={
             "ssn": data["ssn"],

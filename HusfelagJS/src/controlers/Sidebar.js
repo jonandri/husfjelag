@@ -123,6 +123,18 @@ function SideBar() {
     );
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [switcherOpen, setSwitcherOpen] = useState(false);
+    const [switcherQ, setSwitcherQ] = useState('');
+    const [switcherResults, setSwitcherResults] = useState([]);
+    const [switcherSearching, setSwitcherSearching] = useState(false);
+
+    React.useEffect(() => {
+        if (!switcherOpen || !user?.id) return;
+        setSwitcherSearching(true);
+        fetch(`${API_URL}/Association/list/${user.id}${switcherQ ? `?q=${encodeURIComponent(switcherQ)}` : ''}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { setSwitcherResults(data); setSwitcherSearching(false); })
+            .catch(() => setSwitcherSearching(false));
+    }, [switcherOpen, switcherQ, user]);
 
     const toggle = () => {
         const next = !collapsed;
@@ -206,7 +218,7 @@ function SideBar() {
 
             {/* Nav items */}
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 0.25, pt: 0.5, overflowY: 'auto', overflowX: 'hidden' }}>
-                {NAV.map(item => (
+                {currentAssociation && NAV.map(item => (
                     <NavItem
                         key={item.path}
                         {...item}
@@ -215,20 +227,18 @@ function SideBar() {
                         onClick={() => navigate(item.path)}
                     />
                 ))}
+            </Box>
+
+            {/* Bottom: superadmin + settings + logout */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, pb: 2, pt: 1 }}>
                 {user?.is_superadmin && (
-                    <NavItem
-                        path="/superadmin"
+                    <BottomItem
                         label="Kerfisstjóri"
                         icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />}
                         collapsed={collapsed}
-                        active={location.pathname === '/superadmin'}
                         onClick={() => navigate('/superadmin')}
                     />
                 )}
-            </Box>
-
-            {/* Bottom: settings + logout */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, pb: 2, pt: 1 }}>
                 <BottomItem
                     label="Stillingar"
                     icon={<AccountCircleOutlinedIcon sx={{ fontSize: 20 }} />}
@@ -246,22 +256,29 @@ function SideBar() {
 
             <UserSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} user={user} setUser={setUser} />
 
-            <Dialog open={switcherOpen} onClose={() => setSwitcherOpen(false)} maxWidth="xs" fullWidth>
+            <Dialog open={switcherOpen} onClose={() => { setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }} maxWidth="xs" fullWidth>
                 <DialogTitle>Skipta um húsfélag</DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
                     {impersonating && (
                         <Alert severity="warning" action={
-                            <Button size="small" onClick={() => { stopImpersonating(); setSwitcherOpen(false); }}>
+                            <Button size="small" onClick={() => { stopImpersonating(); setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }}>
                                 Hætta við
                             </Button>
                         }>
                             Þú ert að skoða sem kerfisstjóri
                         </Alert>
                     )}
-                    {associations.map(a => (
+                    <TextField
+                        size="small" fullWidth autoFocus
+                        placeholder="Leita eftir nafni eða kennitölu..."
+                        value={switcherQ}
+                        onChange={e => setSwitcherQ(e.target.value)}
+                        InputProps={{ endAdornment: switcherSearching ? <CircularProgress size={14} /> : null }}
+                    />
+                    {switcherResults.map(a => (
                         <Box
                             key={a.id}
-                            onClick={() => { setCurrentAssociation(a); setSwitcherOpen(false); }}
+                            onClick={() => { setCurrentAssociation(a); setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }}
                             sx={{
                                 p: 1.5, borderRadius: 1, cursor: 'pointer',
                                 backgroundColor: currentAssociation?.id === a.id ? 'rgba(8,192,118,0.12)' : 'transparent',
@@ -273,10 +290,22 @@ function SideBar() {
                             <Typography variant="caption" color="text.secondary">{a.role || ''}</Typography>
                         </Box>
                     ))}
-                    {user?.is_superadmin && <AdminSearch user={user} onSelect={(a) => { setCurrentAssociation(a); setSwitcherOpen(false); }} />}
+                    {!switcherSearching && switcherResults.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                            {switcherQ ? 'Ekkert húsfélag fannst.' : 'Ekkert húsfélag skráð.'}
+                        </Typography>
+                    )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setSwitcherOpen(false)}>Loka</Button>
+                <DialogActions sx={{ justifyContent: 'space-between', px: 2 }}>
+                    {user?.is_superadmin ? (
+                        <Button
+                            color="secondary"
+                            onClick={() => { setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); navigate('/superadmin'); }}
+                        >
+                            + Stofna húsfélag
+                        </Button>
+                    ) : <span />}
+                    <Button onClick={() => { setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }}>Loka</Button>
                 </DialogActions>
             </Dialog>
         </Box>
@@ -388,46 +417,6 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
                 </Button>
             </DialogActions>
         </Dialog>
-    );
-}
-
-function AdminSearch({ user, onSelect }) {
-    const [q, setQ] = useState('');
-    const [results, setResults] = useState([]);
-    const [searching, setSearching] = useState(false);
-
-    React.useEffect(() => {
-        if (q.length < 2) { setResults([]); return; }
-        setSearching(true);
-        fetch(`${API_URL}/admin/Association?user_id=${user.id}&q=${encodeURIComponent(q)}`)
-            .then(r => r.ok ? r.json() : [])
-            .then(data => { setResults(data); setSearching(false); })
-            .catch(() => setSearching(false));
-    }, [q]);
-
-    return (
-        <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                Leita að hvaða húsfélagi sem er
-            </Typography>
-            <TextField
-                size="small" fullWidth
-                placeholder="Nafn eða kennitala..."
-                value={q}
-                onChange={e => setQ(e.target.value)}
-                InputProps={{ endAdornment: searching ? <CircularProgress size={14} /> : null }}
-            />
-            {results.map(a => (
-                <Box
-                    key={a.id}
-                    onClick={() => onSelect(a)}
-                    sx={{ p: 1, mt: 0.5, borderRadius: 1, cursor: 'pointer', '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }, border: '1px solid rgba(0,0,0,0.08)' }}
-                >
-                    <Typography variant="body2" fontWeight={500}>{a.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">{a.ssn}</Typography>
-                </Box>
-            ))}
-        </Box>
     );
 }
 

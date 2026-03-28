@@ -52,10 +52,7 @@ const theme = createTheme({
 function App() {
   const [user, setUser] = React.useState(null);
   const [associations, setAssociations] = React.useState([]);
-  const [currentAssociation, setCurrentAssociationState] = React.useState(() => {
-    const saved = localStorage.getItem('currentAssociation');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentAssociation, setCurrentAssociationState] = React.useState(null);
   const [impersonating, setImpersonating] = React.useState(false);
 
   //Load any saved user from local storage
@@ -81,8 +78,11 @@ function App() {
         const savedRaw = localStorage.getItem('currentAssociation');
         const savedAssoc = savedRaw ? JSON.parse(savedRaw) : null;
         const match = savedAssoc ? list.find(a => a.id === savedAssoc.id) : null;
-        const resolved = match || list[0] || null;
+        // Only fall back to savedAssoc (outside own list) for superadmins (impersonation reload)
+        const resolved = match || (user?.is_superadmin ? savedAssoc : null) || list[0] || null;
+        const isOwn = resolved ? list.some(a => a.id === resolved.id) : false;
         setCurrentAssociationState(resolved);
+        setImpersonating(!!resolved && !isOwn);
         if (resolved) localStorage.setItem('currentAssociation', JSON.stringify(resolved));
       })
       .catch(() => {});

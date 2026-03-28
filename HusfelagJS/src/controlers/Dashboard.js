@@ -34,7 +34,7 @@ function Dashboard() {
         };
 
         fetchAssociation();
-    }, [user]);
+    }, [user, assocParam]);
 
     return (
         <div className='dashboard'>

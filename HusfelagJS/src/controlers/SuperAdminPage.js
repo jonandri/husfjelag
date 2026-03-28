@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Divider, Paper, TextField, Button,
     CircularProgress, Alert, Grid,
+    Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
@@ -40,16 +42,46 @@ function SuperAdminPage() {
     );
 }
 
+const HOUSING_ISAT = '94.99.1';
+
 function CreateAssociationPanel({ user, onCreated }) {
     const navigate = useNavigate();
     const [assocSsn, setAssocSsn] = useState('');
     const [chairSsn, setChairSsn] = useState('');
+    const [looking, setLooking] = useState(false);
+    const [lookupError, setLookupError] = useState('');
+    const [preview, setPreview] = useState(null);
+    const [isatWarningOpen, setIsatWarningOpen] = useState(false);
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+    const [saveError, setSaveError] = useState('');
     const [success, setSuccess] = useState(null);
 
+    const handleLookup = async () => {
+        setLookupError(''); setPreview(null);
+        setLooking(true);
+        try {
+            const resp = await fetch(`${API_URL}/Association/lookup?ssn=${assocSsn.replace(/-/g, '')}`);
+            const data = await resp.json();
+            if (resp.ok) {
+                setPreview(data);
+                if (data.isat_code && data.isat_code !== HOUSING_ISAT) {
+                    setIsatWarningOpen(true);
+                } else {
+                    setConfirmOpen(true);
+                }
+            } else {
+                setLookupError(data.detail || 'Villa við leit.');
+            }
+        } catch {
+            setLookupError('Tenging við þjón mistókst.');
+        } finally {
+            setLooking(false);
+        }
+    };
+
     const handleCreate = async () => {
-        setError(''); setSuccess(null); setSaving(true);
+        setSaveError(''); setSaving(true);
         try {
             const resp = await fetch(`${API_URL}/admin/Association`, {
                 method: 'POST',
@@ -62,22 +94,16 @@ function CreateAssociationPanel({ user, onCreated }) {
             });
             const data = await resp.json();
             if (resp.ok) {
+                setConfirmOpen(false);
                 setSuccess(data);
-                setAssocSsn(''); setChairSsn('');
+                setAssocSsn(''); setChairSsn(''); setPreview(null);
             } else {
-                setError(data.detail || 'Villa við stofnun.');
+                setSaveError(data.detail || 'Villa við stofnun.');
             }
         } catch {
-            setError('Tenging við þjón mistókst.');
+            setSaveError('Tenging við þjón mistókst.');
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handleGoTo = () => {
-        if (success) {
-            onCreated(success);
-            navigate('/husfelag');
         }
     };
 
@@ -85,13 +111,13 @@ function CreateAssociationPanel({ user, onCreated }) {
         <Paper variant="outlined" sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>Stofna húsfélag</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Lyklar húsfélags og formanns eru sóttir sjálfkrafa.
+                Upplýsingar húsfélags eru sóttar sjálfkrafa á skatturinn.is.
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <TextField
                     label="Kennitala húsfélags"
                     value={assocSsn}
-                    onChange={e => setAssocSsn(e.target.value.replace(/[^0-9-]/g, ''))}
+                    onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); }}
                     size="small" fullWidth
                     placeholder="000000-0000"
                 />
@@ -102,23 +128,88 @@ function CreateAssociationPanel({ user, onCreated }) {
                     size="small" fullWidth
                     placeholder="000000-0000"
                 />
-                {error && <Alert severity="error">{error}</Alert>}
+                {lookupError && <Alert severity="error">{lookupError}</Alert>}
                 {success && (
                     <Alert severity="success" action={
-                        <Button size="small" onClick={handleGoTo}>Fara á síðu</Button>
+                        <Button size="small" onClick={() => { onCreated(success); navigate('/husfelag'); }}>
+                            Fara á síðu
+                        </Button>
                     }>
                         {success.name} stofnað.
                     </Alert>
                 )}
                 <Button
                     variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || saving}
-                    onClick={handleCreate}
+                    disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || looking}
+                    onClick={handleLookup}
                 >
-                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Stofna'}
+                    {looking ? <CircularProgress size={18} color="inherit" /> : 'Fletta upp og stofna'}
                 </Button>
             </Box>
+
+            {/* ÍSAT warning — shown before confirmation if code is unexpected */}
+            <Dialog open={isatWarningOpen} onClose={() => setIsatWarningOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <WarningAmberIcon color="warning" /> ÍSAT flokkur er ekki rétt
+                </DialogTitle>
+                <DialogContent sx={{ pt: 1 }}>
+                    <Typography variant="body2" gutterBottom>
+                        Skráður ÍSAT flokkur er <strong>{preview?.isat_code}</strong>, ekki <strong>94.99.1</strong> (Starfsemi húsfélaga íbúðareigenda).
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {preview?.isat_label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 2 }}>
+                        Ertu viss um að þetta sé húsfélag sem á að skrá?
+                    </Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setIsatWarningOpen(false)}>Hætta við</Button>
+                    <Button
+                        variant="contained" color="warning"
+                        onClick={() => { setIsatWarningOpen(false); setConfirmOpen(true); }}
+                    >
+                        Já, halda áfram
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Staðfesta stofnun húsfélags</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <InfoRow label="Nafn" value={preview?.name} />
+                        <InfoRow label="Kennitala" value={fmtKennitala(preview?.ssn)} />
+                        <InfoRow label="Heimilisfang" value={preview?.address} />
+                        <InfoRow label="Póstnúmer" value={preview?.postal_code} />
+                        <InfoRow label="Staður" value={preview?.city} />
+                        {preview?.isat_code && (
+                            <InfoRow label="ÍSAT" value={`${preview.isat_code} – ${preview.isat_label}`} />
+                        )}
+                    </Box>
+                    {saveError && <Alert severity="error">{saveError}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Hætta við</Button>
+                    <Button
+                        variant="contained" color="secondary" sx={{ color: '#fff' }}
+                        onClick={handleCreate}
+                        disabled={saving}
+                    >
+                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Stofna'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Paper>
+    );
+}
+
+function InfoRow({ label, value }) {
+    return (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>{label}:</Typography>
+            <Typography variant="body2">{value || '—'}</Typography>
+        </Box>
     );
 }
 

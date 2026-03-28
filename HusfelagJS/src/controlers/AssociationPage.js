@@ -26,7 +26,7 @@ function AssociationPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadAll();
-    }, [user]);
+    }, [user, assocParam]);
 
     const loadAll = async () => {
         try {
