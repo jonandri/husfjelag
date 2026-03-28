@@ -22,6 +22,14 @@ husfjelag/
 | **API Docs** | drf-spectacular (Swagger / ReDoc) |
 | **Package manager (BE)** | Poetry |
 
+## Quick Start
+
+```bash
+./dev.sh
+```
+
+Starts the backend on `http://localhost:8010` and the frontend on `http://localhost:3010`.
+
 ## Getting Started
 
 ### Prerequisites
@@ -59,12 +67,12 @@ createdb -U husfelag husfelag
 poetry run python manage.py migrate
 
 # Start the API server
-poetry run python manage.py runserver 8000
+poetry run python manage.py runserver 8010
 ```
 
-API available at `http://localhost:8000`
-Swagger UI at `http://localhost:8000/swagger/`
-ReDoc at `http://localhost:8000/redoc/`
+API available at `http://localhost:8010`
+Swagger UI at `http://localhost:8010/swagger/`
+ReDoc at `http://localhost:8010/redoc/`
 
 **Optional — start Celery worker** (for background tasks):
 ```bash
@@ -80,14 +88,15 @@ cd HusfelagJS
 npm install
 
 # Start dev server
-npm start
+PORT=3010 REACT_APP_API_URL=http://localhost:8010 npm start
 ```
 
-App available at `http://localhost:3000`
+App available at `http://localhost:3010`
 
-The frontend connects to the backend via `REACT_APP_API_URL` (defaults to `http://localhost:8000`). Create a `.env.local` file to override:
+The frontend connects to the backend via `REACT_APP_API_URL`. Create a `.env.local` file to set it permanently:
 ```
-REACT_APP_API_URL=http://localhost:8000
+PORT=3010
+REACT_APP_API_URL=http://localhost:8010
 ```
 
 ## Deployment

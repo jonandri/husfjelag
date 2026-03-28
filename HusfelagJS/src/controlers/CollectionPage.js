@@ -21,7 +21,7 @@ const TYPE_LABELS = {
 
 function CollectionPage() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [data, setData] = useState(undefined);
     const [error, setError] = useState('');
     const { sort, lbl } = useSort('anr');
@@ -29,11 +29,11 @@ function CollectionPage() {
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
-        fetch(`${API_URL}/Collection/${user.id}`)
+        fetch(`${API_URL}/Collection/${user.id}${assocParam}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(setData)
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], budget_summary: [] }); });
-    }, [user]);
+    }, [user, assocParam]);
 
     if (data === undefined) {
         return (

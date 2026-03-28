@@ -94,3 +94,29 @@ class BudgetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Budget
         fields = ["id", "year", "version", "is_active", "items"]
+
+
+class AssociationAccessSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Association
+        fields = ["id", "ssn", "name", "address", "postal_code", "city", "role"]
+
+    ROLE_LABELS = {
+        "CHAIR": "Formaður",
+        "CFO": "Gjaldkeri",
+        "MEMBER": "Eigandi",
+    }
+
+    def get_role(self, obj):
+        user_id = self.context.get("user_id")
+        is_superadmin = self.context.get("is_superadmin", False)
+        if not user_id:
+            return "Kerfisstjóri"
+        access = AssociationAccess.objects.filter(
+            association=obj, user_id=user_id, active=True
+        ).first()
+        if not access:
+            return "Kerfisstjóri" if is_superadmin else None
+        return self.ROLE_LABELS.get(access.role, access.role)

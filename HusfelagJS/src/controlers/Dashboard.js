@@ -8,7 +8,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
 
 function Dashboard() {
     const navigate = useNavigate();
-    const { user } = React.useContext(UserContext);
+    const { user, assocParam } = React.useContext(UserContext);
     const [association, setAssociation] = useState(null);
 
     useEffect(() => {
@@ -19,7 +19,7 @@ function Dashboard() {
 
         const fetchAssociation = async () => {
             try {
-                const response = await fetch(`${API_URL}/Association/${user.id}`);
+                const response = await fetch(`${API_URL}/Association/${user.id}${assocParam}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data === null) {
@@ -34,7 +34,7 @@ function Dashboard() {
         };
 
         fetchAssociation();
-    }, [user]);
+    }, [user, assocParam]);
 
     return (
         <div className='dashboard'>
