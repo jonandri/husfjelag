@@ -1,7 +1,15 @@
 from django.urls import path
-from .views import AssociationView, AssociationLookupView, AssociationRoleView, AssociationListView, AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView, CategoryView, BudgetView, BudgetItemView, CollectionView
+from .views import (
+    AssociationView, AssociationLookupView, AssociationRoleView, AssociationListView,
+    AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView, CategoryView,
+    BudgetView, BudgetItemView, CollectionView,
+    ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
+)
 
 urlpatterns = [
+    path("Apartment/import/sources", ApartmentImportSourcesView.as_view(), name="apartment-import-sources"),
+    path("Apartment/import/preview", ApartmentImportPreviewView.as_view(), name="apartment-import-preview"),
+    path("Apartment/import/confirm", ApartmentImportConfirmView.as_view(), name="apartment-import-confirm"),
     path("Association/lookup", AssociationLookupView.as_view(), name="association-lookup"),
     path("Association/list/<int:user_id>", AssociationListView.as_view(), name="association-list"),
     path("Association/<int:user_id>", AssociationView.as_view(), name="association-detail"),
