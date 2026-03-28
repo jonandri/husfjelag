@@ -106,3 +106,74 @@ def lookup_association(ssn: str) -> dict | None:
         "isat_code": isat_code,
         "isat_label": isat_label,
     }
+
+
+HMS_URL_PATTERN = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
+
+
+def scrape_hms_apartments(url: str) -> list[dict] | None:
+    """
+    Scrape hms.is/fasteignaskra for apartment list.
+    Returns list of {fnr, anr, size} or None on HTTP/connection failure.
+    Returns [] if page loads but no apartment rows found.
+    """
+    try:
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    except requests.RequestException:
+        return None
+
+    if resp.status_code != 200:
+        return None
+
+    soup = BeautifulSoup(resp.content, "html.parser")
+
+    # Find table whose header row contains Fasteignanúmer, Merking, Stærð
+    target_table = None
+    for table in soup.find_all("table"):
+        headers = [th.get_text(strip=True) for th in table.find_all("th")]
+        if any("Fasteignanúmer" in h for h in headers):
+            target_table = table
+            break
+
+    if not target_table:
+        return []
+
+    # Map column index by header name
+    header_row = target_table.find("thead")
+    if not header_row:
+        return []
+    ths = [th.get_text(strip=True) for th in header_row.find_all("th")]
+
+    def col(name):
+        for i, h in enumerate(ths):
+            if name in h:
+                return i
+        return None
+
+    fnr_col = col("Fasteignanúmer")
+    anr_col = col("Merking")
+    size_col = col("Stærð")
+
+    if fnr_col is None or anr_col is None or size_col is None:
+        return []
+
+    results = []
+    tbody = target_table.find("tbody")
+    if not tbody:
+        return []
+
+    for tr in tbody.find_all("tr"):
+        cells = tr.find_all("td")
+        if len(cells) <= max(fnr_col, anr_col, size_col):
+            continue
+        fnr = cells[fnr_col].get_text(strip=True)
+        anr = cells[anr_col].get_text(strip=True)
+        size_raw = cells[size_col].get_text(strip=True).replace(",", ".")
+        try:
+            size = float(size_raw)
+        except ValueError:
+            size = 0.0
+        if fnr:
+            results.append({"fnr": fnr, "anr": anr, "size": size})
+
+    return results
