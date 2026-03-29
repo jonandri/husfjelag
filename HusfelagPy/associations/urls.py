@@ -4,7 +4,7 @@ from .views import (
     AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
     CategoryView, CategoryListView,
     AccountingKeyListView, AccountingKeyView,
-    BankAccountView,
+    BankAccountView, TransactionView,
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
 )
@@ -47,6 +47,9 @@ urlpatterns = [
     path("BankAccount/delete/<int:bank_account_id>", BankAccountView.as_view(), name="bankaccount-delete"),
     path("BankAccount/<int:user_id>", BankAccountView.as_view(), name="bankaccount-list"),
     path("BankAccount", BankAccountView.as_view(), name="bankaccount-create"),
+    path("Transaction/categorise/<int:transaction_id>", TransactionView.as_view(), name="transaction-categorise"),
+    path("Transaction/<int:user_id>", TransactionView.as_view(), name="transaction-list"),
+    path("Transaction", TransactionView.as_view(), name="transaction-create"),
     path("Budget/wizard", BudgetWizardView.as_view(), name="budget-wizard"),
     path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
     path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),

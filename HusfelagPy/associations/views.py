@@ -11,12 +11,12 @@ import datetime
 from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
-    AccountingKey, AccountingKeyType, BankAccount,
+    AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
     CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer,
-    AccountingKeySerializer, BankAccountSerializer,
+    AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
 from .scraper import lookup_association, scrape_hms_apartments
 from users.models import User
@@ -733,6 +733,124 @@ class BankAccountView(APIView):
         bank_account.deleted = True
         bank_account.save(update_fields=["deleted"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TransactionView(APIView):
+    def get(self, request, user_id):
+        """GET /Transaction/{user_id} — list transactions. Query: ?year=, ?bank_account_id=, ?status="""
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+
+        bank_account_ids = list(
+            association.bank_accounts.filter(deleted=False).values_list("id", flat=True)
+        )
+        if not bank_account_ids:
+            return Response([], status=status.HTTP_200_OK)
+
+        qs = Transaction.objects.filter(bank_account_id__in=bank_account_ids).select_related(
+            "bank_account", "category"
+        )
+
+        year = request.query_params.get("year")
+        if year:
+            try:
+                qs = qs.filter(date__year=int(year))
+            except (ValueError, TypeError):
+                pass
+
+        bank_account_id = request.query_params.get("bank_account_id")
+        if bank_account_id:
+            qs = qs.filter(bank_account_id=bank_account_id)
+
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        return Response(TransactionSerializer(qs, many=True).data)
+
+    def post(self, request):
+        """POST /Transaction — create a manual transaction."""
+        user_id = request.data.get("user_id")
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        bank_account_id = request.data.get("bank_account_id")
+        date_str = request.data.get("date")
+        amount = request.data.get("amount")
+        description = request.data.get("description", "").strip()
+        reference = request.data.get("reference", "").strip()
+        category_id = request.data.get("category_id")
+
+        if not bank_account_id or not date_str or amount is None or not description:
+            return Response(
+                {"detail": "bank_account_id, date, amount og description eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            bank_account = BankAccount.objects.get(
+                id=bank_account_id, deleted=False, association=association
+            )
+        except BankAccount.DoesNotExist:
+            return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            amount = Decimal(str(amount))
+        except Exception:
+            return Response({"detail": "Ógilt upphæðargildi."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            date_parsed = datetime.date.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            return Response({"detail": "Ógild dagsetning. Notaðu YYYY-MM-DD snið."}, status=status.HTTP_400_BAD_REQUEST)
+
+        category = None
+        if category_id:
+            try:
+                category = Category.objects.get(id=category_id, deleted=False)
+            except Category.DoesNotExist:
+                return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        tx = Transaction.objects.create(
+            bank_account=bank_account,
+            date=date_parsed,
+            amount=amount,
+            description=description,
+            reference=reference,
+            category=category,
+            status=TransactionStatus.CATEGORISED if category else TransactionStatus.IMPORTED,
+        )
+        return Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
+
+    def patch(self, request, transaction_id):
+        """PATCH /Transaction/categorise/{id} — assign category. Body: {user_id, category_id}."""
+        user_id = request.data.get("user_id")
+        category_id = request.data.get("category_id")
+
+        if not category_id:
+            return Response({"detail": "category_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            tx = Transaction.objects.select_related("bank_account").get(id=transaction_id)
+        except Transaction.DoesNotExist:
+            return Response({"detail": "Færsla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        association = _resolve_assoc(user_id, request)
+        if not association or association.id != tx.bank_account.association_id:
+            return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            category = Category.objects.get(id=category_id, deleted=False)
+        except Category.DoesNotExist:
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        tx.category = category
+        tx.status = TransactionStatus.CATEGORISED
+        tx.save(update_fields=["category", "status"])
+        tx.refresh_from_db()
+        return Response(TransactionSerializer(tx).data)
 
 
 class CategoryView(APIView):

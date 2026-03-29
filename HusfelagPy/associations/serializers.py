@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
-    Category, Budget, BudgetItem, AccountingKey, BankAccount,
+    Category, Budget, BudgetItem, AccountingKey, BankAccount, Transaction,
 )
 
 
@@ -119,6 +119,26 @@ class BankAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = BankAccount
         fields = ["id", "name", "account_number", "description", "deleted", "asset_account"]
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    bank_account = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
+
+    def get_bank_account(self, obj):
+        return {"id": obj.bank_account.id, "name": obj.bank_account.name}
+
+    def get_category(self, obj):
+        if not obj.category_id:
+            return None
+        return {"id": obj.category.id, "name": obj.category.name, "type": obj.category.type}
+
+    class Meta:
+        model = Transaction
+        fields = [
+            "id", "date", "amount", "description", "reference",
+            "status", "created_at", "bank_account", "category",
+        ]
 
 
 class BudgetItemSerializer(serializers.ModelSerializer):

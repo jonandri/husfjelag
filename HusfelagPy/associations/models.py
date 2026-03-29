@@ -139,6 +139,36 @@ class BankAccount(models.Model):
         return f"{self.name} ({self.account_number})"
 
 
+class TransactionStatus(models.TextChoices):
+    IMPORTED    = "IMPORTED",   "Innflutt"
+    CATEGORISED = "CATEGORISED", "Flokkað"
+    RECONCILED  = "RECONCILED", "Jafnað"
+
+
+class Transaction(models.Model):
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name="transactions")
+    date         = models.DateField()
+    amount       = models.DecimalField(max_digits=14, decimal_places=2)  # positive=in, negative=out
+    description  = models.CharField(max_length=500)
+    reference    = models.CharField(max_length=255, blank=True)
+    category     = models.ForeignKey(
+        Category, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="transactions",
+    )
+    status       = models.CharField(
+        max_length=20, choices=TransactionStatus.choices,
+        default=TransactionStatus.IMPORTED,
+    )
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "associations_transaction"
+        ordering = ["-date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.date} {self.description}: {self.amount}"
+
+
 class Budget(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="budgets")
     year = models.IntegerField()

@@ -811,3 +811,132 @@ class BankAccountViewTest(TestCase):
         resp = self.client.get(f"/BankAccount/{nobody.id}")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
+
+
+class TransactionViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="7777777777", name="Gjaldkeri")
+        self.association = Association.objects.create(
+            ssn="3333333337", name="Felag HF", address="Gata 1",
+            postal_code="101", city="Reykjavík"
+        )
+        from associations.models import AssociationAccess, AssociationRole, AccountingKey, AccountingKeyType, BankAccount, Category, CategoryType
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CFO, active=True
+        )
+        self.bank_account = BankAccount.objects.create(
+            association=self.association,
+            name="Rekstrar",
+            account_number="0101-26-123456",
+        )
+        self.category = Category.objects.create(name="Tryggingar", type=CategoryType.SHARED)
+
+    def test_create_manual_transaction(self):
+        resp = self.client.post(
+            "/Transaction",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": self.bank_account.id,
+                "date": "2026-03-15",
+                "amount": "-180000.00",
+                "description": "VÍS tryggingar",
+                "reference": "REF001",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["description"], "VÍS tryggingar")
+        self.assertEqual(data["status"], "IMPORTED")
+        self.assertEqual(data["bank_account"]["name"], "Rekstrar")
+
+    def test_create_with_category_sets_categorised_status(self):
+        resp = self.client.post(
+            "/Transaction",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": self.bank_account.id,
+                "date": "2026-03-15",
+                "amount": "-50000.00",
+                "description": "Þrif",
+                "category_id": self.category.id,
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["status"], "CATEGORISED")
+
+    def test_list_transactions(self):
+        from associations.models import Transaction
+        Transaction.objects.create(
+            bank_account=self.bank_account,
+            date="2026-03-01",
+            amount="-10000",
+            description="Test",
+            status="IMPORTED",
+        )
+        resp = self.client.get(f"/Transaction/{self.user.id}?as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 1)
+
+    def test_list_filters_by_year(self):
+        from associations.models import Transaction
+        Transaction.objects.create(
+            bank_account=self.bank_account, date="2025-06-01",
+            amount="-1000", description="Gamla", status="IMPORTED"
+        )
+        Transaction.objects.create(
+            bank_account=self.bank_account, date="2026-01-01",
+            amount="-2000", description="Nýja", status="IMPORTED"
+        )
+        resp = self.client.get(f"/Transaction/{self.user.id}?as={self.association.id}&year=2026")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["description"], "Nýja")
+
+    def test_categorise_transaction(self):
+        from associations.models import Transaction
+        tx = Transaction.objects.create(
+            bank_account=self.bank_account, date="2026-03-01",
+            amount="-5000", description="Test", status="IMPORTED"
+        )
+        resp = self.client.patch(
+            f"/Transaction/categorise/{tx.id}",
+            data=json.dumps({"user_id": self.user.id, "category_id": self.category.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "CATEGORISED")
+        self.assertEqual(data["category"]["id"], self.category.id)
+
+    def test_categorise_wrong_category_returns_404(self):
+        from associations.models import Transaction
+        tx = Transaction.objects.create(
+            bank_account=self.bank_account, date="2026-03-01",
+            amount="-5000", description="Test", status="IMPORTED"
+        )
+        resp = self.client.patch(
+            f"/Transaction/categorise/{tx.id}",
+            data=json.dumps({"user_id": self.user.id, "category_id": 99999}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_no_bank_accounts_returns_empty_list(self):
+        nobody = User.objects.create(kennitala="8888888888", name="Nobody")
+        nobody_assoc = Association.objects.create(
+            ssn="4444444446", name="Empty HF", address="Gata 1",
+            postal_code="101", city="Reykjavík"
+        )
+        from associations.models import AssociationAccess, AssociationRole
+        AssociationAccess.objects.create(
+            user=nobody, association=nobody_assoc,
+            role=AssociationRole.CHAIR, active=True
+        )
+        resp = self.client.get(f"/Transaction/{nobody.id}?as={nobody_assoc.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])
