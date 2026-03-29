@@ -630,6 +630,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
 }
 
 function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
+    const { assocParam } = React.useContext(UserContext);
     const [kennitala, setKennitala] = useState('');
     const [share, setShare] = useState('');
     const [isPayer, setIsPayer] = useState(false);
@@ -648,7 +649,7 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Owner`, {
+            const resp = await fetch(`${API_URL}/Owner${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
