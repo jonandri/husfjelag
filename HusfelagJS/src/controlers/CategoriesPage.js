@@ -261,14 +261,12 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
     const handleSave = async () => {
         setError('');
         setSaving(true);
-        const url = isDisabled
-            ? `${API_URL}/Category/update/${category.id}`
-            : `${API_URL}/Category/update/${category.id}`;
+        const url = `${API_URL}/Category/update/${category.id}`;
         try {
             const resp = await fetch(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
+                body: JSON.stringify({ user_id: user?.id, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
             if (resp.ok) {
                 if (isDisabled) {
@@ -307,7 +305,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
                 fetch(`${API_URL}/Category/update/${category.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: name.trim(), type }),
+                    body: JSON.stringify({ user_id: user?.id, name: name.trim(), type }),
                 }),
             ]);
             await fetch(`${API_URL}/Category/enable/${category.id}`, { method: 'PATCH' });

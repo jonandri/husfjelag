@@ -516,7 +516,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
     const handleDelete = async () => {
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/delete/${bankAccount.id}`, {
+            const resp = await fetch(`${API_URL}/BankAccount/delete/${bankAccount.id}${assocParam}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId }),
