@@ -389,3 +389,137 @@ class CategorySuperadminGuardTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         cat.refresh_from_db()
         self.assertFalse(cat.deleted)
+
+
+class BudgetWizardViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="9999999901", name="Wizard User")
+        self.association = Association.objects.create(
+            ssn="9999999902", name="Wizard Húsfélag",
+            address="Wizardgata 1", postal_code="600", city="Akureyri"
+        )
+        from associations.models import AssociationAccess, AssociationRole, Category
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        self.cat1 = Category.objects.create(name="Tryggingar", type="SHARED")
+        self.cat2 = Category.objects.create(name="Hiti", type="SHARE2")
+
+    def test_wizard_creates_budget_with_items(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [
+                    {"category_id": self.cat1.id, "amount": 450000},
+                    {"category_id": self.cat2.id, "amount": 120000},
+                ]
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["is_active"], True)
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(len(data["items"]), 2)
+        amounts = {i["category_id"]: float(i["amount"]) for i in data["items"]}
+        self.assertAlmostEqual(amounts[self.cat1.id], 450000)
+        self.assertAlmostEqual(amounts[self.cat2.id], 120000)
+
+    def test_wizard_deactivates_previous_budget(self):
+        from associations.models import Budget
+        old = Budget.objects.create(
+            association=self.association, year=2025, version=1, is_active=True
+        )
+        import datetime
+        year = datetime.date.today().year
+        old.year = year
+        old.save()
+
+        self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        old.refresh_from_db()
+        self.assertFalse(old.is_active)
+
+    def test_wizard_increments_version(self):
+        from associations.models import Budget
+        import datetime
+        year = datetime.date.today().year
+        Budget.objects.create(association=self.association, year=year, version=1, is_active=True)
+
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": 1}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["version"], 2)
+
+    def test_wizard_returns_400_for_empty_items(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({"user_id": self.user.id, "items": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_400_for_invalid_category(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": 99999, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_404_for_unknown_user(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": 99999,
+                "items": [{"category_id": self.cat1.id, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_budget_get_returns_null_when_no_budget(self):
+        resp = self.client.get(f"/Budget/{self.user.id}")
+        self.assertEqual(resp.status_code, 200)
+        # DRF renders Response(None) as empty body; assert no budget data returned
+        self.assertFalse(resp.content)
+
+    def test_wizard_returns_400_for_negative_amount(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": -1}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_400_for_non_numeric_amount(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": "bad"}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)

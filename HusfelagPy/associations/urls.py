@@ -3,7 +3,7 @@ from .views import (
     AssociationView, AssociationLookupView, AssociationRoleView, AssociationListView,
     AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
     CategoryView, CategoryListView,
-    BudgetView, BudgetItemView, CollectionView,
+    BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
 )
 
@@ -35,8 +35,8 @@ urlpatterns = [
     path("Category/update/<int:category_id>", CategoryView.as_view(), name="category-update"),
     path("Category/delete/<int:category_id>", CategoryView.as_view(), name="category-delete"),
     path("Category/enable/<int:category_id>", CategoryView.as_view(), name="category-enable"),
+    path("Budget/wizard", BudgetWizardView.as_view(), name="budget-wizard"),
     path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
-    path("Budget", BudgetView.as_view(), name="budget-create"),
     path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),
     path("Collection/<int:user_id>", CollectionView.as_view(), name="collection-list"),
 ]
