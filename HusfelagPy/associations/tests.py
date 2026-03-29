@@ -264,3 +264,262 @@ class ImportConfirmViewTest(TestCase):
         src = HMSImportSource.objects.get(association=self.association, stadfang_id=200)
         self.assertEqual(src.landeign_id, 100)
         self.assertEqual(src.url, "https://hms.is/fasteignaskra/100/200")
+
+
+class CategoryGlobalModelTest(TestCase):
+    def test_category_has_no_association_field(self):
+        """Category can be created without an association."""
+        from associations.models import Category
+        cat = Category.objects.create(name="Tryggingar", type="SHARED")
+        self.assertEqual(cat.name, "Tryggingar")
+        self.assertFalse(hasattr(cat, 'association_id'))
+
+    def test_two_categories_same_name_allowed(self):
+        """Without unique_together, duplicate names across old associations are fine."""
+        from associations.models import Category
+        Category.objects.create(name="Hiti", type="SHARE2")
+        Category.objects.create(name="Hiti", type="SHARE2")  # should not raise
+        self.assertEqual(Category.objects.filter(name="Hiti").count(), 2)
+
+
+class CategoryListViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        from associations.models import Category
+        Category.objects.create(name="Tryggingar", type="SHARED")
+        Category.objects.create(name="Hiti", type="SHARE2")
+        Category.objects.create(name="Óvirkur", type="EQUAL", deleted=True)
+
+    def test_list_returns_only_active_categories(self):
+        resp = self.client.get("/Category/list")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 2)
+        names = {c["name"] for c in data}
+        self.assertIn("Tryggingar", names)
+        self.assertIn("Hiti", names)
+        self.assertNotIn("Óvirkur", names)
+
+    def test_list_returns_id_name_type(self):
+        resp = self.client.get("/Category/list")
+        item = resp.json()[0]
+        self.assertIn("id", item)
+        self.assertIn("name", item)
+        self.assertIn("type", item)
+
+
+class CategorySuperadminGuardTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.superadmin = User.objects.create(kennitala="0000000001", name="Super", is_superadmin=True)
+        self.regular = User.objects.create(kennitala="0000000002", name="Regular", is_superadmin=False)
+
+    def test_post_category_requires_superadmin(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"user_id": self.regular.id, "name": "Test", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_category_succeeds_for_superadmin(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"user_id": self.superadmin.id, "name": "Tryggingar", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["name"], "Tryggingar")
+
+    def test_put_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Old", type="SHARED")
+        resp = self.client.put(
+            f"/Category/update/{cat.id}?user_id={self.regular.id}",
+            data=json.dumps({"name": "New", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_delete_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="ToDelete", type="EQUAL")
+        resp = self.client.delete(f"/Category/delete/{cat.id}?user_id={self.regular.id}")
+        self.assertEqual(resp.status_code, 403)
+        cat.refresh_from_db()
+        self.assertFalse(cat.deleted)
+
+    def test_enable_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Disabled", type="EQUAL", deleted=True)
+        resp = self.client.patch(f"/Category/enable/{cat.id}?user_id={self.regular.id}")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_category_missing_user_id_returns_400(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"name": "Test", "type": "SHARED"}),  # no user_id
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_put_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Old", type="SHARED")
+        resp = self.client.put(
+            f"/Category/update/{cat.id}?user_id={self.superadmin.id}",
+            data=json.dumps({"name": "New", "type": "SHARE2"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["name"], "New")
+
+    def test_delete_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="ToDelete", type="EQUAL")
+        resp = self.client.delete(f"/Category/delete/{cat.id}?user_id={self.superadmin.id}")
+        self.assertEqual(resp.status_code, 204)
+        cat.refresh_from_db()
+        self.assertTrue(cat.deleted)
+
+    def test_enable_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Disabled", type="SHARED", deleted=True)
+        resp = self.client.patch(f"/Category/enable/{cat.id}?user_id={self.superadmin.id}")
+        self.assertEqual(resp.status_code, 200)
+        cat.refresh_from_db()
+        self.assertFalse(cat.deleted)
+
+
+class BudgetWizardViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="9999999901", name="Wizard User")
+        self.association = Association.objects.create(
+            ssn="9999999902", name="Wizard Húsfélag",
+            address="Wizardgata 1", postal_code="600", city="Akureyri"
+        )
+        from associations.models import AssociationAccess, AssociationRole, Category
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        self.cat1 = Category.objects.create(name="Tryggingar", type="SHARED")
+        self.cat2 = Category.objects.create(name="Hiti", type="SHARE2")
+
+    def test_wizard_creates_budget_with_items(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [
+                    {"category_id": self.cat1.id, "amount": 450000},
+                    {"category_id": self.cat2.id, "amount": 120000},
+                ]
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["is_active"], True)
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(len(data["items"]), 2)
+        amounts = {i["category_id"]: float(i["amount"]) for i in data["items"]}
+        self.assertAlmostEqual(amounts[self.cat1.id], 450000)
+        self.assertAlmostEqual(amounts[self.cat2.id], 120000)
+
+    def test_wizard_deactivates_previous_budget(self):
+        from associations.models import Budget
+        old = Budget.objects.create(
+            association=self.association, year=2025, version=1, is_active=True
+        )
+        import datetime
+        year = datetime.date.today().year
+        old.year = year
+        old.save()
+
+        self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        old.refresh_from_db()
+        self.assertFalse(old.is_active)
+
+    def test_wizard_increments_version(self):
+        from associations.models import Budget
+        import datetime
+        year = datetime.date.today().year
+        Budget.objects.create(association=self.association, year=year, version=1, is_active=True)
+
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": 1}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["version"], 2)
+
+    def test_wizard_returns_400_for_empty_items(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({"user_id": self.user.id, "items": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_400_for_invalid_category(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": 99999, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_404_for_unknown_user(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": 99999,
+                "items": [{"category_id": self.cat1.id, "amount": 100}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_budget_get_returns_null_when_no_budget(self):
+        resp = self.client.get(f"/Budget/{self.user.id}")
+        self.assertEqual(resp.status_code, 200)
+        # DRF renders Response(None) as empty body; assert no budget data returned
+        self.assertFalse(resp.content)
+
+    def test_wizard_returns_400_for_negative_amount(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": -1}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_wizard_returns_400_for_non_numeric_amount(self):
+        resp = self.client.post(
+            "/Budget/wizard",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "items": [{"category_id": self.cat1.id, "amount": "bad"}],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)

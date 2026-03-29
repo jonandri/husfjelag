@@ -79,9 +79,9 @@ class CategoryType(models.TextChoices):
 
 
 class Category(models.Model):
-    association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="categories")
-    name = models.CharField(max_length=255)
-    type = models.CharField(max_length=20, choices=CategoryType.choices)
+    # association FK removed — categories are global, managed by superadmin
+    name    = models.CharField(max_length=255)
+    type    = models.CharField(max_length=20, choices=CategoryType.choices)
     deleted = models.BooleanField(default=False)
 
     class Meta:
