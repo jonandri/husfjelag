@@ -4,13 +4,26 @@ import {
     Box, Typography, Divider, Paper, TextField, Button,
     CircularProgress, Alert, Grid,
     Dialog, DialogTitle, DialogContent, DialogActions,
+    Table, TableHead, TableRow, TableCell, TableBody,
+    Collapse, IconButton, Tooltip,
+    MenuItem, Select, FormControl, InputLabel,
+    DialogContentText,
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
+
+const CATEGORY_TYPES = [
+    { value: 'SHARED', label: 'Sameiginlegt' },
+    { value: 'SHARE2', label: 'Hiti' },
+    { value: 'SHARE3', label: 'Lóð' },
+    { value: 'EQUAL',  label: 'Jafnskipt' },
+];
+const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label || type;
 
 function SuperAdminPage() {
     const navigate = useNavigate();
@@ -35,6 +48,9 @@ function SuperAdminPage() {
                     </Grid>
                     <Grid item xs={12} md={6}>
                         <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <GlobalCategoriesPanel user={user} />
                     </Grid>
                 </Grid>
             </Box>
@@ -267,6 +283,322 @@ function ImpersonatePanel({ user, onSelect }) {
                 )}
             </Box>
         </Paper>
+    );
+}
+
+function GlobalCategoriesPanel({ user }) {
+    const [categories, setCategories] = React.useState(undefined);
+    const [error, setError] = React.useState('');
+    const [showForm, setShowForm] = React.useState(false);
+    const [showDisabled, setShowDisabled] = React.useState(false);
+
+    React.useEffect(() => { loadCategories(); }, []);
+
+    const loadCategories = async () => {
+        try {
+            const resp = await fetch(`${API_URL}/Category/${user.id}`);
+            if (resp.ok) setCategories(await resp.json());
+            else { setError('Villa við að sækja flokka.'); setCategories([]); }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+            setCategories([]);
+        }
+    };
+
+    if (categories === undefined) {
+        return (
+            <Paper variant="outlined" sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            </Paper>
+        );
+    }
+
+    const active = categories.filter(c => !c.deleted);
+    const disabled = categories.filter(c => c.deleted);
+
+    return (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box>
+                    <Typography variant="h6">Flokkar</Typography>
+                    <Typography variant="body2" color="text.secondary">Gildir fyrir öll húsfélög</Typography>
+                </Box>
+                <Button
+                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    onClick={() => setShowForm(v => !v)}
+                >
+                    {showForm ? 'Loka' : '+ Bæta við flokk'}
+                </Button>
+            </Box>
+
+            <Collapse in={showForm}>
+                <GlobalAddCategoryForm
+                    userId={user.id}
+                    onCreated={() => { setShowForm(false); loadCategories(); }}
+                />
+            </Collapse>
+
+            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+
+            {active.length === 0 ? (
+                <Typography color="text.secondary" sx={{ mt: 2 }}>
+                    Enginn flokkur skráður.
+                </Typography>
+            ) : (
+                <Paper variant="outlined" sx={{ mt: 2 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                <TableCell>Nafn</TableCell>
+                                <TableCell>Tegund</TableCell>
+                                <TableCell />
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {active.map(c => (
+                                <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} />
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Paper>
+            )}
+
+            {disabled.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                    <Button
+                        size="small" variant="text" color="inherit"
+                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
+                        onClick={() => setShowDisabled(v => !v)}
+                    >
+                        {showDisabled ? '▲' : '▼'} Óvirkir flokkar ({disabled.length})
+                    </Button>
+                    <Collapse in={showDisabled}>
+                        <Paper variant="outlined" sx={{ mt: 1 }}>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                        <TableCell>Nafn</TableCell>
+                                        <TableCell>Tegund</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {disabled.map(c => (
+                                        <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} isDisabled />
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    </Collapse>
+                </Box>
+            )}
+        </Paper>
+    );
+}
+
+function GlobalAddCategoryForm({ userId, onCreated }) {
+    const [name, setName] = React.useState('');
+    const [type, setType] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    const isValid = name.trim() && type;
+
+    const handleSubmit = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/Category`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, name: name.trim(), type }),
+            });
+            if (resp.ok) {
+                setName(''); setType('');
+                onCreated();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við skráningu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
+            <TextField
+                label="Nafn flokks" value={name}
+                onChange={e => setName(e.target.value)}
+                size="small" fullWidth
+            />
+            <FormControl size="small" fullWidth>
+                <InputLabel>Tegund</InputLabel>
+                <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                    {CATEGORY_TYPES.map(t => (
+                        <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Button
+                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
+                disabled={!isValid || saving} onClick={handleSubmit}
+            >
+                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista flokk'}
+            </Button>
+        </Paper>
+    );
+}
+
+function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
+    const [editOpen, setEditOpen] = React.useState(false);
+    return (
+        <>
+            <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
+                <TableCell>{category.name}</TableCell>
+                <TableCell>{typeLabel(category.type)}</TableCell>
+                <TableCell align="right" sx={{ width: 48 }}>
+                    <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
+                        <IconButton size="small" onClick={() => setEditOpen(true)}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </TableCell>
+            </TableRow>
+            <GlobalEditCategoryDialog
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                category={category}
+                userId={userId}
+                isDisabled={isDisabled}
+                onSaved={() => { setEditOpen(false); onSaved(); }}
+            />
+        </>
+    );
+}
+
+function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled, onSaved }) {
+    const [name, setName] = React.useState(category.name);
+    const [type, setType] = React.useState(category.type);
+    const [saving, setSaving] = React.useState(false);
+    const [disabling, setDisabling] = React.useState(false);
+    const [confirmDisable, setConfirmDisable] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    React.useEffect(() => {
+        if (open) { setName(category.name); setType(category.type); setError(''); }
+    }, [open, category]);
+
+    const isValid = name.trim() && type;
+
+    const handleSave = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim(), type }),
+            });
+            if (resp.ok) {
+                if (isDisabled) {
+                    await fetch(`${API_URL}/Category/enable/${category.id}?user_id=${userId}`, { method: 'PATCH' });
+                }
+                onSaved();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við uppfærslu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDisable = async () => {
+        setDisabling(true);
+        try {
+            const resp = await fetch(`${API_URL}/Category/delete/${category.id}?user_id=${userId}`, { method: 'DELETE' });
+            if (resp.ok) { setConfirmDisable(false); onSaved(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa.'); setConfirmDisable(false); }
+        } catch {
+            setError('Tenging við þjón mistókst.'); setConfirmDisable(false);
+        } finally {
+            setDisabling(false);
+        }
+    };
+
+    return (
+        <>
+            <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+                <DialogTitle>{isDisabled ? 'Óvirkur flokkur' : 'Breyta flokk'}</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <TextField
+                        label="Nafn flokks" value={name}
+                        onChange={e => setName(e.target.value)}
+                        size="small" fullWidth
+                    />
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Tegund</InputLabel>
+                        <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                            {CATEGORY_TYPES.map(t => (
+                                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    {error && <Alert severity="error">{error}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+                    <Box>
+                        {!isDisabled && (
+                            <Button
+                                onClick={() => setConfirmDisable(true)}
+                                sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
+                            >
+                                Óvirkja flokk
+                            </Button>
+                        )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button
+                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            disabled={!isValid || saving}
+                            onClick={handleSave}
+                        >
+                            {saving
+                                ? <CircularProgress size={18} color="inherit" />
+                                : isDisabled ? 'Virkja flokk' : 'Vista'}
+                        </Button>
+                    </Box>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={confirmDisable} onClose={() => setConfirmDisable(false)} maxWidth="xs">
+                <DialogTitle>Óvirkja flokk?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Flokkurinn verður falinn í áætlunarleiðsögn. Núverandi áætlanir haldast óbreyttar.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button
+                        onClick={handleDisable}
+                        color="error"
+                        disabled={disabling}
+                    >
+                        {disabling ? <CircularProgress size={18} color="inherit" /> : 'Óvirkja'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
     );
 }
 
