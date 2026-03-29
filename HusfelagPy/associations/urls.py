@@ -4,6 +4,7 @@ from .views import (
     AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
     CategoryView, CategoryListView,
     AccountingKeyListView, AccountingKeyView,
+    BankAccountView,
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
 )
@@ -42,6 +43,10 @@ urlpatterns = [
     path("AccountingKey/enable/<int:key_id>", AccountingKeyView.as_view(), name="accountingkey-enable"),
     path("AccountingKey/<int:user_id>", AccountingKeyView.as_view(), name="accountingkey-admin-list"),
     path("AccountingKey", AccountingKeyView.as_view(), name="accountingkey-create"),
+    path("BankAccount/update/<int:bank_account_id>", BankAccountView.as_view(), name="bankaccount-update"),
+    path("BankAccount/delete/<int:bank_account_id>", BankAccountView.as_view(), name="bankaccount-delete"),
+    path("BankAccount/<int:user_id>", BankAccountView.as_view(), name="bankaccount-list"),
+    path("BankAccount", BankAccountView.as_view(), name="bankaccount-create"),
     path("Budget/wizard", BudgetWizardView.as_view(), name="budget-wizard"),
     path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
     path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),

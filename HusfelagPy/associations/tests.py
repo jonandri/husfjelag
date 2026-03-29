@@ -697,3 +697,117 @@ class CategoryAccountingFKTest(TestCase):
         cat = next(c for c in resp.json() if c["id"] == self.category.id)
         self.assertEqual(cat["expense_account_id"], self.expense_key.id)
         self.assertEqual(cat["income_account_id"], self.income_key.id)
+
+
+class BankAccountViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="4444444444", name="Formaður")
+        self.other_user = User.objects.create(kennitala="5555555555", name="Annar")
+        self.association = Association.objects.create(
+            ssn="1111111119", name="Test HF", address="Testgata 1",
+            postal_code="101", city="Reykjavík"
+        )
+        self.other_association = Association.objects.create(
+            ssn="2222222228", name="Annað HF", address="Testgata 2",
+            postal_code="101", city="Reykjavík"
+        )
+        from associations.models import AssociationAccess, AssociationRole, AccountingKey, AccountingKeyType
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        AssociationAccess.objects.create(
+            user=self.other_user, association=self.other_association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        self.asset_key = AccountingKey.objects.create(
+            number=9701, name="Test Reikningur", type=AccountingKeyType.ASSET
+        )
+
+    def test_create_bank_account(self):
+        resp = self.client.post(
+            "/BankAccount",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "name": "Rekstrarreikningur",
+                "account_number": "0101-26-123456",
+                "asset_account_id": self.asset_key.id,
+                "description": "Aðalreikningur",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["name"], "Rekstrarreikningur")
+        self.assertEqual(data["asset_account"]["number"], 9701)
+
+    def test_list_bank_accounts(self):
+        from associations.models import BankAccount
+        BankAccount.objects.create(
+            association=self.association, name="Rekstrar",
+            account_number="0101-26-123456", asset_account=self.asset_key
+        )
+        resp = self.client.get(f"/BankAccount/{self.user.id}?as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 1)
+
+    def test_list_excludes_deleted(self):
+        from associations.models import BankAccount
+        BankAccount.objects.create(
+            association=self.association, name="Gamall", account_number="0000-00-000000", deleted=True
+        )
+        resp = self.client.get(f"/BankAccount/{self.user.id}?as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 0)
+
+    def test_update_bank_account(self):
+        from associations.models import BankAccount
+        bank = BankAccount.objects.create(
+            association=self.association, name="Gamalt nafn", account_number="0101-26-123456"
+        )
+        resp = self.client.put(
+            f"/BankAccount/update/{bank.id}",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "name": "Nýtt nafn",
+                "account_number": "0101-26-999999",
+                "asset_account_id": self.asset_key.id,
+                "description": "",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["name"], "Nýtt nafn")
+
+    def test_delete_bank_account(self):
+        from associations.models import BankAccount
+        bank = BankAccount.objects.create(
+            association=self.association, name="Rekstrar", account_number="0101-26-123456"
+        )
+        resp = self.client.delete(
+            f"/BankAccount/delete/{bank.id}",
+            data=json.dumps({"user_id": self.user.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 204)
+        bank.refresh_from_db()
+        self.assertTrue(bank.deleted)
+
+    def test_cannot_delete_other_associations_bank_account(self):
+        from associations.models import BankAccount
+        bank = BankAccount.objects.create(
+            association=self.other_association, name="Rekstrar", account_number="0101-26-999999"
+        )
+        resp = self.client.delete(
+            f"/BankAccount/delete/{bank.id}",
+            data=json.dumps({"user_id": self.user.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_no_association_returns_empty_list(self):
+        nobody = User.objects.create(kennitala="6666666666", name="Nobody")
+        resp = self.client.get(f"/BankAccount/{nobody.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), [])

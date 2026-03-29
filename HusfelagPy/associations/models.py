@@ -121,6 +121,24 @@ class AccountingKey(models.Model):
         return f"{self.number} · {self.name}"
 
 
+class BankAccount(models.Model):
+    association    = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="bank_accounts")
+    name           = models.CharField(max_length=255)
+    account_number = models.CharField(max_length=50)
+    asset_account  = models.ForeignKey(
+        AccountingKey, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="bank_accounts",
+    )
+    description    = models.CharField(max_length=255, blank=True)
+    deleted        = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "associations_bankaccount"
+
+    def __str__(self):
+        return f"{self.name} ({self.account_number})"
+
+
 class Budget(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="budgets")
     year = models.IntegerField()

@@ -11,12 +11,12 @@ import datetime
 from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
-    AccountingKey, AccountingKeyType,
+    AccountingKey, AccountingKeyType, BankAccount,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
     CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer,
-    AccountingKeySerializer,
+    AccountingKeySerializer, BankAccountSerializer,
 )
 from .scraper import lookup_association, scrape_hms_apartments
 from users.models import User
@@ -647,6 +647,92 @@ class AccountingKeyView(APIView):
         key.deleted = False
         key.save(update_fields=["deleted"])
         return Response(AccountingKeySerializer(key).data)
+
+
+class BankAccountView(APIView):
+    def get(self, request, user_id):
+        """GET /BankAccount/{user_id} — list active bank accounts for the association."""
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response([], status=status.HTTP_200_OK)
+        bank_accounts = association.bank_accounts.filter(deleted=False).select_related("asset_account")
+        return Response(BankAccountSerializer(bank_accounts, many=True).data)
+
+    def post(self, request):
+        """POST /BankAccount — create a bank account."""
+        user_id = request.data.get("user_id")
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        name = request.data.get("name", "").strip()
+        account_number = request.data.get("account_number", "").strip()
+        description = request.data.get("description", "").strip()
+        asset_account_id = request.data.get("asset_account_id")
+
+        if not name or not account_number:
+            return Response({"detail": "name og account_number eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        asset_account = None
+        if asset_account_id:
+            try:
+                asset_account = AccountingKey.objects.get(id=asset_account_id, deleted=False)
+            except AccountingKey.DoesNotExist:
+                return Response({"detail": "Bókhaldslykill fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        bank_account = BankAccount.objects.create(
+            association=association,
+            name=name,
+            account_number=account_number,
+            asset_account=asset_account,
+            description=description,
+        )
+        return Response(BankAccountSerializer(bank_account).data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, bank_account_id):
+        """PUT /BankAccount/update/{id} — update. Body: {user_id, name, account_number, asset_account_id, description}."""
+        user_id = request.data.get("user_id")
+        try:
+            bank_account = BankAccount.objects.select_related("asset_account").get(id=bank_account_id, deleted=False)
+        except BankAccount.DoesNotExist:
+            return Response({"detail": "Bankareikningur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        association = _resolve_assoc(user_id, request)
+        if not association or association.id != bank_account.association_id:
+            return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+
+        bank_account.name = request.data.get("name", bank_account.name).strip()
+        bank_account.account_number = request.data.get("account_number", bank_account.account_number).strip()
+        bank_account.description = request.data.get("description", bank_account.description).strip()
+
+        if "asset_account_id" in request.data:
+            asset_account_id = request.data.get("asset_account_id")
+            if asset_account_id is None:
+                bank_account.asset_account = None
+            else:
+                try:
+                    bank_account.asset_account = AccountingKey.objects.get(id=asset_account_id, deleted=False)
+                except AccountingKey.DoesNotExist:
+                    return Response({"detail": "Bókhaldslykill fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        bank_account.save(update_fields=["name", "account_number", "description", "asset_account"])
+        return Response(BankAccountSerializer(bank_account).data)
+
+    def delete(self, request, bank_account_id):
+        """DELETE /BankAccount/delete/{id} — soft-delete. Body: {user_id}."""
+        user_id = request.data.get("user_id")
+        try:
+            bank_account = BankAccount.objects.get(id=bank_account_id, deleted=False)
+        except BankAccount.DoesNotExist:
+            return Response({"detail": "Bankareikningur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        association = _resolve_assoc(user_id, request)
+        if not association or association.id != bank_account.association_id:
+            return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+
+        bank_account.deleted = True
+        bank_account.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CategoryView(APIView):
