@@ -501,9 +501,22 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
     const [disabling, setDisabling] = React.useState(false);
     const [confirmDisable, setConfirmDisable] = React.useState(false);
     const [error, setError] = React.useState('');
+    const [accountingKeys, setAccountingKeys] = React.useState([]);
+    const [expenseAccountId, setExpenseAccountId] = React.useState(category.expense_account_id || '');
+    const [incomeAccountId, setIncomeAccountId] = React.useState(category.income_account_id || '');
 
     React.useEffect(() => {
-        if (open) { setName(category.name); setType(category.type); setError(''); }
+        if (open) {
+            setName(category.name);
+            setType(category.type);
+            setError('');
+            setExpenseAccountId(category.expense_account_id || '');
+            setIncomeAccountId(category.income_account_id || '');
+            fetch(`${API_URL}/AccountingKey/list`)
+                .then(r => r.ok ? r.json() : [])
+                .then(data => setAccountingKeys(data))
+                .catch(() => {});
+        }
     }, [open, category]);
 
     const isValid = name.trim() && type;
@@ -515,7 +528,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), type }),
+                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
             if (resp.ok) {
                 if (isDisabled) {
@@ -561,6 +574,32 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
                             {CATEGORY_TYPES.map(t => (
                                 <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Gjaldareikningur (valfrjálst)</InputLabel>
+                        <Select
+                            value={expenseAccountId}
+                            label="Gjaldareikningur (valfrjálst)"
+                            onChange={e => setExpenseAccountId(e.target.value)}
+                        >
+                            <MenuItem value=""><em>Enginn</em></MenuItem>
+                            {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
+                                <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
+                        <Select
+                            value={incomeAccountId}
+                            label="Tekjureikningur (valfrjálst)"
+                            onChange={e => setIncomeAccountId(e.target.value)}
+                        >
+                            <MenuItem value=""><em>Enginn</em></MenuItem>
+                            {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
+                                <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
                             ))}
                         </Select>
                     </FormControl>
