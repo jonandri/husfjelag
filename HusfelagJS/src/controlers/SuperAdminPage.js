@@ -25,6 +25,15 @@ const CATEGORY_TYPES = [
 ];
 const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label || type;
 
+const ACCOUNTING_KEY_TYPES = [
+    { value: 'ASSET',     label: 'Eign' },
+    { value: 'LIABILITY', label: 'Skuld' },
+    { value: 'EQUITY',    label: 'Eigið fé' },
+    { value: 'INCOME',    label: 'Tekjur' },
+    { value: 'EXPENSE',   label: 'Gjöld' },
+];
+const keyTypeLabel = (type) => ACCOUNTING_KEY_TYPES.find(t => t.value === type)?.label || type;
+
 function SuperAdminPage() {
     const navigate = useNavigate();
     const { user, setCurrentAssociation } = React.useContext(UserContext);
@@ -51,6 +60,9 @@ function SuperAdminPage() {
                     </Grid>
                     <Grid item xs={12}>
                         <GlobalCategoriesPanel user={user} />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <GlobalAccountingKeysPanel user={user} />
                     </Grid>
                 </Grid>
             </Box>
@@ -594,6 +606,330 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         color="error"
                         disabled={disabling}
                     >
+                        {disabling ? <CircularProgress size={18} color="inherit" /> : 'Óvirkja'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </>
+    );
+}
+
+function GlobalAccountingKeysPanel({ user }) {
+    const [keys, setKeys] = React.useState(undefined);
+    const [error, setError] = React.useState('');
+    const [showForm, setShowForm] = React.useState(false);
+    const [showDisabled, setShowDisabled] = React.useState(false);
+
+    React.useEffect(() => { loadKeys(); }, []);
+
+    const loadKeys = async () => {
+        try {
+            const resp = await fetch(`${API_URL}/AccountingKey/${user.id}`);
+            if (resp.ok) setKeys(await resp.json());
+            else { setError('Villa við að sækja bókhaldslykla.'); setKeys([]); }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+            setKeys([]);
+        }
+    };
+
+    if (keys === undefined) {
+        return (
+            <Paper variant="outlined" sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            </Paper>
+        );
+    }
+
+    const active = keys.filter(k => !k.deleted);
+    const disabled = keys.filter(k => k.deleted);
+
+    return (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box>
+                    <Typography variant="h6">Bókhaldslyklar</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                        Staðlað íslenskt bókhaldslykilkerfi — gilt fyrir öll húsfélög
+                    </Typography>
+                </Box>
+                <Button
+                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    onClick={() => setShowForm(v => !v)}
+                >
+                    {showForm ? 'Loka' : '+ Bæta við lykli'}
+                </Button>
+            </Box>
+
+            <Collapse in={showForm}>
+                <GlobalAddAccountingKeyForm
+                    userId={user.id}
+                    onCreated={() => { setShowForm(false); loadKeys(); }}
+                />
+            </Collapse>
+
+            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+
+            {active.length === 0 ? (
+                <Typography color="text.secondary" sx={{ mt: 2 }}>Enginn bókhaldslykill skráður.</Typography>
+            ) : (
+                <Paper variant="outlined" sx={{ mt: 2 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                <TableCell sx={{ width: 80 }}>Númer</TableCell>
+                                <TableCell>Heiti</TableCell>
+                                <TableCell>Tegund</TableCell>
+                                <TableCell />
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {active.map(k => (
+                                <GlobalAccountingKeyRow key={k.id} accountingKey={k} userId={user.id} onSaved={loadKeys} />
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Paper>
+            )}
+
+            {disabled.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                    <Button
+                        size="small" variant="text" color="inherit"
+                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
+                        onClick={() => setShowDisabled(v => !v)}
+                    >
+                        {showDisabled ? '▲' : '▼'} Óvirkir lyklar ({disabled.length})
+                    </Button>
+                    <Collapse in={showDisabled}>
+                        <Paper variant="outlined" sx={{ mt: 1 }}>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                        <TableCell sx={{ width: 80 }}>Númer</TableCell>
+                                        <TableCell>Heiti</TableCell>
+                                        <TableCell>Tegund</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {disabled.map(k => (
+                                        <GlobalAccountingKeyRow key={k.id} accountingKey={k} userId={user.id} onSaved={loadKeys} isDisabled />
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    </Collapse>
+                </Box>
+            )}
+        </Paper>
+    );
+}
+
+function GlobalAddAccountingKeyForm({ userId, onCreated }) {
+    const [number, setNumber] = React.useState('');
+    const [name, setName] = React.useState('');
+    const [type, setType] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    const isValid = number && name.trim() && type;
+
+    const handleSubmit = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/AccountingKey`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, number: parseInt(number, 10), name: name.trim(), type }),
+            });
+            if (resp.ok) {
+                setNumber(''); setName(''); setType('');
+                onCreated();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við skráningu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                    label="Númer" value={number}
+                    onChange={e => setNumber(e.target.value.replace(/\D/g, ''))}
+                    size="small" sx={{ width: 120 }}
+                    inputProps={{ inputMode: 'numeric' }}
+                />
+                <TextField
+                    label="Heiti lykils" value={name}
+                    onChange={e => setName(e.target.value)}
+                    size="small" sx={{ flex: 1 }}
+                />
+            </Box>
+            <FormControl size="small" fullWidth>
+                <InputLabel>Tegund</InputLabel>
+                <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                    {ACCOUNTING_KEY_TYPES.map(t => (
+                        <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Button
+                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
+                disabled={!isValid || saving} onClick={handleSubmit}
+            >
+                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista lykil'}
+            </Button>
+        </Paper>
+    );
+}
+
+function GlobalAccountingKeyRow({ accountingKey, userId, onSaved, isDisabled }) {
+    const [editOpen, setEditOpen] = React.useState(false);
+    return (
+        <>
+            <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
+                <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{accountingKey.number}</TableCell>
+                <TableCell>{accountingKey.name}</TableCell>
+                <TableCell>{keyTypeLabel(accountingKey.type)}</TableCell>
+                <TableCell align="right" sx={{ width: 48 }}>
+                    <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
+                        <IconButton size="small" onClick={() => setEditOpen(true)}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
+                </TableCell>
+            </TableRow>
+            <GlobalEditAccountingKeyDialog
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                accountingKey={accountingKey}
+                userId={userId}
+                isDisabled={isDisabled}
+                onSaved={() => { setEditOpen(false); onSaved(); }}
+            />
+        </>
+    );
+}
+
+function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, isDisabled, onSaved }) {
+    const [name, setName] = React.useState(accountingKey.name);
+    const [type, setType] = React.useState(accountingKey.type);
+    const [saving, setSaving] = React.useState(false);
+    const [disabling, setDisabling] = React.useState(false);
+    const [confirmDisable, setConfirmDisable] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    React.useEffect(() => {
+        if (open) { setName(accountingKey.name); setType(accountingKey.type); setError(''); }
+    }, [open, accountingKey]);
+
+    const isValid = name.trim() && type;
+
+    const handleSave = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/AccountingKey/update/${accountingKey.id}?user_id=${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim(), type }),
+            });
+            if (resp.ok) {
+                if (isDisabled) {
+                    await fetch(`${API_URL}/AccountingKey/enable/${accountingKey.id}?user_id=${userId}`, { method: 'PATCH' });
+                }
+                onSaved();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við uppfærslu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDisable = async () => {
+        setDisabling(true);
+        try {
+            const resp = await fetch(`${API_URL}/AccountingKey/delete/${accountingKey.id}?user_id=${userId}`, { method: 'DELETE' });
+            if (resp.ok) { setConfirmDisable(false); onSaved(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa.'); setConfirmDisable(false); }
+        } catch {
+            setError('Tenging við þjón mistókst.'); setConfirmDisable(false);
+        } finally {
+            setDisabling(false);
+        }
+    };
+
+    return (
+        <>
+            <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+                <DialogTitle>{isDisabled ? 'Óvirkur lykill' : 'Breyta lykli'}</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <TextField
+                        label="Heiti lykils" value={name}
+                        onChange={e => setName(e.target.value)}
+                        size="small" fullWidth
+                    />
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Tegund</InputLabel>
+                        <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                            {ACCOUNTING_KEY_TYPES.map(t => (
+                                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    {error && <Alert severity="error">{error}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+                    <Box>
+                        {!isDisabled && (
+                            <Button
+                                onClick={() => setConfirmDisable(true)}
+                                sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
+                            >
+                                Óvirkja lykil
+                            </Button>
+                        )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button
+                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            disabled={!isValid || saving}
+                            onClick={handleSave}
+                        >
+                            {saving
+                                ? <CircularProgress size={18} color="inherit" />
+                                : isDisabled ? 'Virkja lykil' : 'Vista'}
+                        </Button>
+                    </Box>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={confirmDisable} onClose={() => setConfirmDisable(false)} maxWidth="xs">
+                <DialogTitle>Óvirkja lykil?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Lykillinn verður falinn í flokkunarformi. Núverandi færslur haldast óbreyttar.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button onClick={handleDisable} color="error" disabled={disabling}>
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Óvirkja'}
                     </Button>
                 </DialogActions>
