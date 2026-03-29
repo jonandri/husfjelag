@@ -12,6 +12,7 @@ import ApartmentImportPage from './controlers/ApartmentImportPage';
 import OwnersPage from './controlers/OwnersPage';
 import ProfilePage from './controlers/ProfilePage';
 import BudgetPage from './controlers/BudgetPage';
+import BudgetWizardPage from './controlers/BudgetWizardPage';
 import CategoriesPage from './controlers/CategoriesPage';
 import CollectionPage from './controlers/CollectionPage';
 import SuperAdminPage from './controlers/SuperAdminPage';
@@ -124,6 +125,7 @@ function App() {
             <Route path="/eigendur" element={<OwnersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/aaetlun" element={<BudgetPage />} />
+            <Route path="/aaetlun/nyr" element={<BudgetWizardPage />} />
             <Route path="/flokkar" element={<CategoriesPage />} />
             <Route path="/innheimta" element={<CollectionPage />} />
             <Route path="/superadmin" element={<SuperAdminPage />} />
