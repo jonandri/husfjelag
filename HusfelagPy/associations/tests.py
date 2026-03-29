@@ -280,3 +280,112 @@ class CategoryGlobalModelTest(TestCase):
         Category.objects.create(name="Hiti", type="SHARE2")
         Category.objects.create(name="Hiti", type="SHARE2")  # should not raise
         self.assertEqual(Category.objects.filter(name="Hiti").count(), 2)
+
+
+class CategoryListViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        from associations.models import Category
+        Category.objects.create(name="Tryggingar", type="SHARED")
+        Category.objects.create(name="Hiti", type="SHARE2")
+        Category.objects.create(name="Óvirkur", type="EQUAL", deleted=True)
+
+    def test_list_returns_only_active_categories(self):
+        resp = self.client.get("/Category/list")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 2)
+        names = {c["name"] for c in data}
+        self.assertIn("Tryggingar", names)
+        self.assertIn("Hiti", names)
+        self.assertNotIn("Óvirkur", names)
+
+    def test_list_returns_id_name_type(self):
+        resp = self.client.get("/Category/list")
+        item = resp.json()[0]
+        self.assertIn("id", item)
+        self.assertIn("name", item)
+        self.assertIn("type", item)
+
+
+class CategorySuperadminGuardTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.superadmin = User.objects.create(kennitala="0000000001", name="Super", is_superadmin=True)
+        self.regular = User.objects.create(kennitala="0000000002", name="Regular", is_superadmin=False)
+
+    def test_post_category_requires_superadmin(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"user_id": self.regular.id, "name": "Test", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_category_succeeds_for_superadmin(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"user_id": self.superadmin.id, "name": "Tryggingar", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["name"], "Tryggingar")
+
+    def test_put_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Old", type="SHARED")
+        resp = self.client.put(
+            f"/Category/update/{cat.id}?user_id={self.regular.id}",
+            data=json.dumps({"name": "New", "type": "SHARED"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_delete_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="ToDelete", type="EQUAL")
+        resp = self.client.delete(f"/Category/delete/{cat.id}?user_id={self.regular.id}")
+        self.assertEqual(resp.status_code, 403)
+        cat.refresh_from_db()
+        self.assertFalse(cat.deleted)
+
+    def test_enable_category_requires_superadmin(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Disabled", type="EQUAL", deleted=True)
+        resp = self.client.patch(f"/Category/enable/{cat.id}?user_id={self.regular.id}")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_category_missing_user_id_returns_400(self):
+        resp = self.client.post(
+            "/Category",
+            data=json.dumps({"name": "Test", "type": "SHARED"}),  # no user_id
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_put_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Old", type="SHARED")
+        resp = self.client.put(
+            f"/Category/update/{cat.id}?user_id={self.superadmin.id}",
+            data=json.dumps({"name": "New", "type": "SHARE2"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["name"], "New")
+
+    def test_delete_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="ToDelete", type="EQUAL")
+        resp = self.client.delete(f"/Category/delete/{cat.id}?user_id={self.superadmin.id}")
+        self.assertEqual(resp.status_code, 204)
+        cat.refresh_from_db()
+        self.assertTrue(cat.deleted)
+
+    def test_enable_category_superadmin_succeeds(self):
+        from associations.models import Category
+        cat = Category.objects.create(name="Disabled", type="SHARED", deleted=True)
+        resp = self.client.patch(f"/Category/enable/{cat.id}?user_id={self.superadmin.id}")
+        self.assertEqual(resp.status_code, 200)
+        cat.refresh_from_db()
+        self.assertFalse(cat.deleted)

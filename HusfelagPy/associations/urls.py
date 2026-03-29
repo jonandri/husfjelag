@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (
     AssociationView, AssociationLookupView, AssociationRoleView, AssociationListView,
-    AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView, CategoryView,
+    AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
+    CategoryView, CategoryListView,
     BudgetView, BudgetItemView, CollectionView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
 )
@@ -28,6 +29,7 @@ urlpatterns = [
     path("Owner/update/<int:ownership_id>", OwnerView.as_view(), name="owner-update"),
     path("Owner/delete/<int:ownership_id>", OwnerView.as_view(), name="owner-delete"),
     path("Owner/enable/<int:ownership_id>", OwnerView.as_view(), name="owner-enable"),
+    path("Category/list", CategoryListView.as_view(), name="category-list-global"),
     path("Category/<int:user_id>", CategoryView.as_view(), name="category-list"),
     path("Category", CategoryView.as_view(), name="category-create"),
     path("Category/update/<int:category_id>", CategoryView.as_view(), name="category-update"),

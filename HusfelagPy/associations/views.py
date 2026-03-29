@@ -551,17 +551,40 @@ class OwnerView(APIView):
         return Response(OwnershipSerializer(ownership).data)
 
 
+class CategoryListView(APIView):
+    def get(self, request):
+        """GET /Category/list — all active global categories, no scoping."""
+        categories = Category.objects.filter(deleted=False).order_by("name")
+        return Response(CategorySerializer(categories, many=True).data)
+
+
 class CategoryView(APIView):
-    def _get_association(self, user_id, request):
-        return _resolve_assoc(user_id, request)
+    def _require_superadmin(self, user_id):
+        """Returns (user, error_response). error_response is None if user is superadmin."""
+        if user_id is None:
+            return None, Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            uid = int(user_id)
+            user = User.objects.get(id=uid)
+        except (TypeError, ValueError):
+            return None, Response({"detail": "user_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return None, Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not user.is_superadmin:
+            return None, Response({"detail": "Aðeins kerfisstjórar geta breytt flokkum."}, status=status.HTTP_403_FORBIDDEN)
+        return user, None
 
     def get(self, request, user_id):
-        """GET /Category/{user_id} — List all global categories."""
+        """GET /Category/{user_id} — all global categories (active + deleted) for the superadmin panel.
+        Intentionally unguarded: category names are non-sensitive and this endpoint is only used
+        by the superadmin UI which is already restricted client-side.
+        """
         categories = Category.objects.all().order_by("name")
         return Response(CategorySerializer(categories, many=True).data)
 
     def post(self, request):
-        """POST /Category — Create a category. Body: {name, type}"""
+        """POST /Category — create a global category. Superadmin only."""
+        user_id = request.data.get("user_id")
         name = request.data.get("name", "").strip()
         type_ = request.data.get("type", "")
 
@@ -570,13 +593,22 @@ class CategoryView(APIView):
         if type_ not in CategoryType.values:
             return Response({"detail": "Ógildur flokkategund."}, status=status.HTTP_400_BAD_REQUEST)
 
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
         category = Category.objects.create(name=name, type=type_)
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, category_id):
-        """PUT /Category/update/{id} — Update name and/or type."""
+        """PUT /Category/update/{id}?user_id=X — update name/type. Superadmin only."""
+        user_id = request.query_params.get("user_id") or request.data.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
         try:
-            category = Category.objects.get(id=category_id, deleted=False)
+            category = Category.objects.get(id=category_id)
         except Category.DoesNotExist:
             return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -590,7 +622,12 @@ class CategoryView(APIView):
         return Response(CategorySerializer(category).data)
 
     def delete(self, request, category_id):
-        """DELETE /Category/delete/{id} — Soft-delete a category."""
+        """DELETE /Category/delete/{id}?user_id=X — soft-delete. Superadmin only."""
+        user_id = request.query_params.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
         try:
             category = Category.objects.get(id=category_id, deleted=False)
         except Category.DoesNotExist:
@@ -600,7 +637,12 @@ class CategoryView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def patch(self, request, category_id):
-        """PATCH /Category/enable/{id} — Re-enable a soft-deleted category."""
+        """PATCH /Category/enable/{id}?user_id=X — re-enable. Superadmin only."""
+        user_id = request.query_params.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
         try:
             category = Category.objects.get(id=category_id, deleted=True)
         except Category.DoesNotExist:
