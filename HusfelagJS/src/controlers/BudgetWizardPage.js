@@ -200,7 +200,7 @@ function Step1({ year, hasPrevious, previousBudget, onCopy, onFresh }) {
                                 ↩ Afrita frá áætlun {previousBudget?.year}
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                                Byrja með sömu upphæðir og í fyrra — breyta þar sem þarf
+                                Byrja með sömu upphæðir og í fyrri áætlun — breyta þar sem þarf
                             </Typography>
                         </Paper>
                         <Paper
@@ -238,7 +238,7 @@ function Step2({ hasPrevious, categories, amounts, setAmounts, totals, grandTota
 
             {categories.length === 0 ? (
                 <Alert severity="info">
-                    Engir flokkar eru skilgreindir. Kerfisstjóri þarf að bæta við flokki.
+                    Engir flokkar eru skilgreindir. Kerfisstjóri þarf að bæta við flokkum.
                 </Alert>
             ) : (
                 <>
