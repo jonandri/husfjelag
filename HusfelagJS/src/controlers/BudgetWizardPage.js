@@ -218,7 +218,7 @@ function Step1({ year, hasPrevious, previousBudget, onCopy, onFresh }) {
             ) : (
                 <>
                     <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        Engin fyrri áætlun er til. Slærðu inn upphæðir fyrir hvern flokk á næsta skrefi.
+                        Engin fyrri áætlun er til. Settu inn upphæðir fyrir hvern flokk á næsta skrefi.
                     </Typography>
                     <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={onFresh}>
                         Áfram →
