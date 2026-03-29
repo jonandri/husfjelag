@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem
+from .models import (
+    Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
+    Category, Budget, BudgetItem, AccountingKey,
+)
 
 
 class AssociationSerializer(serializers.ModelSerializer):
@@ -76,6 +79,12 @@ class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
         fields = ["id", "name", "type", "deleted"]
+
+
+class AccountingKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AccountingKey
+        fields = ["id", "number", "name", "type", "deleted"]
 
 
 class BudgetItemSerializer(serializers.ModelSerializer):

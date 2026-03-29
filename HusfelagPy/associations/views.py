@@ -8,8 +8,16 @@ from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models, transaction
 import datetime
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, CategoryType, Budget, BudgetItem, HMSImportSource
-from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
+from .models import (
+    Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
+    Category, CategoryType, Budget, BudgetItem, HMSImportSource,
+    AccountingKey, AccountingKeyType,
+)
+from .serializers import (
+    AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
+    CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer,
+    AccountingKeySerializer,
+)
 from .scraper import lookup_association, scrape_hms_apartments
 from users.models import User
 
@@ -532,6 +540,113 @@ class CategoryListView(APIView):
         """GET /Category/list — all active global categories, no scoping."""
         categories = Category.objects.filter(deleted=False).order_by("name")
         return Response(CategorySerializer(categories, many=True).data)
+
+
+class AccountingKeyListView(APIView):
+    def get(self, request):
+        """GET /AccountingKey/list — all active keys (no auth required)."""
+        keys = AccountingKey.objects.filter(deleted=False)
+        return Response(AccountingKeySerializer(keys, many=True).data)
+
+
+class AccountingKeyView(APIView):
+    def _require_superadmin(self, user_id):
+        """Returns (user, error_response). error_response is None if superadmin."""
+        if user_id is None:
+            return None, Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            uid = int(user_id)
+            user = User.objects.get(id=uid)
+        except (TypeError, ValueError):
+            return None, Response({"detail": "user_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return None, Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        if not user.is_superadmin:
+            return None, Response({"detail": "Aðeins kerfisstjórar geta breytt bókhaldslyklum."}, status=status.HTTP_403_FORBIDDEN)
+        return user, None
+
+    def get(self, request, user_id):
+        """GET /AccountingKey/{user_id} — all keys including deleted (superadmin panel)."""
+        keys = AccountingKey.objects.all()
+        return Response(AccountingKeySerializer(keys, many=True).data)
+
+    def post(self, request):
+        """POST /AccountingKey — create a key. Superadmin only."""
+        user_id = request.data.get("user_id")
+        number = request.data.get("number")
+        name = request.data.get("name", "").strip()
+        type_ = request.data.get("type", "")
+
+        if number is None or not name or not type_:
+            return Response({"detail": "number, name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        if type_ not in AccountingKeyType.values:
+            return Response({"detail": "Ógildur lykilflokkur."}, status=status.HTTP_400_BAD_REQUEST)
+
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
+        try:
+            number = int(number)
+        except (TypeError, ValueError):
+            return Response({"detail": "number verður að vera heiltala."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if AccountingKey.objects.filter(number=number).exists():
+            return Response({"detail": "Bókhaldslykill með þetta númer er þegar til."}, status=status.HTTP_400_BAD_REQUEST)
+
+        key = AccountingKey.objects.create(number=number, name=name, type=type_)
+        return Response(AccountingKeySerializer(key).data, status=status.HTTP_201_CREATED)
+
+    def put(self, request, key_id):
+        """PUT /AccountingKey/update/{id}?user_id=X — update name/type. Superadmin only."""
+        user_id = request.query_params.get("user_id") or request.data.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
+        try:
+            key = AccountingKey.objects.get(id=key_id)
+        except AccountingKey.DoesNotExist:
+            return Response({"detail": "Bókhaldslykill fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        key.name = request.data.get("name", key.name).strip()
+        key.type = request.data.get("type", key.type)
+        if not key.name or not key.type:
+            return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        if key.type not in AccountingKeyType.values:
+            return Response({"detail": "Ógildur lykilflokkur."}, status=status.HTTP_400_BAD_REQUEST)
+        key.save(update_fields=["name", "type"])
+        return Response(AccountingKeySerializer(key).data)
+
+    def delete(self, request, key_id):
+        """DELETE /AccountingKey/delete/{id}?user_id=X — soft-delete. Superadmin only."""
+        user_id = request.query_params.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
+        try:
+            key = AccountingKey.objects.get(id=key_id, deleted=False)
+        except AccountingKey.DoesNotExist:
+            return Response({"detail": "Bókhaldslykill fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        key.deleted = True
+        key.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def patch(self, request, key_id):
+        """PATCH /AccountingKey/enable/{id}?user_id=X — re-enable. Superadmin only."""
+        user_id = request.query_params.get("user_id")
+        _, err = self._require_superadmin(user_id)
+        if err:
+            return err
+
+        try:
+            key = AccountingKey.objects.get(id=key_id, deleted=True)
+        except AccountingKey.DoesNotExist:
+            return Response({"detail": "Bókhaldslykill fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        key.deleted = False
+        key.save(update_fields=["deleted"])
+        return Response(AccountingKeySerializer(key).data)
 
 
 class CategoryView(APIView):

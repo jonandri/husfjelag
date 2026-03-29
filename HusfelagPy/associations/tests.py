@@ -548,3 +548,94 @@ class AccountingKeyModelTest(TestCase):
         # Seeded keys should come back ordered by number
         keys = list(AccountingKey.objects.all().values_list("number", flat=True))
         self.assertEqual(keys, sorted(keys))
+
+
+class AccountingKeyViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.superadmin = User.objects.create(
+            kennitala="1111111111", name="Admin", is_superadmin=True
+        )
+        self.regular = User.objects.create(
+            kennitala="2222222222", name="Regular"
+        )
+        # Use numbers outside the seeded range to avoid collisions
+        from associations.models import AccountingKey, AccountingKeyType
+        self.key = AccountingKey.objects.create(
+            number=9901, name="Test Eign", type=AccountingKeyType.ASSET
+        )
+        self.deleted_key = AccountingKey.objects.create(
+            number=9902, name="Test Óvirkur", type=AccountingKeyType.EXPENSE, deleted=True
+        )
+
+    def test_list_returns_only_active_keys(self):
+        resp = self.client.get("/AccountingKey/list")
+        self.assertEqual(resp.status_code, 200)
+        numbers = [k["number"] for k in resp.json()]
+        self.assertIn(9901, numbers)
+        self.assertNotIn(9902, numbers)
+
+    def test_superadmin_get_includes_deleted(self):
+        resp = self.client.get(f"/AccountingKey/{self.superadmin.id}")
+        self.assertEqual(resp.status_code, 200)
+        numbers = [k["number"] for k in resp.json()]
+        self.assertIn(9901, numbers)
+        self.assertIn(9902, numbers)
+
+    def test_create_requires_superadmin(self):
+        resp = self.client.post(
+            "/AccountingKey",
+            data=json.dumps({"user_id": self.regular.id, "number": 9999, "name": "X", "type": "EXPENSE"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_create_accounting_key(self):
+        resp = self.client.post(
+            "/AccountingKey",
+            data=json.dumps({"user_id": self.superadmin.id, "number": 9950, "name": "Nýr lykill", "type": "EXPENSE"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["number"], 9950)
+        self.assertEqual(resp.json()["type"], "EXPENSE")
+
+    def test_create_duplicate_number_returns_400(self):
+        resp = self.client.post(
+            "/AccountingKey",
+            data=json.dumps({"user_id": self.superadmin.id, "number": 9901, "name": "Afrit", "type": "ASSET"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("þegar til", resp.json()["detail"])
+
+    def test_update_accounting_key(self):
+        resp = self.client.put(
+            f"/AccountingKey/update/{self.key.id}?user_id={self.superadmin.id}",
+            data=json.dumps({"name": "Uppfært nafn", "type": "ASSET"}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["name"], "Uppfært nafn")
+
+    def test_soft_delete(self):
+        resp = self.client.delete(
+            f"/AccountingKey/delete/{self.key.id}?user_id={self.superadmin.id}"
+        )
+        self.assertEqual(resp.status_code, 204)
+        self.key.refresh_from_db()
+        self.assertTrue(self.key.deleted)
+
+    def test_enable(self):
+        resp = self.client.patch(
+            f"/AccountingKey/enable/{self.deleted_key.id}?user_id={self.superadmin.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.deleted_key.refresh_from_db()
+        self.assertFalse(self.deleted_key.deleted)
+
+    def test_non_superadmin_cannot_delete(self):
+        resp = self.client.delete(
+            f"/AccountingKey/delete/{self.key.id}?user_id={self.regular.id}"
+        )
+        self.assertEqual(resp.status_code, 403)
