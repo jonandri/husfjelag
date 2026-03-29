@@ -91,6 +91,28 @@ class Category(models.Model):
         return f"{self.name} ({self.type})"
 
 
+class AccountingKeyType(models.TextChoices):
+    ASSET     = "ASSET",     "Eign"
+    LIABILITY = "LIABILITY", "Skuld"
+    EQUITY    = "EQUITY",    "Eigið fé"
+    INCOME    = "INCOME",    "Tekjur"
+    EXPENSE   = "EXPENSE",   "Gjöld"
+
+
+class AccountingKey(models.Model):
+    number  = models.IntegerField(unique=True)
+    name    = models.CharField(max_length=255)
+    type    = models.CharField(max_length=20, choices=AccountingKeyType.choices)
+    deleted = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "associations_accountingkey"
+        ordering = ["number"]
+
+    def __str__(self):
+        return f"{self.number} · {self.name}"
+
+
 class Budget(models.Model):
     association = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="budgets")
     year = models.IntegerField()

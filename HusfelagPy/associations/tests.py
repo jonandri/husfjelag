@@ -523,3 +523,28 @@ class BudgetWizardViewTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 400)
+
+
+class AccountingKeyModelTest(TestCase):
+    def test_create_accounting_key(self):
+        from associations.models import AccountingKey, AccountingKeyType
+        key = AccountingKey.objects.create(
+            number=9990, name="Test lykill", type=AccountingKeyType.EXPENSE
+        )
+        self.assertEqual(key.number, 9990)
+        self.assertEqual(key.name, "Test lykill")
+        self.assertEqual(key.type, "EXPENSE")
+        self.assertFalse(key.deleted)
+
+    def test_seed_data_present(self):
+        from associations.models import AccountingKey
+        # Migration seeds 12 keys; verify a few
+        self.assertTrue(AccountingKey.objects.filter(number=1200).exists())
+        self.assertTrue(AccountingKey.objects.filter(number=5600).exists())
+        self.assertEqual(AccountingKey.objects.filter(deleted=False).count(), 12)
+
+    def test_ordering_by_number(self):
+        from associations.models import AccountingKey
+        # Seeded keys should come back ordered by number
+        keys = list(AccountingKey.objects.all().values_list("number", flat=True))
+        self.assertEqual(keys, sorted(keys))
