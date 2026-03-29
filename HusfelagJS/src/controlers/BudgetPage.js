@@ -26,7 +26,6 @@ function BudgetPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
     const [budget, setBudget] = useState(undefined);  // undefined = loading, null = none
-    const [creating, setCreating] = useState(false);
     const [error, setError] = useState('');
     const year = new Date().getFullYear();
     const { sort, lbl } = useSort('category_name');
@@ -47,23 +46,7 @@ function BudgetPage() {
         }
     };
 
-    const handleCreate = async () => {
-        setError('');
-        setCreating(true);
-        try {
-            const resp = await fetch(`${API_URL}/Budget${assocParam}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: user.id }),
-            });
-            if (resp.ok) setBudget(await resp.json());
-            else { const data = await resp.json(); setError(data.detail || 'Villa við stofnun áætlunar.'); }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-        } finally {
-            setCreating(false);
-        }
-    };
+    const handleCreate = () => navigate('/aaetlun/nyr');
 
     if (budget === undefined) {
         return (
@@ -92,9 +75,9 @@ function BudgetPage() {
                     <Typography variant="h5">{budgetTitle}</Typography>
                     <Button
                         variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        disabled={creating} onClick={handleCreate}
+                        onClick={handleCreate}
                     >
-                        {creating ? <CircularProgress size={20} color="inherit" /> : `+ Búa til nýja áætlun ${year}`}
+                        + Búa til nýja áætlun {year}
                     </Button>
                 </Box>
 
@@ -102,7 +85,7 @@ function BudgetPage() {
 
                 {!budget ? null : budget.items.length === 0 ? (
                     <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Áætlun er til en engir flokkar eru skráðir. Farðu í „Flokkar" og bættu við flokki.
+                        Áætlun er til en engir flokkar eru skráðir.
                     </Typography>
                 ) : (
                     <Paper variant="outlined" sx={{ mt: 2 }}>

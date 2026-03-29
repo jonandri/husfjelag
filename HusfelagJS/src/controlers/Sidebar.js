@@ -10,7 +10,6 @@ import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
-import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
 import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -34,7 +33,6 @@ const NAV = [
     { path: '/ibudir',    label: 'Íbúðir',    icon: <HomeOutlinedIcon                  sx={{ fontSize: 20 }} /> },
     { path: '/eigendur',  label: 'Eigendur',  icon: <GroupOutlinedIcon                 sx={{ fontSize: 20 }} /> },
     { path: '/aaetlun',   label: 'Áætlun',    icon: <AssessmentOutlinedIcon            sx={{ fontSize: 20 }} /> },
-    { path: '/flokkar',   label: 'Flokkar',   icon: <LabelOutlinedIcon                 sx={{ fontSize: 20 }} /> },
     { path: '/innheimta', label: 'Innheimta', icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },
 ];
 
