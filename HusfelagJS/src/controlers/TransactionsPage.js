@@ -77,7 +77,7 @@ function TransactionsPage() {
     }
 
     const filtered = transactions.filter(tx => {
-        if (filterBankAccount && tx.bank_account.id !== filterBankAccount) return false;
+        if (filterBankAccount && String(tx.bank_account.id) !== String(filterBankAccount)) return false;
         if (filterStatus && tx.status !== filterStatus) return false;
         return true;
     });
@@ -304,7 +304,7 @@ function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCr
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const isValid = bankAccountId && date && amount && description.trim();
+    const isValid = bankAccountId && date && amount && !isNaN(parseFloat(amount)) && description.trim();
 
     const handleSubmit = async () => {
         setError('');
@@ -348,7 +348,7 @@ function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCr
                     size="small" InputLabelProps={{ shrink: true }} sx={{ width: 160 }}
                 />
                 <TextField
-                    label="Upphæð" value={amount}
+                    label="Upphæð" type="number" value={amount}
                     onChange={e => setAmount(e.target.value)}
                     size="small" sx={{ width: 140 }}
                     placeholder="-50000"
