@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models, transaction
 import datetime
-from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, Budget, BudgetItem, HMSImportSource
+from .models import Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership, Category, CategoryType, Budget, BudgetItem, HMSImportSource
 from .serializers import AssociationSerializer, ApartmentSerializer, OwnershipSerializer, CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer
 from .scraper import lookup_association, scrape_hms_apartments
 from users.models import User
@@ -51,10 +51,10 @@ DEFAULT_CATEGORIES = [
 ]
 
 def _create_default_categories(association):
-    """Create the default category set for a new association (skips any that already exist)."""
-    existing = set(association.categories.values_list("name", flat=True))
+    """Seed global categories from DEFAULT_CATEGORIES if they don't already exist (by name)."""
+    existing = set(Category.objects.values_list("name", flat=True))
     Category.objects.bulk_create([
-        Category(association=association, name=name, type=type_)
+        Category(name=name, type=type_)
         for name, type_ in DEFAULT_CATEGORIES
         if name not in existing
     ])
@@ -556,27 +556,21 @@ class CategoryView(APIView):
         return _resolve_assoc(user_id, request)
 
     def get(self, request, user_id):
-        """GET /Category/{user_id} — List all categories for the association."""
-        association = self._get_association(user_id, request)
-        if not association:
-            return Response([], status=status.HTTP_200_OK)
-        categories = association.categories.all().order_by("name")
+        """GET /Category/{user_id} — List all global categories."""
+        categories = Category.objects.all().order_by("name")
         return Response(CategorySerializer(categories, many=True).data)
 
     def post(self, request):
-        """POST /Category — Create a category. Body: {user_id, name, type}"""
-        user_id = request.data.get("user_id")
+        """POST /Category — Create a category. Body: {name, type}"""
         name = request.data.get("name", "").strip()
         type_ = request.data.get("type", "")
 
         if not name or not type_:
             return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        if type_ not in CategoryType.values:
+            return Response({"detail": "Ógildur flokkategund."}, status=status.HTTP_400_BAD_REQUEST)
 
-        association = self._get_association(user_id, request)
-        if not association:
-            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        category = Category.objects.create(association=association, name=name, type=type_)
+        category = Category.objects.create(name=name, type=type_)
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, category_id):
@@ -590,6 +584,8 @@ class CategoryView(APIView):
         category.type = request.data.get("type", category.type)
         if not category.name or not category.type:
             return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        if category.type not in CategoryType.values:
+            return Response({"detail": "Ógildur flokkategund."}, status=status.HTTP_400_BAD_REQUEST)
         category.save(update_fields=["name", "type"])
         return Response(CategorySerializer(category).data)
 
@@ -619,9 +615,8 @@ def _budget_with_items(budget):
 
 
 def _create_budget_items(budget, source_budget=None):
-    """Create BudgetItems for all active categories. Copy amounts from source_budget if provided."""
-    association = budget.association
-    active_categories = association.categories.filter(deleted=False)
+    """Create BudgetItems for all active global categories. Copy amounts from source_budget if provided."""
+    active_categories = Category.objects.filter(deleted=False)
     existing_ids = set(budget.items.values_list("category_id", flat=True))
 
     source_amounts = {}

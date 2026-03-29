@@ -264,3 +264,19 @@ class ImportConfirmViewTest(TestCase):
         src = HMSImportSource.objects.get(association=self.association, stadfang_id=200)
         self.assertEqual(src.landeign_id, 100)
         self.assertEqual(src.url, "https://hms.is/fasteignaskra/100/200")
+
+
+class CategoryGlobalModelTest(TestCase):
+    def test_category_has_no_association_field(self):
+        """Category can be created without an association."""
+        from associations.models import Category
+        cat = Category.objects.create(name="Tryggingar", type="SHARED")
+        self.assertEqual(cat.name, "Tryggingar")
+        self.assertFalse(hasattr(cat, 'association_id'))
+
+    def test_two_categories_same_name_allowed(self):
+        """Without unique_together, duplicate names across old associations are fine."""
+        from associations.models import Category
+        Category.objects.create(name="Hiti", type="SHARE2")
+        Category.objects.create(name="Hiti", type="SHARE2")  # should not raise
+        self.assertEqual(Category.objects.filter(name="Hiti").count(), 2)
