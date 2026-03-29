@@ -692,7 +692,7 @@ class CategoryView(APIView):
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, category_id):
-        """PUT /Category/update/{id}?user_id=X — update name/type. Superadmin only."""
+        """PUT /Category/update/{id}?user_id=X — update name/type/account FKs. Superadmin only."""
         user_id = request.query_params.get("user_id") or request.data.get("user_id")
         _, err = self._require_superadmin(user_id)
         if err:
@@ -709,7 +709,30 @@ class CategoryView(APIView):
             return Response({"detail": "name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
         if category.type not in CategoryType.values:
             return Response({"detail": "Ógildur flokkategund."}, status=status.HTTP_400_BAD_REQUEST)
-        category.save(update_fields=["name", "type"])
+
+        # Handle expense_account_id FK
+        if "expense_account_id" in request.data:
+            expense_account_id = request.data.get("expense_account_id")
+            if expense_account_id is None:
+                category.expense_account = None
+            else:
+                try:
+                    category.expense_account = AccountingKey.objects.get(id=expense_account_id, deleted=False)
+                except AccountingKey.DoesNotExist:
+                    return Response({"detail": "Bókhaldslykill fyrir gjöld fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Handle income_account_id FK
+        if "income_account_id" in request.data:
+            income_account_id = request.data.get("income_account_id")
+            if income_account_id is None:
+                category.income_account = None
+            else:
+                try:
+                    category.income_account = AccountingKey.objects.get(id=income_account_id, deleted=False)
+                except AccountingKey.DoesNotExist:
+                    return Response({"detail": "Bókhaldslykill fyrir tekjur fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        category.save(update_fields=["name", "type", "expense_account", "income_account"])
         return Response(CategorySerializer(category).data)
 
     def delete(self, request, category_id):

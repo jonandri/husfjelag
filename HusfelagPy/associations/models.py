@@ -83,6 +83,14 @@ class Category(models.Model):
     name    = models.CharField(max_length=255)
     type    = models.CharField(max_length=20, choices=CategoryType.choices)
     deleted = models.BooleanField(default=False)
+    expense_account = models.ForeignKey(
+        "AccountingKey", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="expense_categories",
+    )
+    income_account = models.ForeignKey(
+        "AccountingKey", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="income_categories",
+    )
 
     class Meta:
         db_table = "associations_category"

@@ -639,3 +639,61 @@ class AccountingKeyViewTest(TestCase):
             f"/AccountingKey/delete/{self.key.id}?user_id={self.regular.id}"
         )
         self.assertEqual(resp.status_code, 403)
+
+
+class CategoryAccountingFKTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.superadmin = User.objects.create(
+            kennitala="3333333333", name="Admin", is_superadmin=True
+        )
+        from associations.models import AccountingKey, AccountingKeyType, Category, CategoryType
+        self.expense_key = AccountingKey.objects.create(
+            number=9801, name="Test Gjöld", type=AccountingKeyType.EXPENSE
+        )
+        self.income_key = AccountingKey.objects.create(
+            number=9802, name="Test Tekjur", type=AccountingKeyType.INCOME
+        )
+        self.category = Category.objects.create(name="Þrif", type=CategoryType.SHARED)
+
+    def test_category_has_accounting_fks(self):
+        from associations.models import Category
+        cat = Category.objects.get(id=self.category.id)
+        self.assertIsNone(cat.expense_account)
+        self.assertIsNone(cat.income_account)
+
+    def test_update_category_sets_expense_account(self):
+        resp = self.client.put(
+            f"/Category/update/{self.category.id}?user_id={self.superadmin.id}",
+            data=json.dumps({
+                "name": "Þrif",
+                "type": "SHARED",
+                "expense_account_id": self.expense_key.id,
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["expense_account_id"], self.expense_key.id)
+        self.assertEqual(data["expense_account_number"], 9801)
+
+    def test_update_category_clears_expense_account(self):
+        self.category.expense_account = self.expense_key
+        self.category.save()
+        resp = self.client.put(
+            f"/Category/update/{self.category.id}?user_id={self.superadmin.id}",
+            data=json.dumps({"name": "Þrif", "type": "SHARED", "expense_account_id": None}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.json()["expense_account_id"])
+
+    def test_serializer_returns_account_fields(self):
+        self.category.expense_account = self.expense_key
+        self.category.income_account = self.income_key
+        self.category.save()
+        resp = self.client.get(f"/Category/{self.superadmin.id}")
+        self.assertEqual(resp.status_code, 200)
+        cat = next(c for c in resp.json() if c["id"] == self.category.id)
+        self.assertEqual(cat["expense_account_id"], self.expense_key.id)
+        self.assertEqual(cat["income_account_id"], self.income_key.id)
