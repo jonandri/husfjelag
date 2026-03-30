@@ -20,6 +20,7 @@ from .serializers import (
 )
 from .scraper import lookup_association, scrape_hms_apartments
 from .importers import BANK_PARSERS, detect_duplicates
+from .categoriser import build_categorisation_context, categorise_row
 from users.models import User
 
 
@@ -973,16 +974,22 @@ class ImportConfirmView(APIView):
         except BankAccount.DoesNotExist:
             return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
 
+        rules, history = build_categorisation_context(association)
+
         transactions = []
         for row in rows:
             try:
+                description = str(row.get("description") or "")
+                cat = categorise_row(description, rules, history)
+                tx_status = TransactionStatus.CATEGORISED if cat else TransactionStatus.IMPORTED
                 transactions.append(Transaction(
                     bank_account=bank_account,
                     date=datetime.date.fromisoformat(row["date"]),
                     amount=Decimal(str(row["amount"])),
-                    description=str(row.get("description") or ""),
+                    description=description,
                     reference=str(row.get("reference") or ""),
-                    status=TransactionStatus.IMPORTED,
+                    category=cat,
+                    status=tx_status,
                 ))
             except (KeyError, ValueError, Exception):
                 continue

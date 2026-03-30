@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
-from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus
+from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1464,3 +1464,56 @@ class CategoriserTest(TestCase):
         )
         _, history = build_categorisation_context(self.association)
         self.assertNotIn(normalise_vendor("HS Veitur hf. 100226"), history)
+
+
+class ImportConfirmCategorisationTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1234567890", name="Tester")
+        self.association = Association.objects.create(
+            ssn="0101013210", name="Flokkunarfélag",
+            address="Flokkunargata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0111-26-000001"
+        )
+        self.cat = Category.objects.create(name="Hitaveita", type="SHARED")
+
+    def _confirm(self, rows):
+        return self.client.post(
+            "/Import/confirm",
+            data=json.dumps({"user_id": self.user.id, "bank_account_id": self.bank.id, "rows": rows}),
+            content_type="application/json",
+        )
+
+    def test_import_with_matching_rule_categorises_transaction(self):
+        from .models import CategoryRule
+        CategoryRule.objects.create(keyword="HS Veitur", category=self.cat, association=self.association)
+        resp = self._confirm([{"date": "2026-03-01", "amount": "-5000", "description": "HS Veitur hf. 280226", "reference": ""}])
+        self.assertEqual(resp.status_code, 201)
+        txn = Transaction.objects.filter(bank_account=self.bank).first()
+        self.assertEqual(txn.category, self.cat)
+        self.assertEqual(txn.status, TransactionStatus.CATEGORISED)
+
+    def test_import_with_no_rule_leaves_status_imported(self):
+        resp = self._confirm([{"date": "2026-03-02", "amount": "-1000", "description": "Óþekkt greiðsla", "reference": ""}])
+        self.assertEqual(resp.status_code, 201)
+        txn = Transaction.objects.filter(bank_account=self.bank).first()
+        self.assertIsNone(txn.category)
+        self.assertEqual(txn.status, TransactionStatus.IMPORTED)
+
+    def test_import_with_history_match_categorises_transaction(self):
+        Transaction.objects.create(
+            bank_account=self.bank,
+            date="2026-01-01",
+            amount="-5000",
+            description="HS Veitur hf. 010126",
+            status=TransactionStatus.CATEGORISED,
+            category=self.cat,
+        )
+        resp = self._confirm([{"date": "2026-03-01", "amount": "-5000", "description": "HS Veitur hf. 280226", "reference": ""}])
+        self.assertEqual(resp.status_code, 201)
+        txn = Transaction.objects.filter(bank_account=self.bank, date="2026-03-01").first()
+        self.assertEqual(txn.category, self.cat)
+        self.assertEqual(txn.status, TransactionStatus.CATEGORISED)
