@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, Button, CircularProgress, Alert,
     Table, TableHead, TableBody, TableRow, TableCell,
@@ -6,10 +7,12 @@ import {
     TextField, MenuItem, Select, FormControl, InputLabel,
 } from '@mui/material';
 import { UserContext } from './UserContext';
+import SideBar from './Sidebar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 export default function CategorisationRulesPage() {
+    const navigate = useNavigate();
     const { user, assocParam } = useContext(UserContext);
     const [assocRules, setAssocRules] = useState([]);
     const [globalRules, setGlobalRules] = useState([]);
@@ -29,6 +32,7 @@ export default function CategorisationRulesPage() {
     // Delete confirm dialog
     const [deleteRule, setDeleteRule] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState('');
 
     const load = () => {
         if (!user?.id) return;
@@ -49,7 +53,10 @@ export default function CategorisationRulesPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(load, [user, assocParam]);
+    useEffect(() => {
+        if (!user) { navigate('/login'); return; }
+        load();
+    }, [user, assocParam, navigate]);
 
     const openCreate = (isGlobal = false) => {
         setEditRule(null);
@@ -116,20 +123,35 @@ export default function CategorisationRulesPage() {
             });
             if (resp.ok) {
                 setDeleteRule(null);
+                setDeleteError('');
                 load();
+            } else {
+                setDeleteError('Gat ekki eytt reglu.');
             }
         } catch {
-            // ignore
+            setDeleteError('Tenging við þjón mistókst.');
         } finally {
             setDeleting(false);
         }
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}><CircularProgress color="secondary" /></Box>;
+    if (loading) {
+        return (
+            <div className="dashboard">
+                <SideBar />
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8, flex: 1 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            </div>
+        );
+    }
 
     return (
-        <Box sx={{ p: 3, maxWidth: 800 }}>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <div className="dashboard">
+            <SideBar />
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
+                <Box sx={{ maxWidth: 800 }}>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -198,20 +220,23 @@ export default function CategorisationRulesPage() {
                 </DialogActions>
             </Dialog>
 
-            {/* Delete confirm dialog */}
-            <Dialog open={!!deleteRule} onClose={() => setDeleteRule(null)} maxWidth="xs" fullWidth>
-                <DialogTitle>Eyða reglu</DialogTitle>
-                <DialogContent>
-                    <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDeleteRule(null)}>Hætta við</Button>
-                    <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
-                        {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
+                    {/* Delete confirm dialog */}
+                    <Dialog open={!!deleteRule} onClose={() => { setDeleteRule(null); setDeleteError(''); }} maxWidth="xs" fullWidth>
+                        <DialogTitle>Eyða reglu</DialogTitle>
+                        <DialogContent>
+                            <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
+                            {deleteError && <Alert severity="error" sx={{ mt: 1 }}>{deleteError}</Alert>}
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button onClick={() => { setDeleteRule(null); setDeleteError(''); }}>Hætta við</Button>
+                            <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                                {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
+                </Box>
+            </Box>
+        </div>
     );
 }
 
