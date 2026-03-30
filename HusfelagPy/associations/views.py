@@ -1732,3 +1732,114 @@ class ApartmentImportConfirmView(APIView):
         # Return updated apartment list
         apartments = association.apartments.filter(deleted=False)
         return Response(ApartmentSerializer(apartments, many=True).data)
+
+
+class ReportView(APIView):
+    def get(self, request, user_id):
+        """
+        GET /Report/<user_id>?year=YYYY
+        GET /Report/<user_id>?year=YYYY&month=M
+        Full-year or single-month financial report for the association.
+        Positive amounts = income; negative amounts = expenses (shown as absolute values).
+        """
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        year_param = request.query_params.get("year")
+        year = int(year_param) if year_param and year_param.isdigit() else datetime.date.today().year
+
+        month_param = request.query_params.get("month")
+        month = int(month_param) if month_param and month_param.isdigit() else None
+
+        # Base transaction queryset for this association and year
+        txn_qs = Transaction.objects.filter(
+            bank_account__association=association,
+            date__year=year,
+        )
+        if month:
+            txn_qs = txn_qs.filter(date__month=month)
+
+        # --- Income ---
+        income_rows = (
+            txn_qs.filter(amount__gt=0, category__isnull=False)
+            .values("category_id", "category__name")
+            .annotate(actual=django_models.Sum("amount"))
+            .order_by("category__name")
+        )
+        income = [
+            {
+                "category_id": r["category_id"],
+                "category_name": r["category__name"],
+                "actual": str(r["actual"]),
+            }
+            for r in income_rows
+        ]
+
+        income_uncategorised = (
+            txn_qs.filter(amount__gt=0, category__isnull=True)
+            .aggregate(total=django_models.Sum("amount"))["total"]
+            or Decimal("0")
+        )
+
+        # --- Expenses ---
+        expense_rows = (
+            txn_qs.filter(amount__lt=0, category__isnull=False)
+            .values("category_id", "category__name")
+            .annotate(actual_neg=django_models.Sum("amount"))
+            .order_by("category__name")
+        )
+        actual_by_cat = {r["category_id"]: abs(r["actual_neg"]) for r in expense_rows}
+        cat_names = {r["category_id"]: r["category__name"] for r in expense_rows}
+
+        # Budget items for the active budget of this year
+        budget = Budget.objects.filter(
+            association=association, year=year, is_active=True
+        ).first()
+        budgeted_by_cat = {}
+        if budget:
+            for item in BudgetItem.objects.filter(budget=budget).select_related("category"):
+                budgeted_by_cat[item.category_id] = item.amount
+                cat_names.setdefault(item.category_id, item.category.name)
+
+        all_expense_cat_ids = set(actual_by_cat.keys()) | set(budgeted_by_cat.keys())
+        expenses = sorted(
+            [
+                {
+                    "category_id": cid,
+                    "category_name": cat_names[cid],
+                    "budgeted": str(budgeted_by_cat.get(cid, Decimal("0"))),
+                    "actual": str(actual_by_cat.get(cid, Decimal("0"))),
+                }
+                for cid in all_expense_cat_ids
+            ],
+            key=lambda x: x["category_name"],
+        )
+
+        expenses_uncategorised = (
+            txn_qs.filter(amount__lt=0, category__isnull=True)
+            .aggregate(total=django_models.Sum("amount"))["total"]
+            or Decimal("0")
+        )
+
+        # --- Monthly breakdown (full-year mode only) ---
+        monthly = []
+        if not month:
+            for m in range(1, 13):
+                mqs = txn_qs.filter(date__month=m)
+                inc = mqs.filter(amount__gt=0).aggregate(
+                    t=django_models.Sum("amount")
+                )["t"] or Decimal("0")
+                exp = mqs.filter(amount__lt=0).aggregate(
+                    t=django_models.Sum("amount")
+                )["t"] or Decimal("0")
+                monthly.append({"month": m, "income": str(inc), "expenses": str(abs(exp))})
+
+        return Response({
+            "year": year,
+            "income": income,
+            "income_uncategorised": str(income_uncategorised),
+            "expenses": expenses,
+            "expenses_uncategorised": str(abs(expenses_uncategorised)),
+            "monthly": monthly,
+        })

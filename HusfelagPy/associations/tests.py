@@ -1636,3 +1636,141 @@ class CategoryRuleViewTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 404)
+
+
+import datetime as _datetime_module
+
+
+class ReportViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="7777777779", name="Skýrslumaður")
+        self.association = Association.objects.create(
+            ssn="7070707070", name="Skýrslufélag",
+            address="Skýrslugata 1", postal_code="107", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.cat_heat = Category.objects.create(name="Hitaveita", type="SHARED")
+        self.cat_elec = Category.objects.create(name="Rafmagn", type="SHARED")
+        self.bank = BankAccount.objects.create(
+            association=self.association,
+            name="Aðalreikningur",
+            account_number="0101-26-123456",
+        )
+
+    def _tx(self, amount, cat=None, date=None):
+        from decimal import Decimal
+        return Transaction.objects.create(
+            bank_account=self.bank,
+            date=date or _datetime_module.date(2026, 3, 15),
+            amount=Decimal(str(amount)),
+            description="Test",
+            reference='',
+            category=cat,
+            status=TransactionStatus.CATEGORISED if cat else TransactionStatus.IMPORTED,
+        )
+
+    def test_income_and_expense_totals(self):
+        from decimal import Decimal
+        self._tx(400000)                         # income uncategorised
+        self._tx(-95000, cat=self.cat_heat)      # expense categorised
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("400000"))
+        self.assertEqual(len(data["expenses"]), 1)
+        self.assertEqual(Decimal(data["expenses"][0]["actual"]), Decimal("95000"))
+
+    def test_budget_comparison(self):
+        from decimal import Decimal
+        from .models import Budget, BudgetItem
+        budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        BudgetItem.objects.create(budget=budget, category=self.cat_heat, amount=Decimal("1200000"))
+        self._tx(-950000, cat=self.cat_heat)
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        expense = data["expenses"][0]
+        self.assertEqual(Decimal(expense["budgeted"]), Decimal("1200000"))
+        self.assertEqual(Decimal(expense["actual"]), Decimal("950000"))
+
+    def test_budget_item_with_no_transactions_returns_zero_actual(self):
+        from decimal import Decimal
+        from .models import Budget, BudgetItem
+        budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        BudgetItem.objects.create(budget=budget, category=self.cat_elec, amount=Decimal("600000"))
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        expense = next(e for e in data["expenses"] if e["category_id"] == self.cat_elec.id)
+        self.assertEqual(Decimal(expense["actual"]), Decimal("0"))
+
+    def test_expense_with_no_budget_returns_zero_budgeted(self):
+        from decimal import Decimal
+        self._tx(-85000, cat=self.cat_heat)
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(Decimal(data["expenses"][0]["budgeted"]), Decimal("0"))
+
+    def test_uncategorised_income_and_expense(self):
+        from decimal import Decimal
+        self._tx(100000)
+        self._tx(-50000)
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        data = resp.json()
+        self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("100000"))
+        self.assertEqual(Decimal(data["expenses_uncategorised"]), Decimal("50000"))
+
+    def test_year_param(self):
+        self._tx(-100000, cat=self.cat_heat, date=_datetime_module.date(2025, 6, 1))
+        resp = self.client.get(f"/Report/{self.user.id}?year=2025&as={self.association.id}")
+        data = resp.json()
+        self.assertEqual(data["year"], 2025)
+        self.assertEqual(len(data["expenses"]), 1)
+
+    def test_month_param_filters_to_single_month(self):
+        from decimal import Decimal
+        self._tx(-100000, cat=self.cat_heat, date=_datetime_module.date(2026, 3, 15))
+        self._tx(-200000, cat=self.cat_heat, date=_datetime_module.date(2026, 4, 10))
+        resp = self.client.get(
+            f"/Report/{self.user.id}?year=2026&month=3&as={self.association.id}"
+        )
+        data = resp.json()
+        self.assertEqual(Decimal(data["expenses"][0]["actual"]), Decimal("100000"))
+        self.assertEqual(data["monthly"], [])
+
+    def test_no_transactions_returns_zeros(self):
+        from decimal import Decimal
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["income"], [])
+        self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("0"))
+        self.assertEqual(data["expenses"], [])
+        self.assertEqual(Decimal(data["expenses_uncategorised"]), Decimal("0"))
+        self.assertEqual(len(data["monthly"]), 12)
+
+    def test_monthly_breakdown(self):
+        from decimal import Decimal
+        self._tx(400000, date=_datetime_module.date(2026, 1, 10))
+        self._tx(-95000, cat=self.cat_heat, date=_datetime_module.date(2026, 1, 15))
+        resp = self.client.get(f"/Report/{self.user.id}?year=2026&as={self.association.id}")
+        data = resp.json()
+        jan = data["monthly"][0]
+        self.assertEqual(jan["month"], 1)
+        self.assertEqual(Decimal(jan["income"]), Decimal("400000"))
+        self.assertEqual(Decimal(jan["expenses"]), Decimal("95000"))
+
+    def test_superadmin_as_param(self):
+        superadmin = User.objects.create(
+            kennitala="9999999998", name="Admin2", is_superadmin=True
+        )
+        resp = self.client.get(
+            f"/Report/{superadmin.id}?year=2026&as={self.association.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
