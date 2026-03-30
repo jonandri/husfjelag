@@ -15,6 +15,7 @@ import { fmtAmount } from '../format';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Maí', 'Jún', 'Júl', 'Ágú', 'Sep', 'Okt', 'Nóv', 'Des'];
+const MONTH_NAMES_FULL = ['Janúar', 'Febrúar', 'Mars', 'Apríl', 'Maí', 'Júní', 'Júlí', 'Ágúst', 'September', 'Október', 'Nóvember', 'Desember'];
 
 const HEAD_SX = { backgroundColor: '#f5f5f5' };
 const HEAD_CELL_SX = { fontWeight: 600, fontSize: '0.78rem', color: '#555', whiteSpace: 'nowrap' };
@@ -112,8 +113,8 @@ function ReportPage() {
     const totalExpenseActual = expenses.reduce((s, r) => s + parseFloat(r.actual), 0) + expenseUncat;
     const net = totalIncome - totalExpenseActual;
 
-    const chartData = monthly.map((m, i) => ({
-        month: MONTH_LABELS[i],
+    const chartData = monthly.map((m) => ({
+        month: MONTH_LABELS[m.month - 1],
         income: parseFloat(m.income),
         expenses: parseFloat(m.expenses),
         isFuture: parseFloat(m.income) === 0 && parseFloat(m.expenses) === 0,
@@ -318,7 +319,7 @@ function ReportPage() {
                 {/* Month drill-down dialog */}
                 <Dialog open={drillMonth !== null} onClose={closeDrill} maxWidth="sm" fullWidth>
                     <DialogTitle sx={{ color: '#1D366F', fontWeight: 600 }}>
-                        {drillMonth !== null ? `${MONTH_LABELS[drillMonth - 1]} ${year}` : ''}
+                        {drillMonth !== null ? `${MONTH_NAMES_FULL[drillMonth - 1]} ${year}` : ''}
                     </DialogTitle>
                     <DialogContent>
                         {drillLoading && (
@@ -396,7 +397,7 @@ function ReportPage() {
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                     }}>
                                         <Typography sx={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>
-                                            Niðurstaða {MONTH_LABELS[drillMonth - 1]}
+                                            Niðurstaða {MONTH_NAMES_FULL[drillMonth - 1]}
                                         </Typography>
                                         <Typography sx={{
                                             color: dNet >= 0 ? '#80cbc4' : '#ef9a9a',
