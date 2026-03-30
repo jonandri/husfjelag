@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
-from .models import Association, HMSImportSource, Apartment, Category
+from django.db import models as django_models
+from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1360,3 +1361,106 @@ class CategoryRuleModelTest(TestCase):
             association=None,
         )
         self.assertIsNone(rule.association)
+
+
+class CategoriserTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="9876543210", name="Félag B",
+            address="Brautargata 2", postal_code="200", city="Kópavogur"
+        )
+        self.assoc2 = Association.objects.create(
+            ssn="1111111119", name="Félag C",
+            address="Vesturgata 3", postal_code="300", city="Akureyri"
+        )
+        self.cat_heat = Category.objects.create(name="Hitaveita", type="SHARED")
+        self.cat_elec = Category.objects.create(name="Rafmagn", type="SHARED")
+        self.cat_maint = Category.objects.create(name="Viðhald", type="SHARED")
+
+    def test_normalise_vendor_strips_trailing_date(self):
+        from .categoriser import normalise_vendor
+        self.assertEqual(normalise_vendor("HS Veitur hf. 280226"), "hs veitur hf")
+
+    def test_normalise_vendor_strips_reference_numbers(self):
+        from .categoriser import normalise_vendor
+        self.assertEqual(normalise_vendor("Orka náttúrunnar 12345678"), "orka náttúrunnar")
+
+    def test_normalise_vendor_lowercases(self):
+        from .categoriser import normalise_vendor
+        self.assertEqual(normalise_vendor("VÍS Tryggingar"), "vís tryggingar")
+
+    def test_categorise_row_association_rule_wins_over_global(self):
+        from .models import CategoryRule
+        from .categoriser import categorise_row
+        CategoryRule.objects.create(keyword="Orka", category=self.cat_heat, association=self.association)
+        CategoryRule.objects.create(keyword="Orka", category=self.cat_elec, association=None)
+        # assoc rule first in list — simulating build_categorisation_context order
+        rules = list(CategoryRule.objects.filter(deleted=False).order_by(
+            django_models.Case(
+                django_models.When(association=self.association, then=0),
+                default=1,
+            )
+        ))
+        result = categorise_row("Orka náttúrunnar", rules, {})
+        self.assertEqual(result, self.cat_heat)
+
+    def test_categorise_row_falls_back_to_history(self):
+        from .categoriser import categorise_row
+        history = {"orka náttúrunnar": self.cat_elec}
+        result = categorise_row("Orka náttúrunnar 20260315", [], history)
+        self.assertEqual(result, self.cat_elec)
+
+    def test_categorise_row_returns_none_when_no_match(self):
+        from .categoriser import categorise_row
+        result = categorise_row("Óþekkt greiðsla", [], {})
+        self.assertIsNone(result)
+
+    def test_build_categorisation_context_returns_assoc_rules_first(self):
+        from .models import CategoryRule
+        from .categoriser import build_categorisation_context
+        CategoryRule.objects.create(keyword="Global", category=self.cat_elec, association=None)
+        CategoryRule.objects.create(keyword="Local", category=self.cat_heat, association=self.association)
+        rules, history = build_categorisation_context(self.association)
+        self.assertEqual(rules[0].association, self.association)
+        self.assertIsNone(rules[1].association)
+
+    def test_build_categorisation_context_excludes_deleted(self):
+        from .models import CategoryRule
+        from .categoriser import build_categorisation_context
+        CategoryRule.objects.create(keyword="Dead", category=self.cat_elec, association=None, deleted=True)
+        rules, history = build_categorisation_context(self.association)
+        self.assertFalse(any(r.keyword == "Dead" for r in rules))
+
+    def test_build_categorisation_context_history_from_categorised_transactions(self):
+        from .models import CategoryRule, BankAccount, Transaction, TransactionStatus
+        from .categoriser import build_categorisation_context, normalise_vendor
+        bank = BankAccount.objects.create(
+            association=self.association, name="Sparnaður", account_number="0111-26-123456"
+        )
+        Transaction.objects.create(
+            bank_account=bank,
+            date="2026-01-15",
+            amount="-5000",
+            description="HS Veitur hf. 280226",
+            status=TransactionStatus.CATEGORISED,
+            category=self.cat_heat,
+        )
+        _, history = build_categorisation_context(self.association)
+        self.assertEqual(history.get(normalise_vendor("HS Veitur hf. 280226")), self.cat_heat)
+
+    def test_build_categorisation_context_history_excludes_other_association(self):
+        from .models import CategoryRule, BankAccount, Transaction, TransactionStatus
+        from .categoriser import build_categorisation_context, normalise_vendor
+        bank2 = BankAccount.objects.create(
+            association=self.assoc2, name="Annar reikningur", account_number="0222-26-999999"
+        )
+        Transaction.objects.create(
+            bank_account=bank2,
+            date="2026-01-10",
+            amount="-1000",
+            description="HS Veitur hf. 100226",
+            status=TransactionStatus.CATEGORISED,
+            category=self.cat_heat,
+        )
+        _, history = build_categorisation_context(self.association)
+        self.assertNotIn(normalise_vendor("HS Veitur hf. 100226"), history)
