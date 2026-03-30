@@ -18,6 +18,7 @@ import CollectionPage from './controlers/CollectionPage';
 import SuperAdminPage from './controlers/SuperAdminPage';
 import TransactionsPage from './controlers/TransactionsPage';
 import CategorisationRulesPage from './controlers/CategorisationRulesPage';
+import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -131,6 +132,7 @@ function App() {
             <Route path="/flokkar" element={<CategoriesPage />} />
             <Route path="/faerslur" element={<TransactionsPage />} />
             <Route path="/flokkunarreglur" element={<CategorisationRulesPage />} />
+            <Route path="/skyrslur" element={<ReportPage />} />
             <Route path="/innheimta" element={<CollectionPage />} />
             <Route path="/superadmin" element={<SuperAdminPage />} />
           </Routes>

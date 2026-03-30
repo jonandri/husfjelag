@@ -18,6 +18,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
+import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
 import { fmtKennitala, fmtPhone } from '../format';
 
@@ -37,6 +38,7 @@ const NAV = [
     { path: '/aaetlun',   label: 'Áætlun',    icon: <AssessmentOutlinedIcon            sx={{ fontSize: 20 }} /> },
     { path: '/faerslur',         label: 'Færslur',          icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
     { path: '/flokkunarreglur',  label: 'Flokkunarreglur',  icon: <LabelOutlinedIcon                 sx={{ fontSize: 20 }} /> },
+    { path: '/skyrslur',         label: 'Skýrslur',         icon: <BarChartOutlinedIcon              sx={{ fontSize: 20 }} /> },
     { path: '/innheimta',        label: 'Innheimta',        icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },
 ];
 
