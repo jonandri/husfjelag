@@ -1290,3 +1290,44 @@ class ImportViewTest(TestCase):
             "file": f,
         })
         self.assertEqual(resp.status_code, 403)
+
+    def test_confirm_bulk_creates_transactions(self):
+        from associations.models import Transaction
+        rows = [
+            {"date": "2026-03-15", "amount": "-245000.00", "description": "HS Veitur hf.", "reference": "280226"},
+            {"date": "2026-03-10", "amount": "-180000.00", "description": "VÍS tryggingar", "reference": "290226"},
+        ]
+        resp = self.client.post(
+            "/Import/confirm",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": self.bank_account.id,
+                "rows": rows,
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.json()["created"], 2)
+        self.assertEqual(Transaction.objects.filter(bank_account=self.bank_account).count(), 2)
+        tx = Transaction.objects.get(description="HS Veitur hf.")
+        from decimal import Decimal
+        self.assertEqual(tx.amount, Decimal("-245000.00"))
+        self.assertEqual(tx.status, "IMPORTED")
+
+    def test_confirm_wrong_bank_account_returns_403(self):
+        from associations.models import BankAccount
+        other_ba = BankAccount.objects.create(
+            association=self.other_association,
+            name="Önnur", account_number="0370-13-000000",
+            asset_account=self.asset_key,
+        )
+        resp = self.client.post(
+            "/Import/confirm",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": other_ba.id,
+                "rows": [],
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)

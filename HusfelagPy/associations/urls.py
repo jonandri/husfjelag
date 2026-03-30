@@ -5,7 +5,7 @@ from .views import (
     CategoryView, CategoryListView,
     AccountingKeyListView, AccountingKeyView,
     BankAccountView, TransactionView,
-    ImportPreviewView,
+    ImportPreviewView, ImportConfirmView,
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
 )
@@ -52,6 +52,7 @@ urlpatterns = [
     path("Transaction/<int:user_id>", TransactionView.as_view(), name="transaction-list"),
     path("Transaction", TransactionView.as_view(), name="transaction-create"),
     path("Import/preview", ImportPreviewView.as_view(), name="import-preview"),
+    path("Import/confirm", ImportConfirmView.as_view(), name="import-confirm"),
     path("Budget/wizard", BudgetWizardView.as_view(), name="budget-wizard"),
     path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
     path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),

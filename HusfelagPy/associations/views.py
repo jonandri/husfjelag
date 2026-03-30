@@ -940,6 +940,57 @@ class ImportPreviewView(APIView):
         })
 
 
+class ImportConfirmView(APIView):
+    def post(self, request):
+        """POST /Import/confirm — bulk-create transactions from confirmed rows."""
+        user_id = request.data.get("user_id")
+        bank_account_id = request.data.get("bank_account_id")
+        rows = request.data.get("rows", [])
+
+        if not user_id or not bank_account_id:
+            return Response(
+                {"detail": "user_id og bank_account_id eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user_id = int(user_id)
+            bank_account_id = int(bank_account_id)
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "user_id og bank_account_id verða að vera tölur."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            bank_account = BankAccount.objects.get(
+                id=bank_account_id, deleted=False, association=association
+            )
+        except BankAccount.DoesNotExist:
+            return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+
+        transactions = []
+        for row in rows:
+            try:
+                transactions.append(Transaction(
+                    bank_account=bank_account,
+                    date=datetime.date.fromisoformat(row["date"]),
+                    amount=Decimal(str(row["amount"])),
+                    description=str(row.get("description") or ""),
+                    reference=str(row.get("reference") or ""),
+                    status=TransactionStatus.IMPORTED,
+                ))
+            except (KeyError, ValueError, Exception):
+                continue
+
+        Transaction.objects.bulk_create(transactions)
+        return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
+
+
 class CategoryView(APIView):
     def _require_superadmin(self, user_id):
         """Returns (user, error_response). error_response is None if user is superadmin."""
