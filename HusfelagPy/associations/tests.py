@@ -940,3 +940,75 @@ class TransactionViewTest(TestCase):
         resp = self.client.get(f"/Transaction/{nobody.id}?as={nobody_assoc.id}")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), [])
+
+
+class ImporterTest(TestCase):
+    """Unit tests for importers.py — no HTTP, no DB (except detect_duplicates)."""
+
+    def test_parse_icelandic_amount_comma_decimal(self):
+        from associations.importers import parse_icelandic_amount
+        from decimal import Decimal
+        self.assertEqual(parse_icelandic_amount("-100,00"), Decimal("-100.00"))
+        self.assertEqual(parse_icelandic_amount("455,00"), Decimal("455.00"))
+        self.assertEqual(parse_icelandic_amount("-351.427,00"), Decimal("-351427.00"))
+
+    def test_parse_icelandic_amount_kr_suffix(self):
+        from associations.importers import parse_icelandic_amount
+        from decimal import Decimal
+        self.assertEqual(parse_icelandic_amount("-300 kr."), Decimal("-300"))
+        self.assertEqual(parse_icelandic_amount("-2.805.615 kr."), Decimal("-2805615"))
+        self.assertEqual(parse_icelandic_amount("1.135.983 kr."), Decimal("1135983"))
+
+    def test_parse_icelandic_amount_float(self):
+        from associations.importers import parse_icelandic_amount
+        from decimal import Decimal
+        self.assertEqual(parse_icelandic_amount(-100.0), Decimal("-100"))
+        self.assertEqual(parse_icelandic_amount(245000.0), Decimal("245000"))
+
+    def test_parse_arion_csv(self):
+        from associations.importers import parse_arion
+        from decimal import Decimal
+        import datetime
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_bytes = (
+            ";;\n"
+            "0370-13-037063;IS87 0370 1303 7063 0507 7253 59\n"
+            ";;\n"
+            "Dagsetning;Upphæð;Staða;Mynt;Skýring;Seðilnúmer;Tilvísun;Texti\n"
+            "15.03.2026;-245.000,00;;;HS Veitur hf.;280226;;HS Veitur hf.\n"
+            "10.03.2026;320.000,00;;;Innborgun;310326;;Innborgun\n"
+        ).encode("utf-8")
+        f = SimpleUploadedFile("AccountTransactions0370.csv", csv_bytes, content_type="text/csv")
+        result = parse_arion(f, "csv")
+        self.assertEqual(result["file_account_number"], "0370-13-037063")
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 15))
+        self.assertEqual(result["rows"][0]["amount"], Decimal("-245000.00"))
+        self.assertEqual(result["rows"][0]["description"], "HS Veitur hf.")
+        self.assertEqual(result["rows"][0]["reference"], "280226")
+        self.assertEqual(result["rows"][1]["amount"], Decimal("320000.00"))
+
+    def test_parse_arion_xlsx(self):
+        from associations.importers import parse_arion
+        from decimal import Decimal
+        import datetime
+        import openpyxl
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Heiti", "IBAN númer"])
+        ws.append(["0370-13-037063", "IS87 0370 1303 7063 0507 7253 59"])
+        ws.append([None])
+        ws.append(["Dagsetning", "Upphæð", "Staða", "Mynt", "Skýring", "Seðilnúmer"])
+        ws.append([datetime.datetime(2026, 3, 15), -245000.0, None, "ISK", "HS Veitur hf.", "280226"])
+        buf = BytesIO()
+        wb.save(buf)
+        f = SimpleUploadedFile("AccountTransactions0370.xlsx", buf.getvalue(),
+                               content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        result = parse_arion(f, "xlsx")
+        self.assertEqual(result["file_account_number"], "0370-13-037063")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 15))
+        self.assertEqual(result["rows"][0]["amount"], Decimal("-245000"))
+        self.assertEqual(result["rows"][0]["description"], "HS Veitur hf.")
