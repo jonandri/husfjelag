@@ -974,7 +974,10 @@ class ImportConfirmView(APIView):
         except BankAccount.DoesNotExist:
             return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
 
-        rules, history = build_categorisation_context(association)
+        try:
+            rules, history = build_categorisation_context(association)
+        except Exception:
+            rules, history = [], {}
 
         transactions = []
         for row in rows:

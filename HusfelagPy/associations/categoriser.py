@@ -8,6 +8,8 @@ def normalise_vendor(description: str) -> str:
     and trailing punctuation. Lowercases.
     Example: "HS Veitur hf. 280226" -> "hs veitur hf"
     """
+    if not description:
+        return ""
     s = description.strip()
     # Strip trailing 6+ digit sequences (reference numbers / dates like 280226)
     s = re.sub(r'\s+\d{6,}\s*$', '', s)
