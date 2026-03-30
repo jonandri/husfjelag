@@ -234,3 +234,20 @@ class HMSImportSource(models.Model):
 
     def __str__(self):
         return f"{self.association} — STF{self.stadfang_id}"
+
+
+class CategoryRule(models.Model):
+    keyword     = models.CharField(max_length=255)
+    category    = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="rules")
+    association = models.ForeignKey(
+        Association, null=True, blank=True,
+        on_delete=models.CASCADE, related_name="category_rules"
+    )
+    deleted     = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "associations_categoryrule"
+
+    def __str__(self):
+        scope = self.association.name if self.association_id else "global"
+        return f"{self.keyword} → {self.category} ({scope})"

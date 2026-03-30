@@ -1,6 +1,6 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
-from .models import Association, HMSImportSource, Apartment
+from .models import Association, HMSImportSource, Apartment, Category
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1331,3 +1331,32 @@ class ImportViewTest(TestCase):
             content_type="application/json",
         )
         self.assertEqual(resp.status_code, 403)
+
+
+class CategoryRuleModelTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567890", name="Test Félag",
+            address="Testgata 1", postal_code="101", city="Reykjavík"
+        )
+        self.category = Category.objects.create(name="Hitaveita", type="SHARED")
+
+    def test_association_rule_created(self):
+        from .models import CategoryRule
+        rule = CategoryRule.objects.create(
+            keyword="HS Veitur",
+            category=self.category,
+            association=self.association,
+        )
+        self.assertEqual(rule.keyword, "HS Veitur")
+        self.assertFalse(rule.deleted)
+        self.assertEqual(rule.association, self.association)
+
+    def test_global_rule_has_null_association(self):
+        from .models import CategoryRule
+        rule = CategoryRule.objects.create(
+            keyword="Orka",
+            category=self.category,
+            association=None,
+        )
+        self.assertIsNone(rule.association)
