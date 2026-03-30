@@ -57,6 +57,7 @@ function ReportPage() {
     const [drillMonth, setDrillMonth] = useState(null);
     const [drillData, setDrillData] = useState(null);
     const [drillLoading, setDrillLoading] = useState(false);
+    const [drillError, setDrillError] = useState('');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -73,19 +74,21 @@ function ReportPage() {
     }, [user, assocParam, year]);
 
     const openDrill = (month) => {
+        if (!user) return;
         setDrillMonth(month);
         setDrillData(null);
         setDrillLoading(true);
+        setDrillError('');
         const qs = assocParam
             ? `${assocParam}&year=${year}&month=${month}`
             : `?year=${year}&month=${month}`;
         fetch(`${API_URL}/Report/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(d => { setDrillData(d); setDrillLoading(false); })
-            .catch(() => setDrillLoading(false));
+            .catch(() => { setDrillLoading(false); setDrillError('Villa við að sækja mánaðargögn.'); });
     };
 
-    const closeDrill = () => { setDrillMonth(null); setDrillData(null); };
+    const closeDrill = () => { setDrillMonth(null); setDrillData(null); setDrillError(''); };
 
     if (data === undefined) {
         return (
@@ -322,6 +325,9 @@ function ReportPage() {
                             <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
                                 <CircularProgress color="secondary" />
                             </Box>
+                        )}
+                        {drillError && !drillLoading && (
+                            <Alert severity="error" sx={{ mt: 1 }}>{drillError}</Alert>
                         )}
                         {drillData && !drillLoading && (() => {
                             const dIncome = drillData.income ?? [];
