@@ -17,7 +17,7 @@ Add bank statement import to Húsfélag. Users upload a CSV or Excel export from
 - **Named bank parsers, not a generic column mapper.** Bank format logic lives entirely in the backend (`importers.py`). If a bank changes its export format, a backend fix is enough without a frontend deploy.
 - **Stateless two-step API.** `POST /Import/preview` parses the file and returns the non-duplicate rows. The frontend holds them in React state. `POST /Import/confirm` receives those rows and bulk-creates transactions. No server-side session or staging table needed.
 - **Silent duplicate skip.** A row is a duplicate if a Transaction already exists in the same BankAccount with the same `date`, `amount`, and `description`. Skipped count shown in the preview summary.
-- **Íslandsbanki old format has no account number in the file.** User always selects the bank account from the dropdown — no validation against the file. This is acceptable.
+- **Account number validation for Arion, Landsbankinn, and Íslandsbanki new.** Each parser extracts the account number from the file. `ImportPreviewView` compares it against `bank_account.account_number` (normalised: strip hyphens and spaces before comparing). Mismatch → `400`. Íslandsbanki old has no account number in the file — user's selection is trusted.
 - **CSV and Excel auto-detected by file extension.** `.csv` → `csv.DictReader`. `.xlsx` → `openpyxl`.
 
 ---
@@ -105,19 +105,25 @@ BANK_PARSERS = {
     "islandsbanki": parse_islandsbanki,
 }
 
-def parse_arion(file_obj, ext) -> list[dict]:
+def parse_arion(file_obj, ext) -> dict:
     # Load sheet (openpyxl for xlsx, csv.DictReader for csv)
+    # file_account_number = cell A2 (e.g. "0370-13-037063")
     # Skip rows 1–3. Row 4 = headers. Data from row 5.
-    # Returns list of {date, amount, description, reference}
+    # Returns {"file_account_number": str, "rows": list[dict]}
 
-def parse_landsbankinn(file_obj, ext) -> list[dict]:
+def parse_landsbankinn(file_obj, ext) -> dict:
+    # file_account_number = extract from A2 via regex r"reikningi\s+([\d\-]+)"
     # Skip rows 1–4. Row 5 = headers. Data from row 6.
     # description = Texti if non-empty, else Skýring greiðslu
+    # Returns {"file_account_number": str, "rows": list[dict]}
 
-def parse_islandsbanki(file_obj, ext) -> list[dict]:
+def parse_islandsbanki(file_obj, ext) -> dict:
     # Auto-detect format by reading cell A4
-    # If A4 == "Reikningsnúmer" → new format (headers row 12, data row 13)
-    # Else → old format (headers row 5, data row 6, amount from "Upph.ISK")
+    # If A4 == "Reikningsnúmer" → new format:
+    #   file_account_number = cell B4, headers row 12, data row 13
+    # Else → old format:
+    #   file_account_number = None, headers row 5, data row 6, amount from "Upph.ISK"
+    # Returns {"file_account_number": str | None, "rows": list[dict]}
 
 def parse_icelandic_amount(val) -> Decimal:
     # Strip whitespace, "kr.", "ISK"
@@ -147,7 +153,9 @@ class ImportPreviewView(APIView):
         # Validate bank in BANK_PARSERS
         # Validate file extension (.csv or .xlsx)
         # Validate bank_account belongs to association
-        # Call BANK_PARSERS[bank](file, ext)
+        # Call BANK_PARSERS[bank](file, ext) → {file_account_number, rows}
+        # If file_account_number is not None:
+        #   normalise both (strip hyphens/spaces), compare → 400 if mismatch
         # Call detect_duplicates(rows, bank_account)
         # Return {total_in_file, to_import, skipped_duplicates, rows: [...]}
 
@@ -174,7 +182,8 @@ path("Import/confirm", ImportConfirmView.as_view(), name="import-confirm"),
 | Unknown `bank` value | `400` — "Óþekktur banki." |
 | File extension not `.csv` or `.xlsx` | `400` — "Aðeins .csv og .xlsx skrár eru studdar." |
 | Parse error (wrong format for selected bank) | `400` — "Gat ekki lesið skrána. Athugaðu að rétt bankaskrá sé valin." |
-| `bank_account` doesn't belong to association | `403` — "Aðgangur hafnaður." |
+| `bank_account` doesn't belong to association | `403` — "Aðgangi hafnað." |
+| File account number doesn't match selected bank account | `400` — "Skráin tilheyrir öðrum bankareikningi." |
 | No transactions found in file | `200` — `{total_in_file: 0, to_import: 0, skipped_duplicates: 0, rows: []}` |
 
 ---
@@ -244,6 +253,8 @@ Opening the import form collapses the add-transaction form (and vice versa) — 
 - `ImportViewTest` — integration tests:
   - Preview with Arion file → correct counts
   - Preview skips duplicates → `skipped_duplicates` count correct
+  - Preview with mismatched account number → 400
+  - Preview with Íslandsbanki old (no account number in file) → no mismatch error
   - Preview with unknown bank → 400
   - Preview with wrong extension → 400
   - Confirm bulk-creates transactions → verify count in DB
@@ -257,7 +268,8 @@ Opening the import form collapses the add-transaction form (and vice versa) — 
 - `importers.py` with parsers for Arion, Landsbankinn, Íslandsbanki (old + new)
 - `parse_icelandic_amount`, `parse_icelandic_date` utilities
 - `detect_duplicates` (date + amount + description match)
-- `ImportView` with preview and confirm actions
+- Account number validation: file vs selected bank account (Arion, Landsbankinn, Íslandsbanki new)
+- `ImportPreviewView` and `ImportConfirmView` with preview and confirm actions
 - `ImportForm` and `ImportPreview` components in `TransactionsPage.js`
 - Fixture files for parser unit tests
 
@@ -266,6 +278,5 @@ Opening the import form collapses the add-transaction form (and vice versa) — 
 **Out of scope (future sub-projects):**
 - Auto-categorisation on import (sub-project 3)
 - Auto-detecting bank from filename
-- Validating file account number against selected bank account
 - Editing individual rows in the preview
 - Other banks (Kvika, Indó, sparisjóðir)
