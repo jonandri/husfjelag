@@ -17,6 +17,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
+import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import { UserContext } from './UserContext';
 import { fmtKennitala, fmtPhone } from '../format';
 
@@ -34,8 +35,9 @@ const NAV = [
     { path: '/ibudir',    label: 'Íbúðir',    icon: <HomeOutlinedIcon                  sx={{ fontSize: 20 }} /> },
     { path: '/eigendur',  label: 'Eigendur',  icon: <GroupOutlinedIcon                 sx={{ fontSize: 20 }} /> },
     { path: '/aaetlun',   label: 'Áætlun',    icon: <AssessmentOutlinedIcon            sx={{ fontSize: 20 }} /> },
-    { path: '/faerslur',  label: 'Færslur',   icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
-    { path: '/innheimta', label: 'Innheimta', icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },
+    { path: '/faerslur',         label: 'Færslur',          icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
+    { path: '/flokkunarreglur',  label: 'Flokkunarreglur',  icon: <LabelOutlinedIcon                 sx={{ fontSize: 20 }} /> },
+    { path: '/innheimta',        label: 'Innheimta',        icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },
 ];
 
 function NavItem({ path, label, icon, collapsed, active, onClick }) {
