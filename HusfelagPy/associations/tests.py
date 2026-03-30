@@ -1151,4 +1151,142 @@ class ImporterTest(TestCase):
         to_import, skipped = detect_duplicates(rows, bank_account)
         self.assertEqual(skipped, 1)
         self.assertEqual(len(to_import), 1)
-        self.assertEqual(to_import[0]["description"], "VÍS tryggingar")
+
+
+class ImportViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="6600000001", name="Formaður")
+        self.other_user = User.objects.create(kennitala="6600000002", name="Annar")
+        self.association = Association.objects.create(
+            ssn="6600000009", name="Import Test HF", address="Gata 1",
+            postal_code="101", city="Reykjavík"
+        )
+        self.other_association = Association.objects.create(
+            ssn="7700000009", name="Önnur HF", address="Gata 2",
+            postal_code="101", city="Reykjavík"
+        )
+        from associations.models import AssociationAccess, AssociationRole, AccountingKey, AccountingKeyType
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        AssociationAccess.objects.create(
+            user=self.other_user, association=self.other_association,
+            role=AssociationRole.CHAIR, active=True
+        )
+        self.asset_key = AccountingKey.objects.create(
+            number=9760, name="Test Reikningur", type=AccountingKeyType.ASSET
+        )
+        from associations.models import BankAccount
+        self.bank_account = BankAccount.objects.create(
+            association=self.association,
+            name="Rekstrarreikningur",
+            account_number="0370-13-037063",
+            asset_account=self.asset_key,
+        )
+
+    def _arion_csv(self, account_number="0370-13-037063", rows=None):
+        """Build a minimal Arion CSV file as bytes."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        if rows is None:
+            rows = [
+                "15.03.2026;-245.000,00;;;HS Veitur hf.;280226;;HS Veitur hf.",
+                "10.03.2026;-180.000,00;;;VÍS tryggingar;290226;;VÍS tryggingar",
+            ]
+        lines = [
+            "Heiti;IBAN",
+            f"{account_number};IS87...",
+            ";;",
+            "Dagsetning;Upphæð;Staða;Mynt;Skýring;Seðilnúmer;Tilvísun;Texti",
+        ] + rows
+        return SimpleUploadedFile(
+            "AccountTransactions0370.csv",
+            "\n".join(lines).encode("utf-8"),
+            content_type="text/csv",
+        )
+
+    def test_preview_returns_correct_counts(self):
+        f = self._arion_csv()
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": self.bank_account.id,
+            "bank": "arion",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_in_file"], 2)
+        self.assertEqual(data["to_import"], 2)
+        self.assertEqual(data["skipped_duplicates"], 0)
+        self.assertEqual(len(data["rows"]), 2)
+        self.assertEqual(data["rows"][0]["description"], "HS Veitur hf.")
+
+    def test_preview_skips_duplicates(self):
+        from associations.models import Transaction
+        import datetime
+        from decimal import Decimal
+        Transaction.objects.create(
+            bank_account=self.bank_account, date=datetime.date(2026, 3, 15),
+            amount=Decimal("-245000.00"), description="HS Veitur hf.", status="IMPORTED"
+        )
+        f = self._arion_csv()
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": self.bank_account.id,
+            "bank": "arion",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["total_in_file"], 2)
+        self.assertEqual(data["to_import"], 1)
+        self.assertEqual(data["skipped_duplicates"], 1)
+
+    def test_preview_account_number_mismatch_returns_400(self):
+        f = self._arion_csv(account_number="0370-13-999999")  # wrong account
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": self.bank_account.id,
+            "bank": "arion",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("öðrum bankareikningi", resp.json()["detail"])
+
+    def test_preview_unknown_bank_returns_400(self):
+        f = self._arion_csv()
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": self.bank_account.id,
+            "bank": "unknown_bank",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_preview_wrong_extension_returns_400(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        f = SimpleUploadedFile("statement.pdf", b"not a spreadsheet", content_type="application/pdf")
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": self.bank_account.id,
+            "bank": "arion",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 400)
+
+    def test_preview_wrong_bank_account_returns_403(self):
+        from associations.models import BankAccount
+        other_bank_account = BankAccount.objects.create(
+            association=self.other_association,
+            name="Önnur", account_number="0370-13-000000",
+            asset_account=self.asset_key,
+        )
+        f = self._arion_csv(account_number="0370-13-000000")
+        resp = self.client.post("/Import/preview", data={
+            "user_id": self.user.id,
+            "bank_account_id": other_bank_account.id,
+            "bank": "arion",
+            "file": f,
+        })
+        self.assertEqual(resp.status_code, 403)

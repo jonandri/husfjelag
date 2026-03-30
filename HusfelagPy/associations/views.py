@@ -19,6 +19,7 @@ from .serializers import (
     AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
 from .scraper import lookup_association, scrape_hms_apartments
+from .importers import BANK_PARSERS, detect_duplicates
 from users.models import User
 
 
@@ -75,6 +76,11 @@ def _resolve_assoc(user_id, request):
     return Association.objects.filter(
         access_entries__user_id=user_id, access_entries__active=True
     ).first()
+
+
+def _normalize_acct(s):
+    """Strip hyphens and spaces from an account number string for comparison."""
+    return re.sub(r'[\s\-]', '', str(s or ''))
 
 
 class AssociationView(APIView):
@@ -851,6 +857,87 @@ class TransactionView(APIView):
         tx.save(update_fields=["category", "status"])
         tx.refresh_from_db()
         return Response(TransactionSerializer(tx).data)
+
+
+class ImportPreviewView(APIView):
+    def post(self, request):
+        """POST /Import/preview — parse uploaded statement, skip duplicates, return preview."""
+        user_id = request.data.get("user_id")
+        bank_account_id = request.data.get("bank_account_id")
+        bank = str(request.data.get("bank") or "").strip().lower()
+        file = request.FILES.get("file")
+
+        if not all([user_id, bank_account_id, bank, file]):
+            return Response(
+                {"detail": "user_id, bank_account_id, bank og file eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user_id = int(user_id)
+            bank_account_id = int(bank_account_id)
+        except (ValueError, TypeError):
+            return Response(
+                {"detail": "user_id og bank_account_id verða að vera tölur."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if bank not in BANK_PARSERS:
+            return Response({"detail": "Óþekktur banki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else ''
+        if ext not in ('csv', 'xlsx'):
+            return Response(
+                {"detail": "Aðeins .csv og .xlsx skrár eru studdar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            bank_account = BankAccount.objects.get(
+                id=bank_account_id, deleted=False, association=association
+            )
+        except BankAccount.DoesNotExist:
+            return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            result = BANK_PARSERS[bank](file, ext)
+        except Exception:
+            return Response(
+                {"detail": "Gat ekki lesið skrána. Athugaðu að rétt bankaskrá sé valin."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        file_acct = result.get("file_account_number")
+        if file_acct is not None:
+            if _normalize_acct(file_acct) != _normalize_acct(bank_account.account_number):
+                return Response(
+                    {"detail": "Skráin tilheyrir öðrum bankareikningi."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        all_rows = result.get("rows", [])
+        to_import_rows, skipped = detect_duplicates(all_rows, bank_account)
+
+        serialized = [
+            {
+                "date":        r["date"].isoformat(),
+                "amount":      str(r["amount"]),
+                "description": r["description"],
+                "reference":   r["reference"],
+            }
+            for r in to_import_rows
+        ]
+
+        return Response({
+            "total_in_file":      len(all_rows),
+            "to_import":          len(to_import_rows),
+            "skipped_duplicates": skipped,
+            "rows":               serialized,
+        })
 
 
 class CategoryView(APIView):
