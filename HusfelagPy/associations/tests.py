@@ -1517,3 +1517,122 @@ class ImportConfirmCategorisationTest(TestCase):
         txn = Transaction.objects.filter(bank_account=self.bank, date="2026-03-01").first()
         self.assertEqual(txn.category, self.cat)
         self.assertEqual(txn.status, TransactionStatus.CATEGORISED)
+
+
+class CategoryRuleViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(kennitala="3333333339", name="Reglumaður")
+        self.superadmin = User.objects.create(kennitala="9999999999", name="Admin", is_superadmin=True)
+        self.association = Association.objects.create(
+            ssn="2020202020", name="Reglurfélag",
+            address="Reglugata 5", postal_code="105", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        AssociationAccess.objects.create(user=self.superadmin, association=self.association, active=True)
+        self.other_assoc = Association.objects.create(
+            ssn="5050505050", name="Annað félag",
+            address="Annargata 9", postal_code="200", city="Kópavogur"
+        )
+        self.cat = Category.objects.create(name="Hitaveita", type="SHARED")
+
+    def test_get_returns_association_and_global_rules(self):
+        from .models import CategoryRule
+        CategoryRule.objects.create(keyword="Local", category=self.cat, association=self.association)
+        CategoryRule.objects.create(keyword="Global", category=self.cat, association=None)
+        resp = self.client.get(f"/CategoryRule/{self.user.id}?as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data["association_rules"]), 1)
+        self.assertEqual(data["association_rules"][0]["keyword"], "Local")
+        self.assertEqual(len(data["global_rules"]), 1)
+        self.assertEqual(data["global_rules"][0]["keyword"], "Global")
+
+    def test_get_excludes_deleted_rules(self):
+        from .models import CategoryRule
+        CategoryRule.objects.create(keyword="Dead", category=self.cat, association=self.association, deleted=True)
+        resp = self.client.get(f"/CategoryRule/{self.user.id}?as={self.association.id}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["association_rules"], [])
+
+    def test_post_creates_association_rule(self):
+        resp = self.client.post(
+            "/CategoryRule",
+            data=json.dumps({"user_id": self.user.id, "keyword": "VÍS", "category_id": self.cat.id, "is_global": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["keyword"], "VÍS")
+        self.assertFalse(data["is_global"])
+
+    def test_post_global_rule_by_superadmin(self):
+        resp = self.client.post(
+            "/CategoryRule",
+            data=json.dumps({"user_id": self.superadmin.id, "keyword": "Orka", "category_id": self.cat.id, "is_global": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertTrue(data["is_global"])
+
+    def test_post_global_rule_by_non_superadmin_returns_403(self):
+        resp = self.client.post(
+            "/CategoryRule",
+            data=json.dumps({"user_id": self.user.id, "keyword": "Orka", "category_id": self.cat.id, "is_global": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_post_unknown_category_returns_400(self):
+        resp = self.client.post(
+            "/CategoryRule",
+            data=json.dumps({"user_id": self.user.id, "keyword": "Test", "category_id": 99999, "is_global": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_put_updates_keyword(self):
+        from .models import CategoryRule
+        rule = CategoryRule.objects.create(keyword="Gamalt", category=self.cat, association=self.association)
+        resp = self.client.put(
+            f"/CategoryRule/update/{rule.id}",
+            data=json.dumps({"user_id": self.user.id, "keyword": "Nýtt", "category_id": self.cat.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        rule.refresh_from_db()
+        self.assertEqual(rule.keyword, "Nýtt")
+
+    def test_delete_soft_deletes_rule(self):
+        from .models import CategoryRule
+        rule = CategoryRule.objects.create(keyword="Eyða", category=self.cat, association=self.association)
+        resp = self.client.delete(
+            f"/CategoryRule/delete/{rule.id}",
+            data=json.dumps({"user_id": self.user.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        rule.refresh_from_db()
+        self.assertTrue(rule.deleted)
+
+    def test_update_rule_of_other_association_returns_403(self):
+        from .models import CategoryRule
+        other_rule = CategoryRule.objects.create(
+            keyword="Annað", category=self.cat, association=self.other_assoc
+        )
+        resp = self.client.put(
+            f"/CategoryRule/update/{other_rule.id}",
+            data=json.dumps({"user_id": self.user.id, "keyword": "Hacked", "category_id": self.cat.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_update_nonexistent_rule_returns_404(self):
+        resp = self.client.put(
+            "/CategoryRule/update/99999",
+            data=json.dumps({"user_id": self.user.id, "keyword": "X", "category_id": self.cat.id}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)

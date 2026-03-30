@@ -12,6 +12,7 @@ from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
     AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
+    CategoryRule,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
@@ -999,6 +1000,151 @@ class ImportConfirmView(APIView):
 
         Transaction.objects.bulk_create(transactions)
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
+
+
+class CategoryRuleView(APIView):
+    def get(self, request, user_id):
+        """GET /CategoryRule/<user_id> — list association + global rules."""
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"association_rules": [], "global_rules": []})
+
+        assoc_rules = CategoryRule.objects.filter(
+            association=association, deleted=False
+        ).select_related("category")
+        global_rules = CategoryRule.objects.filter(
+            association__isnull=True, deleted=False
+        ).select_related("category")
+
+        def _ser(rule, is_global=False):
+            return {
+                "id": rule.id,
+                "keyword": rule.keyword,
+                "category": {"id": rule.category.id, "name": rule.category.name},
+                "is_global": is_global,
+            }
+
+        return Response({
+            "association_rules": [_ser(r, False) for r in assoc_rules],
+            "global_rules":      [_ser(r, True)  for r in global_rules],
+        })
+
+    def post(self, request):
+        """POST /CategoryRule — create a rule."""
+        user_id     = request.data.get("user_id")
+        keyword     = request.data.get("keyword", "").strip()
+        category_id = request.data.get("category_id")
+        is_global   = bool(request.data.get("is_global", False))
+
+        if not user_id or not keyword or not category_id:
+            return Response(
+                {"detail": "user_id, keyword og category_id eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(id=int(user_id))
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            category = Category.objects.get(id=int(category_id), deleted=False)
+        except (Category.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if is_global:
+            if not user.is_superadmin:
+                return Response(
+                    {"detail": "Aðeins stjórnendur geta búið til almennar reglur."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            assoc = None
+        else:
+            assoc = _resolve_assoc(user.id, request)
+            if not assoc:
+                return Response({"detail": "Félag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        rule = CategoryRule.objects.create(keyword=keyword, category=category, association=assoc)
+        return Response(
+            {"id": rule.id, "keyword": rule.keyword,
+             "category": {"id": category.id, "name": category.name}, "is_global": is_global},
+            status=status.HTTP_201_CREATED,
+        )
+
+    def put(self, request, rule_id):
+        """PUT /CategoryRule/update/<rule_id> — update keyword and/or category."""
+        user_id     = request.data.get("user_id")
+        keyword     = request.data.get("keyword", "").strip()
+        category_id = request.data.get("category_id")
+
+        if not user_id or not keyword or not category_id:
+            return Response(
+                {"detail": "user_id, keyword og category_id eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            user = User.objects.get(id=int(user_id))
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            rule = CategoryRule.objects.get(id=rule_id, deleted=False)
+        except CategoryRule.DoesNotExist:
+            return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Access check
+        if rule.association is not None:
+            assoc = _resolve_assoc(user.id, request)
+            if not assoc or rule.association_id != assoc.id:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            if not user.is_superadmin:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            category = Category.objects.get(id=int(category_id), deleted=False)
+        except (Category.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
+
+        rule.keyword  = keyword
+        rule.category = category
+        rule.save()
+
+        is_global = rule.association_id is None
+        return Response({
+            "id": rule.id, "keyword": rule.keyword,
+            "category": {"id": category.id, "name": category.name}, "is_global": is_global,
+        })
+
+    def delete(self, request, rule_id):
+        """DELETE /CategoryRule/delete/<rule_id> — soft-delete."""
+        user_id = request.data.get("user_id")
+
+        if not user_id:
+            return Response({"detail": "user_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=int(user_id))
+        except (User.DoesNotExist, ValueError, TypeError):
+            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            rule = CategoryRule.objects.get(id=rule_id, deleted=False)
+        except CategoryRule.DoesNotExist:
+            return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        if rule.association is not None:
+            assoc = _resolve_assoc(user.id, request)
+            if not assoc or rule.association_id != assoc.id:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            if not user.is_superadmin:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+
+        rule.deleted = True
+        rule.save()
+        return Response({"deleted": True})
 
 
 class CategoryView(APIView):
