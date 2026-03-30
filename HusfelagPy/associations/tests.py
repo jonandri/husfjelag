@@ -1767,10 +1767,14 @@ class ReportViewTest(TestCase):
         self.assertEqual(Decimal(jan["expenses"]), Decimal("95000"))
 
     def test_superadmin_as_param(self):
+        from decimal import Decimal
         superadmin = User.objects.create(
             kennitala="9999999998", name="Admin2", is_superadmin=True
         )
+        self._tx(100000)  # income transaction in this association
         resp = self.client.get(
             f"/Report/{superadmin.id}?year=2026&as={self.association.id}"
         )
         self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("100000"))

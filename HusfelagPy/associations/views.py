@@ -1751,6 +1751,8 @@ class ReportView(APIView):
 
         month_param = request.query_params.get("month")
         month = int(month_param) if month_param and month_param.isdigit() else None
+        if month is not None and not (1 <= month <= 12):
+            return Response({"detail": "month must be 1-12."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Base transaction queryset for this association and year
         txn_qs = Transaction.objects.filter(
@@ -1825,14 +1827,30 @@ class ReportView(APIView):
         # --- Monthly breakdown (full-year mode only) ---
         monthly = []
         if not month:
+            from django.db.models import DecimalField as DField
+            monthly_rows = {
+                r["date__month"]: r
+                for r in txn_qs.values("date__month").annotate(
+                    income=django_models.Sum(
+                        django_models.Case(
+                            django_models.When(amount__gt=0, then="amount"),
+                            default=0,
+                            output_field=DField(max_digits=14, decimal_places=2),
+                        )
+                    ),
+                    expenses=django_models.Sum(
+                        django_models.Case(
+                            django_models.When(amount__lt=0, then="amount"),
+                            default=0,
+                            output_field=DField(max_digits=14, decimal_places=2),
+                        )
+                    ),
+                ).order_by("date__month")
+            }
             for m in range(1, 13):
-                mqs = txn_qs.filter(date__month=m)
-                inc = mqs.filter(amount__gt=0).aggregate(
-                    t=django_models.Sum("amount")
-                )["t"] or Decimal("0")
-                exp = mqs.filter(amount__lt=0).aggregate(
-                    t=django_models.Sum("amount")
-                )["t"] or Decimal("0")
+                row = monthly_rows.get(m, {})
+                inc = row.get("income") or Decimal("0")
+                exp = row.get("expenses") or Decimal("0")
                 monthly.append({"month": m, "income": str(inc), "expenses": str(abs(exp))})
 
         return Response({
