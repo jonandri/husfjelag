@@ -30,6 +30,13 @@ function TransactionsPage() {
     const [filterStatus, setFilterStatus] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [error, setError] = useState('');
+    const [showImport, setShowImport] = useState(false);
+    const [importPreview, setImportPreview] = useState(null);
+    const [importBankAccountId, setImportBankAccountId] = useState('');
+    const [importBank, setImportBank] = useState('arion');
+    const [importError, setImportError] = useState('');
+    const [importUploading, setImportUploading] = useState(false);
+    const [importConfirming, setImportConfirming] = useState(false);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -99,8 +106,14 @@ function TransactionsPage() {
                             </Select>
                         </FormControl>
                         <Button
+                            variant="outlined" color="secondary"
+                            onClick={() => { setShowImport(v => !v); setShowForm(false); setImportPreview(null); setImportError(''); }}
+                        >
+                            {showImport ? 'Loka' : '+ Innflutningur'}
+                        </Button>
+                        <Button
                             variant="contained" color="secondary" sx={{ color: '#fff' }}
-                            onClick={() => setShowForm(v => !v)}
+                            onClick={() => { setShowForm(v => !v); setShowImport(false); setImportError(''); }}
                         >
                             {showForm ? 'Loka' : '+ Færsla'}
                         </Button>
@@ -115,6 +128,44 @@ function TransactionsPage() {
                         bankAccounts={bankAccounts}
                         categories={categories}
                         onCreated={() => { setShowForm(false); reloadTransactions(); }}
+                    />
+                )}
+
+                {/* Import form / preview */}
+                {showImport && !importPreview && (
+                    <ImportForm
+                        userId={user.id}
+                        assocParam={assocParam}
+                        bankAccounts={bankAccounts}
+                        importBankAccountId={importBankAccountId}
+                        setImportBankAccountId={setImportBankAccountId}
+                        importBank={importBank}
+                        setImportBank={setImportBank}
+                        uploading={importUploading}
+                        setUploading={setImportUploading}
+                        error={importError}
+                        setError={setImportError}
+                        onPreviewReady={(preview) => setImportPreview(preview)}
+                    />
+                )}
+                {showImport && importPreview && (
+                    <ImportPreview
+                        preview={importPreview}
+                        userId={user.id}
+                        assocParam={assocParam}
+                        bankAccountId={importBankAccountId}
+                        confirming={importConfirming}
+                        setConfirming={setImportConfirming}
+                        error={importError}
+                        setError={setImportError}
+                        onBack={() => setImportPreview(null)}
+                        onDone={() => {
+                            setShowImport(false);
+                            setImportPreview(null);
+                            setImportBankAccountId('');
+                            setImportBank('arion');
+                            loadAll();
+                        }}
                     />
                 )}
 
@@ -392,6 +443,219 @@ function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCr
             >
                 {saving ? <CircularProgress size={20} color="inherit" /> : 'Skrá færslu'}
             </Button>
+        </Paper>
+    );
+}
+
+const BANK_OPTIONS = [
+    { value: 'arion',        label: 'Arion banki' },
+    { value: 'landsbankinn', label: 'Landsbankinn' },
+    { value: 'islandsbanki', label: 'Íslandsbanki' },
+];
+
+function ImportForm({
+    userId, assocParam, bankAccounts,
+    importBankAccountId, setImportBankAccountId,
+    importBank, setImportBank,
+    uploading, setUploading, error, setError,
+    onPreviewReady,
+}) {
+    const [file, setFile] = useState(null);
+    const [dragOver, setDragOver] = useState(false);
+    const fileInputRef = React.useRef();
+
+    const isValid = importBankAccountId && importBank && file;
+
+    const handleFile = (f) => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        if (!['csv', 'xlsx'].includes(ext)) {
+            setError('Aðeins .csv og .xlsx skrár eru studdar.');
+            return;
+        }
+        setError('');
+        setFile(f);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    };
+
+    const handleSubmit = async () => {
+        setError('');
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('bank_account_id', importBankAccountId);
+            formData.append('bank', importBank);
+            formData.append('file', file);
+            const resp = await fetch(`${API_URL}/Import/preview`, {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                onPreviewReady(data);
+            } else {
+                setError(data.detail || 'Villa við lestur skráar.');
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+            setFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 2, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 520 }}>
+            <Typography variant="subtitle2">Flytja inn bankayfirlit</Typography>
+            <FormControl size="small" fullWidth>
+                <InputLabel>Bankareikningur</InputLabel>
+                <Select value={importBankAccountId} label="Bankareikningur"
+                    onChange={e => setImportBankAccountId(e.target.value)}>
+                    <MenuItem value=""><em>Veldu reikning</em></MenuItem>
+                    {bankAccounts.map(b => (
+                        <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+                <InputLabel>Banki</InputLabel>
+                <Select value={importBank} label="Banki" onChange={e => setImportBank(e.target.value)}>
+                    {BANK_OPTIONS.map(o => (
+                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <Box
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                sx={{
+                    border: `2px dashed ${dragOver ? '#08C076' : '#ddd'}`,
+                    borderRadius: 1, p: 3, textAlign: 'center',
+                    cursor: 'pointer', color: 'text.secondary',
+                    transition: 'border-color 0.2s',
+                    '&:hover': { borderColor: '#08C076' },
+                }}
+            >
+                <input
+                    ref={fileInputRef} type="file" accept=".csv,.xlsx" hidden
+                    onChange={e => e.target.files[0] && handleFile(e.target.files[0])}
+                />
+                {file
+                    ? <Typography variant="body2" color="success.main">{file.name}</Typography>
+                    : <Typography variant="body2">Dragðu skrá hingað eða <span style={{ color: '#08C076' }}>veldu skrá</span><br /><small>.csv eða .xlsx</small></Typography>
+                }
+            </Box>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Button
+                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
+                disabled={!isValid || uploading} onClick={handleSubmit}
+            >
+                {uploading ? <CircularProgress size={20} color="inherit" /> : 'Greina skrá →'}
+            </Button>
+        </Paper>
+    );
+}
+
+function ImportPreview({
+    preview, userId, assocParam, bankAccountId,
+    confirming, setConfirming, error, setError,
+    onBack, onDone,
+}) {
+    const handleConfirm = async () => {
+        setError('');
+        setConfirming(true);
+        try {
+            const resp = await fetch(`${API_URL}/Import/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    bank_account_id: bankAccountId,
+                    rows: preview.rows,
+                }),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                onDone();
+            } else {
+                setError(data.detail || 'Villa við innflutning.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setConfirming(false);
+        }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 2, mb: 3, maxWidth: 640 }}>
+            <Typography variant="subtitle2" sx={{ mb: 2 }}>Yfirlit innflutnings — staðfesta?</Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                <Box sx={{ flex: 1, bgcolor: '#f0f9f4', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
+                    <Typography variant="h5" color="success.main" fontWeight={600}>{preview.to_import}</Typography>
+                    <Typography variant="caption" color="text.secondary">Færslur til að flytja inn</Typography>
+                </Box>
+                <Box sx={{ flex: 1, bgcolor: '#f5f5f5', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
+                    <Typography variant="h5" color="text.disabled" fontWeight={600}>{preview.skipped_duplicates}</Typography>
+                    <Typography variant="caption" color="text.secondary">Þegar til (sleppt)</Typography>
+                </Box>
+            </Box>
+            <Table size="small" sx={{ mb: 2 }}>
+                <TableHead>
+                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                        <TableCell>Dagsetning</TableCell>
+                        <TableCell>Lýsing</TableCell>
+                        <TableCell align="right">Upphæð</TableCell>
+                    </TableRow>
+                </TableHead>
+                <TableBody>
+                    {preview.rows.slice(0, 10).map((row, i) => {
+                        const amt = parseFloat(row.amount);
+                        return (
+                            <TableRow key={i}>
+                                <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{row.date}</TableCell>
+                                <TableCell>{row.description}</TableCell>
+                                <TableCell align="right" sx={{
+                                    fontFamily: 'monospace',
+                                    color: amt >= 0 ? 'success.main' : 'error.main',
+                                    whiteSpace: 'nowrap',
+                                }}>
+                                    {amt >= 0 ? '+' : ''}{fmtAmount(amt)} kr.
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
+                    {preview.rows.length > 10 && (
+                        <TableRow>
+                            <TableCell colSpan={3} sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                                … {preview.rows.length - 10} færslur til viðbótar
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button onClick={onBack} disabled={confirming}>Til baka</Button>
+                <Button
+                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    disabled={preview.to_import === 0 || confirming} onClick={handleConfirm}
+                >
+                    {confirming
+                        ? <CircularProgress size={18} color="inherit" />
+                        : `Staðfesta innflutning (${preview.to_import})`}
+                </Button>
+            </Box>
         </Paper>
     );
 }
