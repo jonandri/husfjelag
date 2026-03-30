@@ -86,13 +86,13 @@ export default function CategorisationRulesPage() {
         try {
             let resp;
             if (editRule) {
-                resp = await fetch(`${API_URL}/CategoryRule/update/${editRule.id}`, {
+                resp = await fetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
                 });
             } else {
-                resp = await fetch(`${API_URL}/CategoryRule`, {
+                resp = await fetch(`${API_URL}/CategoryRule${assocParam}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: editGlobal }),
@@ -116,7 +116,7 @@ export default function CategorisationRulesPage() {
         if (!deleteRule) return;
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}`, {
+            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),

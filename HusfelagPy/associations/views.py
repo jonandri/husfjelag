@@ -984,19 +984,22 @@ class ImportConfirmView(APIView):
         for row in rows:
             try:
                 description = str(row.get("description") or "")
-                cat = categorise_row(description, rules, history)
-                tx_status = TransactionStatus.CATEGORISED if cat else TransactionStatus.IMPORTED
-                transactions.append(Transaction(
-                    bank_account=bank_account,
-                    date=datetime.date.fromisoformat(row["date"]),
-                    amount=Decimal(str(row["amount"])),
-                    description=description,
-                    reference=str(row.get("reference") or ""),
-                    category=cat,
-                    status=tx_status,
-                ))
-            except (KeyError, ValueError, Exception):
+                date = datetime.date.fromisoformat(row["date"])
+                amount = Decimal(str(row["amount"]))
+            except (KeyError, ValueError, TypeError):
                 continue
+
+            cat = categorise_row(description, rules, history)
+            tx_status = TransactionStatus.CATEGORISED if cat else TransactionStatus.IMPORTED
+            transactions.append(Transaction(
+                bank_account=bank_account,
+                date=date,
+                amount=amount,
+                description=description,
+                reference=str(row.get("reference") or ""),
+                category=cat,
+                status=tx_status,
+            ))
 
         Transaction.objects.bulk_create(transactions)
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
