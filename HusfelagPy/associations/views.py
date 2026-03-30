@@ -1029,6 +1029,17 @@ class CategoryRuleView(APIView):
             "global_rules":      [_ser(r, True)  for r in global_rules],
         })
 
+    def _check_rule_access(self, user, rule, request):
+        """Returns a 403 Response if user cannot modify this rule, else None."""
+        if rule.association is not None:
+            assoc = _resolve_assoc(user.id, request)
+            if not assoc or rule.association_id != assoc.id:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            if not user.is_superadmin:
+                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        return None
+
     def post(self, request):
         """POST /CategoryRule — create a rule."""
         user_id     = request.data.get("user_id")
@@ -1093,14 +1104,9 @@ class CategoryRuleView(APIView):
         except CategoryRule.DoesNotExist:
             return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Access check
-        if rule.association is not None:
-            assoc = _resolve_assoc(user.id, request)
-            if not assoc or rule.association_id != assoc.id:
-                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
-        else:
-            if not user.is_superadmin:
-                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        err = self._check_rule_access(user, rule, request)
+        if err:
+            return err
 
         try:
             category = Category.objects.get(id=int(category_id), deleted=False)
@@ -1134,13 +1140,9 @@ class CategoryRuleView(APIView):
         except CategoryRule.DoesNotExist:
             return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
-        if rule.association is not None:
-            assoc = _resolve_assoc(user.id, request)
-            if not assoc or rule.association_id != assoc.id:
-                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
-        else:
-            if not user.is_superadmin:
-                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+        err = self._check_rule_access(user, rule, request)
+        if err:
+            return err
 
         rule.deleted = True
         rule.save()
