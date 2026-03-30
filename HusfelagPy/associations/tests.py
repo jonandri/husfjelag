@@ -1012,3 +1012,143 @@ class ImporterTest(TestCase):
         self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 15))
         self.assertEqual(result["rows"][0]["amount"], Decimal("-245000"))
         self.assertEqual(result["rows"][0]["description"], "HS Veitur hf.")
+
+    def test_parse_landsbankinn_csv(self):
+        from associations.importers import parse_landsbankinn
+        from decimal import Decimal
+        import datetime
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_bytes = (
+            "Netbanki fyrirtækja-Reikningsyfirlit\n"
+            "Færslur á reikningi 0133-26-019111 Veltureikningur fyrirtækja\n"
+            "Allar færslur. Tímabil 28.3.2025 - 29.3.2026\n"
+            "\n"
+            "Dags;Vaxtad;Banki;RB. Nr.;Fl.;Tnr/Seðilnr.;Tilvísun;Textalykill;Skýring greiðslu;Kennitala;Texti;Upphæð;Staða\n"
+            "24.03.2026;24.03;0536;^h71;01;0010426;2405862319;Félagaþjónusta;Félagaþjónusta;240586-2319;Hilmar Þór Birgisson;24.484;242.562\n"
+            "23.03.2026;23.03;0133;KR41;02;0002012;2312080590;Rafmagn og hiti;Rafmagn og hiti;431208-0590;HS Veitur hf.;-1.948;218.078\n"
+        ).encode("utf-8")
+        f = SimpleUploadedFile("LandsbankinnExcel20260330.csv", csv_bytes)
+        result = parse_landsbankinn(f, "csv")
+        self.assertEqual(result["file_account_number"], "0133-26-019111")
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 24))
+        self.assertEqual(result["rows"][0]["description"], "Hilmar Þór Birgisson")
+        self.assertEqual(result["rows"][0]["reference"], "0010426")
+        self.assertEqual(result["rows"][1]["amount"], Decimal("-1948"))
+        # When Texti is empty, falls back to Skýring greiðslu
+        csv_no_texti = (
+            "Netbanki\n"
+            "Færslur á reikningi 0133-26-019111 Reikningur\n"
+            "\n"
+            "\n"
+            "Dags;Vaxtad;Banki;RB. Nr.;Fl.;Tnr/Seðilnr.;Tilvísun;Textalykill;Skýring greiðslu;Kennitala;Texti;Upphæð;Staða\n"
+            "01.03.2026;;;;;\t;;Kostnaður;HS Veitur hf.;;;-500;\n"
+        ).encode("utf-8")
+        f2 = SimpleUploadedFile("LandsbankinnExcel20260301.csv", csv_no_texti)
+        result2 = parse_landsbankinn(f2, "csv")
+        self.assertEqual(result2["rows"][0]["description"], "HS Veitur hf.")
+
+    def test_parse_islandsbanki_new_format(self):
+        from associations.importers import parse_islandsbanki
+        from decimal import Decimal
+        import datetime, openpyxl
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Eigandi", "Þórunnarstræti 132, húsfélag"])  # row 1
+        ws.append(["Kennitala", "650585-1279"])                   # row 2
+        ws.append(["Reikningur", "Húsfélagar. Aðalreik"])         # row 3
+        ws.append(["Reikningsnúmer", "0565-26-565121"])            # row 4 — detection key
+        ws.append(["Staða", "189.153 kr."])                        # row 5
+        ws.append([None])                                           # row 6
+        ws.append(["Dagsetning frá", "28.02.2026"])                # row 7
+        ws.append(["Dagsetning til", "30.03.2026"])                # row 8
+        ws.append(["Yfirlit sótt", "2026-03-30 09:28:35"])         # row 9
+        ws.append([None])                                           # row 10
+        ws.append([None])                                           # row 11
+        ws.append(["Dagsetning", "Mótaðili", "Tilvísun", "Texti", "Upphæð", "Staða"])  # row 12
+        ws.append(["18.03.2026", "LukTom píparar ehf.", "280226", "Kostnaður", "-300 kr.", "189.153 kr."])  # row 13
+        ws.append(["17.03.2026", "Þjónustugjald innheimtuþjónusta", None, "Innheimtuþjónusta", "-919 kr.", "189.453 kr."])  # row 14
+        buf = BytesIO()
+        wb.save(buf)
+        f = SimpleUploadedFile("reikningsyfirlit2026-03-30.xlsx", buf.getvalue())
+        result = parse_islandsbanki(f, "xlsx")
+        self.assertEqual(result["file_account_number"], "0565-26-565121")
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 18))
+        self.assertEqual(result["rows"][0]["description"], "LukTom píparar ehf.")
+        self.assertEqual(result["rows"][0]["amount"], Decimal("-300"))
+        self.assertEqual(result["rows"][0]["reference"], "280226")
+
+    def test_parse_islandsbanki_old_format(self):
+        from associations.importers import parse_islandsbanki
+        from decimal import Decimal
+        import datetime, openpyxl
+        from io import BytesIO
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Íslandsbanki"])                           # row 1
+        ws.append(["Reikningsyfirlit"])                        # row 2
+        ws.append(["Tímabil: mars 2026"])                      # row 3
+        ws.append(["Allar færslur"])                           # row 4 — NOT "Reikningsnúmer"
+        ws.append(["Dags.", "Seðilnr.", "Tegund", "Mótaðili", "Tilvísun",
+                   "Upplýsingar um færslu", "Aðrar upplýsingar", "Færslulykill",
+                   "Textalykill", "Upplýsingar", "Kennitala móttakanda", "Söluaðili",
+                   "Innlausnarbanki", "Vaxtadagsetning", "Bókunardagur greiðslu",
+                   "Upphæð", "Upph.ISK", "Staða"])             # row 5 — headers
+        ws.append(["18.03.2026", "280226", "Kostnaður", "LukTom píparar ehf.", "5603061130",
+                   None, None, None,
+                   "Kostnaður", "Innheimtukrafa", "6812221110", None,
+                   None, None, None,
+                   "-300", "-300", "189.153"])                 # row 6
+        ws.append(["17.03.2026", "030326", "Millifært", "Elva Sturludóttir", "1607735109",
+                   None, None, None,
+                   "Millifært", "Innborgun", "1607735109", None,
+                   None, None, None,
+                   "1.135.983", "1.135.983", "5.785.724"])     # row 7
+        buf = BytesIO()
+        wb.save(buf)
+        f = SimpleUploadedFile("ReikningsYfirlit20260330.xlsx", buf.getvalue())
+        result = parse_islandsbanki(f, "xlsx")
+        self.assertIsNone(result["file_account_number"])
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual(result["rows"][0]["date"], datetime.date(2026, 3, 18))
+        self.assertEqual(result["rows"][0]["description"], "LukTom píparar ehf.")
+        self.assertEqual(result["rows"][0]["amount"], Decimal("-300"))
+        self.assertEqual(result["rows"][1]["amount"], Decimal("1135983"))
+
+    def test_detect_duplicates(self):
+        from associations.importers import detect_duplicates
+        from associations.models import (
+            Association, AssociationAccess, AssociationRole,
+            AccountingKey, AccountingKeyType, BankAccount, Transaction
+        )
+        import datetime
+        from decimal import Decimal
+        assoc = Association.objects.create(
+            ssn="9900000009", name="Dup Test HF", address="Gata 1",
+            postal_code="101", city="Reykjavík"
+        )
+        asset_key = AccountingKey.objects.create(
+            number=9750, name="Test", type=AccountingKeyType.ASSET
+        )
+        bank_account = BankAccount.objects.create(
+            association=assoc, name="Test", account_number="0133-26-000001",
+            asset_account=asset_key
+        )
+        Transaction.objects.create(
+            bank_account=bank_account, date=datetime.date(2026, 3, 15),
+            amount=Decimal("-245000.00"), description="HS Veitur hf.", status="IMPORTED"
+        )
+        rows = [
+            {"date": datetime.date(2026, 3, 15), "amount": Decimal("-245000.00"),
+             "description": "HS Veitur hf.", "reference": "280226"},   # duplicate
+            {"date": datetime.date(2026, 3, 10), "amount": Decimal("-180000.00"),
+             "description": "VÍS tryggingar", "reference": "290226"},  # new
+        ]
+        to_import, skipped = detect_duplicates(rows, bank_account)
+        self.assertEqual(skipped, 1)
+        self.assertEqual(len(to_import), 1)
+        self.assertEqual(to_import[0]["description"], "VÍS tryggingar")

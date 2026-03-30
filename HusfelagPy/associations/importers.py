@@ -45,12 +45,15 @@ def _load_sheet(file_obj, ext):
         raw = file_obj.read()
         if isinstance(raw, bytes):
             raw = raw.decode('utf-8-sig')  # handle BOM
-        # Detect delimiter from first non-blank line
-        first_data = next((line for line in raw.splitlines() if line.strip()), raw[:512])
-        try:
-            dialect = csv.Sniffer().sniff(first_data, delimiters=',;\t')
-        except csv.Error:
-            dialect = csv.excel  # fallback: comma
+        # Detect delimiter: try each non-blank line until sniff succeeds
+        dialect = csv.excel  # fallback: comma
+        for line in raw.splitlines():
+            if line.strip():
+                try:
+                    dialect = csv.Sniffer().sniff(line, delimiters=',;\t')
+                    break
+                except csv.Error:
+                    continue
         return [row for row in csv.reader(io.StringIO(raw), dialect)]
     else:
         wb = openpyxl.load_workbook(io.BytesIO(file_obj.read()), data_only=True)
@@ -88,6 +91,114 @@ def parse_arion(file_obj, ext) -> dict:
     return {"file_account_number": file_account_number, "rows": result}
 
 
+def parse_landsbankinn(file_obj, ext) -> dict:
+    """Parse Landsbankinn statement.
+    Row layout (1-indexed): 1=title, 2=account line, 3=date range, 4=empty, 5=headers, 6+=data.
+    Account number extracted from row 2 via regex.
+    Returns {"file_account_number": str | None, "rows": list[dict]}
+    """
+    rows = _load_sheet(file_obj, ext)
+    if len(rows) < 6:
+        return {"file_account_number": None, "rows": []}
+
+    # Extract account number from row 2 (index 1), e.g. "Færslur á reikningi 0133-26-019111 ..."
+    account_match = re.search(r'reikningi\s+([\d\-]+)', str(rows[1][0] or ''))
+    file_account_number = account_match.group(1) if account_match else None
+
+    headers = [str(h).strip() if h is not None else '' for h in rows[4]]
+
+    result = []
+    for raw_row in rows[5:]:
+        if not any(v for v in raw_row if v is not None):
+            continue
+        row = dict(zip(headers, raw_row))
+        try:
+            texti = str(row.get('Texti') or '').strip()
+            description = texti if texti else str(row.get('Skýring greiðslu') or '').strip()
+            result.append({
+                'date':        parse_icelandic_date(row['Dags']),
+                'amount':      parse_icelandic_amount(row['Upphæð']),
+                'description': description,
+                'reference':   str(row.get('Tnr/Seðilnr.') or '').strip(),
+            })
+        except (KeyError, ValueError, InvalidOperation):
+            continue
+
+    return {"file_account_number": file_account_number, "rows": result}
+
+
+def parse_islandsbanki(file_obj, ext) -> dict:
+    """Parse Íslandsbanki statement — auto-detects new (BETA) vs old format.
+    New format detected by: cell A4 == "Reikningsnúmer"
+      Account number in B4, headers on row 12, data from row 13.
+    Old format (fallback):
+      No account number. Headers on row 5, data from row 6. Amount from 'Upph.ISK'.
+    Returns {"file_account_number": str | None, "rows": list[dict]}
+    """
+    rows = _load_sheet(file_obj, ext)
+    if len(rows) < 6:
+        return {"file_account_number": None, "rows": []}
+
+    # Detect format: new if A4 (index 3, col 0) == "Reikningsnúmer"
+    a4 = str(rows[3][0]).strip() if len(rows) > 3 and rows[3] and rows[3][0] else ''
+    is_new = (a4 == "Reikningsnúmer")
+
+    if is_new:
+        file_account_number = str(rows[3][1]).strip() if len(rows[3]) > 1 and rows[3][1] else None
+        if len(rows) < 13:
+            return {"file_account_number": file_account_number, "rows": []}
+        headers = [str(h).strip() if h is not None else '' for h in rows[11]]
+        data_rows = rows[12:]
+        amount_col = 'Upphæð'
+        description_col = 'Mótaðili'
+        date_col = 'Dagsetning'
+    else:
+        file_account_number = None
+        headers = [str(h).strip() if h is not None else '' for h in rows[4]]
+        data_rows = rows[5:]
+        amount_col = 'Upph.ISK'
+        description_col = 'Mótaðili'
+        date_col = 'Dags.'
+
+    result = []
+    for raw_row in data_rows:
+        if not any(v for v in raw_row if v is not None):
+            continue
+        row = dict(zip(headers, raw_row))
+        try:
+            result.append({
+                'date':        parse_icelandic_date(row[date_col]),
+                'amount':      parse_icelandic_amount(row[amount_col]),
+                'description': str(row.get(description_col) or '').strip(),
+                'reference':   str(row.get('Tilvísun') or '').strip(),
+            })
+        except (KeyError, ValueError, InvalidOperation):
+            continue
+
+    return {"file_account_number": file_account_number, "rows": result}
+
+
+def detect_duplicates(rows, bank_account):
+    """Return (to_import_rows, skipped_count).
+    A row is a duplicate if same (date, amount, description) already exists in bank_account.
+    """
+    from .models import Transaction
+    existing = set(
+        Transaction.objects.filter(bank_account=bank_account)
+        .values_list('date', 'amount', 'description')
+    )
+    to_import = []
+    skipped = 0
+    for row in rows:
+        if (row['date'], row['amount'], row['description']) in existing:
+            skipped += 1
+        else:
+            to_import.append(row)
+    return to_import, skipped
+
+
 BANK_PARSERS = {
-    "arion": parse_arion,
+    "arion":        parse_arion,
+    "landsbankinn": parse_landsbankinn,
+    "islandsbanki": parse_islandsbanki,
 }
