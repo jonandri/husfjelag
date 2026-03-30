@@ -3,11 +3,14 @@
     "allow": [
       "Bash(git *)",
       "Bash(gh *)",
+      "Bash(cd * && git *)",
+      "Bash(cd * && gh *)",
       "Bash(find *)",
       "Bash(cat *)",
       "Bash(grep *)",
       "Bash(cd *)",
       "Bash(ls *)",
+      "Bash(cd * && ls *)",
       "Bash(echo *)",
       "Bash(which *)",
       "Bash(pwd)",
@@ -41,7 +44,8 @@
       "Bash(poetry run python* -c \" import request*)",
       "Skill(commit-commands:commit-push-pr)",
       "Skill(commit-commands:commit-push-pr:*)",
-      "Bash(bash /Users/jonandri/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh --project-dir /Users/jonandri/Developer/Digit/husfjelag)"
+      "Bash(bash /Users/jonandri/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh --project-dir /Users/jonandri/Developer/Digit/husfjelag)",
+      "mcp__plugin_claude-mem_mcp-search__smart_unfold"
     ],
     "deny": [
       "Bash(rm *)",

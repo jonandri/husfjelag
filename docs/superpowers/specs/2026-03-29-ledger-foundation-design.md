@@ -126,8 +126,9 @@ Migration seeds these defaults on first deploy. Superadmin can add/edit after.
 | 5100 | Tryggingar | EXPENSE |
 | 5200 | Hiti og rafmagn | EXPENSE |
 | 5300 | Þrif og viðhald | EXPENSE |
-| 5400 | Lóðarleiga | EXPENSE |
+| 5400 | Lóðarkostnaður | EXPENSE |
 | 5500 | Sameiginleg gjöld | EXPENSE |
+| 5600 | Rekstur húsfélags | EXPENSE |
 
 ---
 
