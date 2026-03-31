@@ -462,11 +462,14 @@ function ImportForm({
 }) {
     const [file, setFile] = useState(null);
     const [dragOver, setDragOver] = useState(false);
+    const [detecting, setDetecting] = useState(false);
     const fileInputRef = React.useRef();
 
     const isValid = importBankAccountId && importBank && file;
 
-    const handleFile = (f) => {
+    const normaliseAcct = (s) => String(s || '').replace(/[-\s]/g, '');
+
+    const handleFile = async (f) => {
         const ext = f.name.split('.').pop().toLowerCase();
         if (!['csv', 'xlsx'].includes(ext)) {
             setError('Aðeins .csv og .xlsx skrár eru studdar.');
@@ -474,6 +477,25 @@ function ImportForm({
         }
         setError('');
         setFile(f);
+        setDetecting(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', f);
+            const resp = await fetch(`${API_URL}/Import/detect`, { method: 'POST', body: fd });
+            if (resp.ok) {
+                const { bank, file_account_number } = await resp.json();
+                if (bank) setImportBank(bank);
+                if (file_account_number) {
+                    const norm = normaliseAcct(file_account_number);
+                    const match = bankAccounts.find(b => normaliseAcct(b.account_number) === norm);
+                    if (match) setImportBankAccountId(match.id);
+                }
+            }
+        } catch {
+            // detection failure is non-fatal
+        } finally {
+            setDetecting(false);
+        }
     };
 
     const handleDrop = (e) => {
@@ -515,24 +537,6 @@ function ImportForm({
     return (
         <Paper variant="outlined" sx={{ p: 2, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 520 }}>
             <Typography variant="subtitle2">Flytja inn bankayfirlit</Typography>
-            <FormControl size="small" fullWidth>
-                <InputLabel>Bankareikningur</InputLabel>
-                <Select value={importBankAccountId} label="Bankareikningur"
-                    onChange={e => setImportBankAccountId(e.target.value)}>
-                    <MenuItem value=""><em>Veldu reikning</em></MenuItem>
-                    {bankAccounts.map(b => (
-                        <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-                <InputLabel>Banki</InputLabel>
-                <Select value={importBank} label="Banki" onChange={e => setImportBank(e.target.value)}>
-                    {BANK_OPTIONS.map(o => (
-                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
             <Box
                 onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
@@ -551,10 +555,28 @@ function ImportForm({
                     onChange={e => e.target.files[0] && handleFile(e.target.files[0])}
                 />
                 {file
-                    ? <Typography variant="body2" color="success.main">{file.name}</Typography>
+                    ? <Typography variant="body2" color="success.main">{file.name}{detecting ? ' — greini…' : ''}</Typography>
                     : <Typography variant="body2">Dragðu skrá hingað eða <span style={{ color: '#08C076' }}>veldu skrá</span><br /><small>.csv eða .xlsx</small></Typography>
                 }
             </Box>
+            <FormControl size="small" fullWidth>
+                <InputLabel>Banki</InputLabel>
+                <Select value={importBank} label="Banki" onChange={e => setImportBank(e.target.value)}>
+                    {BANK_OPTIONS.map(o => (
+                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+                <InputLabel>Bankareikningur</InputLabel>
+                <Select value={importBankAccountId} label="Bankareikningur"
+                    onChange={e => setImportBankAccountId(e.target.value)}>
+                    <MenuItem value=""><em>Veldu reikning</em></MenuItem>
+                    {bankAccounts.map(b => (
+                        <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
             {error && <Alert severity="error">{error}</Alert>}
             <Button
                 variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}

@@ -178,6 +178,45 @@ def parse_islandsbanki(file_obj, ext) -> dict:
     return {"file_account_number": file_account_number, "rows": result}
 
 
+def detect_bank(file_obj, ext) -> dict:
+    """Detect which bank a statement file belongs to by inspecting its structure.
+    Returns {"bank": str, "file_account_number": str | None} or {"bank": None, "file_account_number": None}.
+    """
+    try:
+        rows = _load_sheet(file_obj, ext)
+    except Exception:
+        return {"bank": None, "file_account_number": None}
+
+    def _headers(row_index):
+        if len(rows) <= row_index:
+            return set()
+        return {str(h).strip() for h in rows[row_index] if h is not None}
+
+    # Íslandsbanki new format: A4 == "Reikningsnúmer"
+    if len(rows) > 3 and rows[3] and str(rows[3][0]).strip() == "Reikningsnúmer":
+        acct = str(rows[3][1]).strip() if len(rows[3]) > 1 and rows[3][1] else None
+        return {"bank": "islandsbanki", "file_account_number": acct}
+
+    # Íslandsbanki old format: row 5 headers contain 'Upph.ISK'
+    if "Upph.ISK" in _headers(4):
+        return {"bank": "islandsbanki", "file_account_number": None}
+
+    # Arion: row 4 headers contain 'Dagsetning' and 'Upphæð'
+    h4 = _headers(3)
+    if "Dagsetning" in h4 and "Upphæð" in h4:
+        acct = str(rows[1][0]).strip() if len(rows) > 1 and rows[1] and rows[1][0] else None
+        return {"bank": "arion", "file_account_number": acct}
+
+    # Landsbankinn: row 5 headers contain 'Dags' and 'Upphæð'
+    h5 = _headers(4)
+    if "Dags" in h5 and "Upphæð" in h5:
+        acct_match = re.search(r'reikningi\s+([\d\-]+)', str(rows[1][0] or '')) if len(rows) > 1 and rows[1] else None
+        acct = acct_match.group(1) if acct_match else None
+        return {"bank": "landsbankinn", "file_account_number": acct}
+
+    return {"bank": None, "file_account_number": None}
+
+
 def detect_duplicates(rows, bank_account):
     """Return (to_import_rows, skipped_count).
     A row is a duplicate if same (date, amount, description) already exists in bank_account.

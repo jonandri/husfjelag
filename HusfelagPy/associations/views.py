@@ -20,7 +20,7 @@ from .serializers import (
     AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
 from .scraper import lookup_association, scrape_hms_apartments
-from .importers import BANK_PARSERS, detect_duplicates
+from .importers import BANK_PARSERS, detect_bank, detect_duplicates
 from .categoriser import build_categorisation_context, categorise_row
 from users.models import User
 
@@ -940,6 +940,21 @@ class ImportPreviewView(APIView):
             "skipped_duplicates": skipped,
             "rows":               serialized,
         })
+
+
+class ImportDetectView(APIView):
+    def post(self, request):
+        """POST /Import/detect — detect bank and account number from a statement file.
+        Body: multipart with `file`. Returns {bank, file_account_number}.
+        """
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "file er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+        ext = file.name.rsplit(".", 1)[-1].lower() if "." in file.name else ""
+        if ext not in ("csv", "xlsx"):
+            return Response({"detail": "Aðeins .csv og .xlsx skrár eru studdar."}, status=status.HTTP_400_BAD_REQUEST)
+        result = detect_bank(file, ext)
+        return Response(result)
 
 
 class ImportConfirmView(APIView):
