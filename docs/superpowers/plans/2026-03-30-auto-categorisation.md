@@ -961,7 +961,7 @@ export default function CategorisationRulesPage() {
 
     const handleSave = async () => {
         if (!keyword.trim() || !categoryId) {
-            setSaveError('Lykliorð og flokkur eru nauðsynleg.');
+            setSaveError('Lykilorð og flokkur eru nauðsynleg.');
             return;
         }
         setSaving(true);
@@ -1026,7 +1026,7 @@ export default function CategorisationRulesPage() {
                 <Box>
                     <Typography variant="h6" fontWeight={600}>Flokkunarreglur</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Reglur sem nota lykliorð til að flokka færslur sjálfkrafa við innflutning.
+                        Reglur sem nota lykilorð til að flokka færslur sjálfkrafa við innflutning.
                     </Typography>
                 </Box>
                 <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={() => openCreate(false)}>
@@ -1069,7 +1069,7 @@ export default function CategorisationRulesPage() {
                 <DialogTitle>{editRule ? 'Breyta reglu' : 'Ný regla'}</DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
                     <TextField
-                        label="Lykliorð" value={keyword} size="small" fullWidth autoFocus
+                        label="Lykilorð" value={keyword} size="small" fullWidth autoFocus
                         onChange={e => setKeyword(e.target.value)}
                     />
                     <FormControl size="small" fullWidth>
@@ -1118,7 +1118,7 @@ function RulesTable({ rules, isGlobal, canEdit, onEdit, onDelete }) {
         <Table size="small" sx={{ mb: 1 }}>
             <TableHead>
                 <TableRow sx={{ '& th': { color: '#555', fontWeight: 500, borderBottom: '2px solid #eee' } }}>
-                    <TableCell>Lykliorð</TableCell>
+                    <TableCell>Lykilorð</TableCell>
                     <TableCell>Flokkur</TableCell>
                     <TableCell />
                 </TableRow>
