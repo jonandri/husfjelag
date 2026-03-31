@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
-from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, ApartmentOwnership, Collection, CollectionStatus
+from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, BudgetItem, ApartmentOwnership, Collection, CollectionStatus
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1943,3 +1943,158 @@ class AutoMatchTest(TestCase):
         }])
         self.collection.refresh_from_db()
         self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+
+class CollectionGenerateViewTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="3333333339", name="Admin")
+        self.payer1 = User.objects.create(kennitala="1111111111", name="Greiðandi 1")
+        self.payer2 = User.objects.create(kennitala="2222222222", name="Greiðandi 2")
+        self.association = Association.objects.create(
+            ssn="3030303030", name="Kynningarfélag",
+            address="Kynningargata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        cat = Category.objects.create(name="Sameiginlegt", type="EQUAL")
+        BudgetItem.objects.create(budget=self.budget, category=cat, amount=Decimal("600000"))
+        self.apt1 = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000001",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("50"),
+        )
+        self.apt2 = Apartment.objects.create(
+            association=self.association, anr="0102", fnr="F000002",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("50"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=self.apt1, user=self.payer1, share=Decimal("100"), is_payer=True, deleted=False
+        )
+        ApartmentOwnership.objects.create(
+            apartment=self.apt2, user=self.payer2, share=Decimal("100"), is_payer=True, deleted=False
+        )
+
+    def _post(self, month=3, year=2026):
+        return self.client.post(
+            "/Collection/generate",
+            data=json.dumps({"user_id": self.user.id, "month": month, "year": year}),
+            content_type="application/json",
+        )
+
+    def test_generates_correct_number_of_items(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["created"], 2)
+        self.assertEqual(data["skipped"], 0)
+        self.assertEqual(Collection.objects.filter(budget=self.budget, month=3).count(), 2)
+
+    def test_is_idempotent(self):
+        self._post()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["skipped"], 2)
+        self.assertEqual(Collection.objects.filter(budget=self.budget, month=3).count(), 2)
+
+    def test_404_no_active_budget(self):
+        resp = self.client.post(
+            "/Collection/generate",
+            data=json.dumps({"user_id": self.user.id, "month": 3, "year": 2025}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_payer_from_current_is_payer_ownership(self):
+        from decimal import Decimal
+        self._post()
+        col = Collection.objects.get(budget=self.budget, apartment=self.apt1, month=3)
+        self.assertEqual(col.payer, self.payer1)
+
+    def test_amounts_calculated_correctly(self):
+        from decimal import Decimal
+        self._post()
+        col = Collection.objects.get(budget=self.budget, apartment=self.apt1, month=3)
+        # Budget 600000 EQUAL, apt1 share_eq=50 → 600000 * 50 / 100 = 300000
+        self.assertEqual(col.amount_equal, Decimal("300000"))
+        self.assertEqual(col.amount_total, Decimal("300000"))
+
+
+class CollectionMatchViewTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        import datetime as dt
+        self.client = Client()
+        self.user = User.objects.create(kennitala="4444444449", name="Admin")
+        self.payer = User.objects.create(kennitala="5555555555", name="Greiðandi")
+        self.association = Association.objects.create(
+            ssn="4040404040", name="Samræmisfélag",
+            address="Samræmisgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000004"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000003",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer, share=Decimal("100"), is_payer=True, deleted=False
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+        self.tx = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 10),
+            amount=Decimal("45000"),
+            description="Húsgjöld",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+
+    def _post(self, collection_id=None, transaction_id=None):
+        return self.client.post(
+            "/Collection/match",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "collection_id": collection_id or self.collection.id,
+                "transaction_id": transaction_id or self.tx.id,
+            }),
+            content_type="application/json",
+        )
+
+    def test_manual_match_sets_paid_and_reconciled(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.collection.refresh_from_db()
+        self.tx.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PAID)
+        self.assertEqual(self.collection.paid_transaction_id, self.tx.id)
+        self.assertEqual(self.tx.status, TransactionStatus.RECONCILED)
+
+    def test_returns_400_if_collection_already_paid(self):
+        self.collection.status = CollectionStatus.PAID
+        self.collection.paid_transaction = self.tx
+        self.collection.save()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+
+    def test_returns_400_if_transaction_not_positive(self):
+        from decimal import Decimal
+        self.tx.amount = Decimal("-100")
+        self.tx.save()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)

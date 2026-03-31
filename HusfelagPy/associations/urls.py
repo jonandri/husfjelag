@@ -8,6 +8,7 @@ from .views import (
     ImportPreviewView, ImportConfirmView, ImportDetectView, ImportRecategoriseView,
     CategoryRuleView,
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
+    CollectionGenerateView, CollectionMatchView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
     ReportView,
 )
@@ -64,6 +65,8 @@ urlpatterns = [
     path("Budget/wizard", BudgetWizardView.as_view(), name="budget-wizard"),
     path("Budget/<int:user_id>", BudgetView.as_view(), name="budget-get"),
     path("BudgetItem/update/<int:item_id>", BudgetItemView.as_view(), name="budgetitem-update"),
+    path("Collection/generate", CollectionGenerateView.as_view(), name="collection-generate"),
+    path("Collection/match", CollectionMatchView.as_view(), name="collection-match"),
     path("Collection/<int:user_id>", CollectionView.as_view(), name="collection-list"),
     path("Report/<int:user_id>", ReportView.as_view(), name="report"),
 ]
