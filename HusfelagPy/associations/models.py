@@ -151,6 +151,7 @@ class Transaction(models.Model):
     amount       = models.DecimalField(max_digits=14, decimal_places=2)  # positive=in, negative=out
     description  = models.CharField(max_length=500)
     reference    = models.CharField(max_length=255, blank=True)
+    payer_kennitala = models.CharField(max_length=20, blank=True, default="")
     category     = models.ForeignKey(
         Category, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="transactions",
@@ -212,6 +213,10 @@ class Collection(models.Model):
     amount_equal = models.DecimalField(max_digits=10, decimal_places=2)   # Equally divided portion
     amount_total = models.DecimalField(max_digits=10, decimal_places=2)   # amount_shared + amount_equal
     status = models.CharField(max_length=10, choices=CollectionStatus.choices, default=CollectionStatus.PENDING)
+    paid_transaction = models.ForeignKey(
+        "Transaction", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="collection_payment",
+    )
 
     class Meta:
         db_table = "associations_collection"
