@@ -13,6 +13,9 @@ HusfelagJS/.env.test.local
 HusfelagJS/.env.production.local
 HusfelagJS/build/
 
+# Claude Code local config
+.claude/settings.local.json
+
 # macOS
 .DS_Store
 .superpowers/
