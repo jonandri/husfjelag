@@ -1,41 +1,95 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, CircularProgress, Paper,
+    Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
-    Alert,
+    Alert, Chip,
 } from '@mui/material';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
-import { fmtAmount, fmtPct, fmtKennitala } from '../format';
-import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { fmtAmount } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
-const TYPE_LABELS = {
-    SHARED: 'Matshlutfall',
-    SHARE2: 'Hiti',
-    SHARE3: 'Lóð',
-    EQUAL:  'Jafnt',
-};
+const MONTH_NAMES = [
+    '', 'Janúar', 'Febrúar', 'Mars', 'Apríl', 'Maí', 'Júní',
+    'Júlí', 'Ágúst', 'September', 'Október', 'Nóvember', 'Desember',
+];
+
+function StatusBadge({ status, date }) {
+    if (status === 'PAID') {
+        return (
+            <Box>
+                <Chip label="GREITT" size="small" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32', fontWeight: 700, fontSize: 11 }} />
+                {date && <Typography variant="caption" display="block" color="text.secondary">{date}</Typography>}
+            </Box>
+        );
+    }
+    return (
+        <Chip label="ÓGREITT" size="small" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 700, fontSize: 11 }} />
+    );
+}
 
 function CollectionPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
-    const [data, setData] = useState(undefined);
+
+    const today = new Date();
+    const [month, setMonth] = useState(today.getMonth() + 1);
+    const [year] = useState(today.getFullYear());
+    const [data, setData] = useState(null);
     const [error, setError] = useState('');
-    const { sort, lbl } = useSort('anr');
-    const year = new Date().getFullYear();
+    const [generating, setGenerating] = useState(false);
+    const [matchError, setMatchError] = useState('');
+
+    const load = useCallback(() => {
+        if (!user) return;
+        setData(null);
+        setError('');
+        // assocParam starts with '?' when set (e.g. '?as=5'), so build:
+        // /Collection/{id}?as=5&month=M&year=Y  or  /Collection/{id}?month=M&year=Y
+        const qs = assocParam
+            ? `${assocParam}&month=${month}&year=${year}`
+            : `?month=${month}&year=${year}`;
+        fetch(`${API_URL}/Collection/${user.id}${qs}`)
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(setData)
+            .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], unmatched: [] }); });
+    }, [user, assocParam, month, year]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
-        fetch(`${API_URL}/Collection/${user.id}${assocParam}`)
-            .then(r => r.ok ? r.json() : Promise.reject())
-            .then(setData)
-            .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], budget_summary: [] }); });
-    }, [user, assocParam]);
+        load();
+    }, [user, load, navigate]);
 
-    if (data === undefined) {
+    const handleGenerate = () => {
+        setGenerating(true);
+        setError('');
+        fetch(`${API_URL}/Collection/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, month, year }),
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => load())
+            .catch(err => setError(typeof err === 'string' ? err : 'Villa við að búa til innheimtu.'))
+            .finally(() => setGenerating(false));
+    };
+
+    const handleMatch = (collectionId, transactionId) => {
+        if (!transactionId) return;
+        setMatchError('');
+        fetch(`${API_URL}/Collection/match`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, collection_id: collectionId, transaction_id: parseInt(transactionId) }),
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => load())
+            .catch(err => setMatchError(typeof err === 'string' ? err : 'Villa við tengingu.'));
+    };
+
+    if (!data) {
         return (
             <div className="dashboard">
                 <SideBar />
@@ -47,86 +101,150 @@ function CollectionPage() {
     }
 
     const rows = data.rows ?? [];
-    const summary = data.budget_summary ?? [];
-    const hasGap = summary.some(s => Math.abs(parseFloat(s.share_sum) - 100) > 0.01);
+    const unmatched = data.unmatched ?? [];
+    const hasItems = rows.length > 0;
+    const paidCount = rows.filter(r => r.status === 'PAID').length;
+    const totalAmount = rows.reduce((s, r) => s + parseFloat(r.amount_total || 0), 0);
 
-    const totalShared  = rows.reduce((s, r) => s + parseFloat(r.shared  || 0), 0);
-    const totalShare2  = rows.reduce((s, r) => s + parseFloat(r.share2  || 0), 0);
-    const totalShare3  = rows.reduce((s, r) => s + parseFloat(r.share3  || 0), 0);
-    const totalEqual   = rows.reduce((s, r) => s + parseFloat(r.equal   || 0), 0);
-    const totalAnnual  = rows.reduce((s, r) => s + parseFloat(r.annual  || 0), 0);
-    const totalMonthly = rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0);
+    // Pending collection items available for manual matching
+    const pendingRows = rows.filter(r => r.status === 'PENDING');
 
     return (
         <div className="dashboard">
             <SideBar />
             <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h5">Innheimta {year}</Typography>
+
+                {/* Header */}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                    <Typography variant="h5" fontWeight={300}>Innheimta {year}</Typography>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Select
+                            size="small"
+                            value={month}
+                            onChange={e => setMonth(e.target.value)}
+                            sx={{ fontSize: 13 }}
+                        >
+                            {MONTH_NAMES.slice(1).map((name, i) => (
+                                <MenuItem key={i + 1} value={i + 1}>{name} {year}</MenuItem>
+                            ))}
+                        </Select>
+                        <Button
+                            variant="contained"
+                            color="secondary"
+                            sx={{ color: '#fff', textTransform: 'none', whiteSpace: 'nowrap' }}
+                            onClick={handleGenerate}
+                            disabled={generating || hasItems}
+                        >
+                            {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
+                        </Button>
+                    </Box>
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                {hasGap && (
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                        Hlutföll summa ekki upp í 100% fyrir allar tegundir. Innheimta er lægri en áætlun.
-                        {summary.filter(s => Math.abs(parseFloat(s.share_sum) - 100) > 0.01).map(s => (
-                            <Box key={s.type} component="span" sx={{ display: 'block', mt: 0.5, fontSize: '0.85rem' }}>
-                                {TYPE_LABELS[s.type] || s.type}: {fmtPct(s.share_sum)} af 100% skráð
-                                {' — '}óráðstafað: {fmtAmount(parseFloat(s.budget) * (100 - parseFloat(s.share_sum)) / 100)}
-                            </Box>
-                        ))}
-                    </Alert>
+                {/* Collection items table */}
+                {hasItems ? (
+                    <>
+                        <Typography variant="overline" sx={{ color: '#1D366F', letterSpacing: 0.5, mb: 1, display: 'block' }}>
+                            Húsgjöld — {MONTH_NAMES[month]} {year}
+                        </Typography>
+                        <Paper variant="outlined" sx={{ mb: 3 }}>
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
+                                        <TableCell>Íbúð</TableCell>
+                                        <TableCell>Greiðandi</TableCell>
+                                        <TableCell align="right">Upphæð</TableCell>
+                                        <TableCell align="center">Staða</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {rows.map(row => (
+                                        <TableRow key={row.collection_id} hover
+                                            sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
+                                            <TableCell>{row.anr}</TableCell>
+                                            <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                            <TableCell align="right">{fmtAmount(row.amount_total)}</TableCell>
+                                            <TableCell align="center">
+                                                <StatusBadge status={row.status} date={row.paid_transaction_date} />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                                <TableFooter>
+                                    <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                        <TableCell colSpan={2}>Samtals</TableCell>
+                                        <TableCell align="right">{fmtAmount(totalAmount)}</TableCell>
+                                        <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
+                                            {paidCount}/{rows.length} greidd
+                                        </TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </Paper>
+                    </>
+                ) : (
+                    <Typography color="text.secondary" sx={{ mb: 3 }}>
+                        Engin innheimta hefur verið búin til fyrir {MONTH_NAMES[month]}. Smelltu á „+ Búa til {MONTH_NAMES[month]}" til að búa til færslur.
+                    </Typography>
                 )}
 
-                {rows.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Engar niðurstöður. Gakktu úr skugga um að íbúðir, eigendur og virk áætlun séu skráð.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table size="small">
-                            <TableHead sx={HEAD_SX}>
-                                <TableRow>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Íbúð')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('payer_name', 'Greiðandi')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('payer_kennitala', 'Kennitala')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('shared', 'Sameiginlegt')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('share2', 'Hiti')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('share3', 'Lóð')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('equal', 'Jafnt')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('annual', 'Samtals á ári')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('monthly', 'Á mánuði')}</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sort(rows).map(row => (
-                                    <TableRow key={row.apartment_id} hover>
-                                        <TableCell>{row.anr}</TableCell>
-                                        <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">Enginn greiðandi</Typography>}</TableCell>
-                                        <TableCell>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : '—'}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.shared)}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.share2)}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.share3)}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.equal)}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.annual)}</TableCell>
-                                        <TableCell align="right">{fmtAmount(row.monthly)}</TableCell>
+                {/* Unmatched transactions section */}
+                {unmatched.length > 0 && (
+                    <>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography variant="overline" sx={{ color: '#c62828', letterSpacing: 0.5 }}>
+                                Ósamræmdar tekjufærslur — {MONTH_NAMES[month]} {year}
+                            </Typography>
+                            <Chip
+                                label={unmatched.length}
+                                size="small"
+                                sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, height: 18, fontSize: 10 }}
+                            />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                            Greiðslur sem bárust en kennitala greiðanda fannst ekki. Tengdu þær handvirkt.
+                        </Typography>
+                        {matchError && <Alert severity="error" sx={{ mb: 1 }}>{matchError}</Alert>}
+                        <Paper variant="outlined">
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
+                                        <TableCell>Dags.</TableCell>
+                                        <TableCell>Lýsing</TableCell>
+                                        <TableCell align="right">Upphæð</TableCell>
+                                        <TableCell>Tengja við</TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                            <TableFooter>
-                                <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                    <TableCell colSpan={3}>Samtals</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalShared)}</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalShare2)}</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalShare3)}</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalEqual)}</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalAnnual)}</TableCell>
-                                    <TableCell align="right">{fmtAmount(totalMonthly)}</TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </Paper>
+                                </TableHead>
+                                <TableBody>
+                                    {unmatched.map(tx => (
+                                        <TableRow key={tx.transaction_id} hover>
+                                            <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
+                                            <TableCell>{tx.description}</TableCell>
+                                            <TableCell align="right" sx={{ color: '#2e7d32' }}>+{fmtAmount(tx.amount)}</TableCell>
+                                            <TableCell>
+                                                <Select
+                                                    size="small"
+                                                    displayEmpty
+                                                    value=""
+                                                    onChange={e => handleMatch(e.target.value.split(':')[0], e.target.value.split(':')[1])}
+                                                    sx={{ fontSize: 12, minWidth: 180 }}
+                                                    renderValue={() => 'Veldu íbúð...'}
+                                                >
+                                                    <MenuItem value="" disabled>Veldu íbúð...</MenuItem>
+                                                    {pendingRows.map(col => (
+                                                        <MenuItem key={col.collection_id} value={`${col.collection_id}:${tx.transaction_id}`}>
+                                                            {col.anr} — {col.payer_name ?? '(enginn greiðandi)'}
+                                                        </MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    </>
                 )}
             </Box>
         </div>
