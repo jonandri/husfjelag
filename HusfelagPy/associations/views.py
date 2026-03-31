@@ -1660,17 +1660,18 @@ class CollectionMatchView(APIView):
         except Transaction.DoesNotExist:
             return Response({"detail": "Færsla ekki fundin."}, status=status.HTTP_403_FORBIDDEN)
 
-        if col.status == CollectionStatus.PAID:
-            return Response({"detail": "Þessi innheimtufærsla er þegar greidd."}, status=status.HTTP_400_BAD_REQUEST)
-
         if tx.amount <= 0:
             return Response({"detail": "Færslan er ekki jákvæð."}, status=status.HTTP_400_BAD_REQUEST)
 
-        col.paid_transaction = tx
-        col.status = CollectionStatus.PAID
-        tx.status = TransactionStatus.RECONCILED
-        col.save(update_fields=["paid_transaction", "status"])
-        tx.save(update_fields=["status"])
+        with transaction.atomic():
+            col = Collection.objects.select_for_update().get(id=collection_id, budget__association=association)
+            if col.status == CollectionStatus.PAID:
+                return Response({"detail": "Þessi innheimtufærsla er þegar greidd."}, status=status.HTTP_400_BAD_REQUEST)
+            col.paid_transaction = tx
+            col.status = CollectionStatus.PAID
+            tx.status = TransactionStatus.RECONCILED
+            col.save(update_fields=["paid_transaction", "status"])
+            tx.save(update_fields=["status"])
 
         return Response({
             "collection_id": col.id,
