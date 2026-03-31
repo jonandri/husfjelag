@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
-    Alert, Chip,
+    Alert, Chip, Tooltip, IconButton,
 } from '@mui/material';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
@@ -76,6 +77,19 @@ function CollectionPage() {
             .finally(() => setGenerating(false));
     };
 
+    const handleUnmatch = (collectionId) => {
+        if (!collectionId) return;
+        setMatchError('');
+        fetch(`${API_URL}/Collection/unmatch${assocParam}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId) }),
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => load())
+            .catch(err => setMatchError(typeof err === 'string' ? err : 'Villa við að aftengja greiðslu.'));
+    };
+
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
@@ -116,7 +130,7 @@ function CollectionPage() {
 
                 {/* Header */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                    <Typography variant="h5" fontWeight={300}>Innheimta {year}</Typography>
+                    <Typography variant="h5">Innheimta {year}</Typography>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <Select
                             size="small"
@@ -141,6 +155,7 @@ function CollectionPage() {
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
 
                 {/* Collection items table */}
                 {hasItems ? (
@@ -156,6 +171,7 @@ function CollectionPage() {
                                         <TableCell>Greiðandi</TableCell>
                                         <TableCell align="right">Upphæð</TableCell>
                                         <TableCell align="center">Staða</TableCell>
+                                        <TableCell />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -168,6 +184,15 @@ function CollectionPage() {
                                             <TableCell align="center">
                                                 <StatusBadge status={row.status} date={row.paid_transaction_date} />
                                             </TableCell>
+                                            <TableCell align="right" sx={{ width: 40, pr: 1 }}>
+                                                {row.status === 'PAID' && (
+                                                    <Tooltip title="Aftengja greiðslu">
+                                                        <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
+                                                            <LinkOffIcon fontSize="small" sx={{ color: '#bbb' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -178,6 +203,7 @@ function CollectionPage() {
                                         <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
                                             {paidCount}/{rows.length} greidd
                                         </TableCell>
+                                        <TableCell />
                                     </TableRow>
                                 </TableFooter>
                             </Table>

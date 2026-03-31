@@ -20,6 +20,7 @@ const CATEGORY_TYPES = [
     { value: 'SHARE2', label: 'Hiti' },
     { value: 'SHARE3', label: 'Lóð' },
     { value: 'EQUAL',  label: 'Jafnskipt' },
+    { value: 'INCOME', label: 'Tekjur' },
 ];
 
 const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label || type;

@@ -309,6 +309,7 @@ function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
 
 function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onSaved, onDisabled }) {
     const { user, setUser } = React.useContext(UserContext);
+    const [name, setName] = useState(ownership.name || '');
     const [share, setShare] = useState(String(ownership.share));
     const [isPayer, setIsPayer] = useState(ownership.is_payer);
     const [email, setEmail] = useState(ownership.email || '');
@@ -320,6 +321,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
 
     React.useEffect(() => {
         if (open) {
+            setName(ownership.name || '');
             setShare(String(ownership.share));
             setIsPayer(ownership.is_payer);
             setEmail(ownership.email || '');
@@ -336,7 +338,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
     const emailValid = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     // Accepts: 7 digits as "XXX XXXX" or "XXXXXXX", or +CC then 7+ digits (spaces allowed)
     const phoneValid = !phone || /^(\+\d{1,3}[\s-]?)?\d{3}[\s]?\d{4}$/.test(phone.trim());
-    const isValid = parseFloat(share) > 0 && !shareOver && emailValid && phoneValid;
+    const isValid = name.trim().length > 0 && parseFloat(share) > 0 && !shareOver && emailValid && phoneValid;
 
     const handleSave = async () => {
         setError('');
@@ -355,13 +357,13 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                 fetch(`${API_URL}/User/${ownership.user_id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),
+                    body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: fmtPhone(phone) }),
                 }),
             ]);
             if (ownerResp.ok && userResp.ok) {
                 // If editing the logged-in user's own contact info, sync context
                 if (user && ownership.user_id === user.id) {
-                    const updatedUser = { ...user, email: email.trim() || null, phone: fmtPhone(phone) || null };
+                    const updatedUser = { ...user, name: name.trim(), email: email.trim() || null, phone: fmtPhone(phone) || null };
                     localStorage.setItem('user', JSON.stringify(updatedUser));
                     setUser(updatedUser);
                 }
@@ -404,12 +406,18 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                     {isDisabled ? 'Óvirkur eigandi' : 'Breyta eiganda'}
                 </DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-                    <Box>
-                        <Typography variant="body1" fontWeight={500}>{ownership.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                            Kennitala: {fmtKennitala(ownership.kennitala)} &nbsp;·&nbsp; Íbúð: {ownership.anr}
-                        </Typography>
-                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        Kennitala: {fmtKennitala(ownership.kennitala)} &nbsp;·&nbsp; Íbúð: {ownership.anr}
+                    </Typography>
+                    <TextField
+                        label="Nafn"
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        size="small"
+                        fullWidth
+                        error={name.trim().length === 0}
+                        helperText={name.trim().length === 0 ? 'Nafn má ekki vera tómt' : ''}
+                    />
                     <TextField
                         label="Netfang"
                         type="email"

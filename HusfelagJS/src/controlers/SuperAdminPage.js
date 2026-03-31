@@ -22,6 +22,7 @@ const CATEGORY_TYPES = [
     { value: 'SHARE2', label: 'Hiti' },
     { value: 'SHARE3', label: 'Lóð' },
     { value: 'EQUAL',  label: 'Jafnskipt' },
+    { value: 'INCOME', label: 'Tekjur' },
 ];
 const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label || type;
 
@@ -339,18 +340,18 @@ function GlobalCategoriesPanel({ user }) {
                 </Box>
                 <Button
                     variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    onClick={() => setShowForm(v => !v)}
+                    onClick={() => setShowForm(true)}
                 >
-                    {showForm ? 'Loka' : '+ Bæta við flokk'}
+                    + Bæta við flokk
                 </Button>
             </Box>
 
-            <Collapse in={showForm}>
-                <GlobalAddCategoryForm
-                    userId={user.id}
-                    onCreated={() => { setShowForm(false); loadCategories(); }}
-                />
-            </Collapse>
+            <GlobalCreateCategoryDialog
+                open={showForm}
+                onClose={() => setShowForm(false)}
+                userId={user.id}
+                onCreated={() => { setShowForm(false); loadCategories(); }}
+            />
 
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
 
@@ -365,13 +366,14 @@ function GlobalCategoriesPanel({ user }) {
                             <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                 <TableCell>Nafn</TableCell>
                                 <TableCell>Tegund</TableCell>
-                                <TableCell>Gjaldareikningur</TableCell>
+                                <TableCell>Bókhaldsreikningur</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {active.map(c => (
-                                <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} />
+                                <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories}
+                                    onUpdated={updated => setCategories(cats => cats.map(cat => cat.id === updated.id ? updated : cat))} />
                             ))}
                         </TableBody>
                     </Table>
@@ -394,13 +396,14 @@ function GlobalCategoriesPanel({ user }) {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                         <TableCell>Nafn</TableCell>
                                         <TableCell>Tegund</TableCell>
-                                        <TableCell>Gjaldareikningur</TableCell>
+                                        <TableCell>Bókhaldsreikningur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {disabled.map(c => (
-                                        <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} isDisabled />
+                                        <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} isDisabled
+                                            onUpdated={updated => setCategories(cats => cats.map(cat => cat.id === updated.id ? updated : cat))} />
                                     ))}
                                 </TableBody>
                             </Table>
@@ -412,11 +415,24 @@ function GlobalCategoriesPanel({ user }) {
     );
 }
 
-function GlobalAddCategoryForm({ userId, onCreated }) {
+function GlobalCreateCategoryDialog({ open, onClose, userId, onCreated }) {
     const [name, setName] = React.useState('');
     const [type, setType] = React.useState('');
+    const [expenseAccountId, setExpenseAccountId] = React.useState('');
+    const [incomeAccountId, setIncomeAccountId] = React.useState('');
+    const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [saving, setSaving] = React.useState(false);
     const [error, setError] = React.useState('');
+
+    React.useEffect(() => {
+        if (open) {
+            setName(''); setType(''); setExpenseAccountId(''); setIncomeAccountId(''); setError('');
+            fetch(`${API_URL}/AccountingKey/list`)
+                .then(r => r.ok ? r.json() : [])
+                .then(data => setAccountingKeys(data))
+                .catch(() => {});
+        }
+    }, [open]);
 
     const isValid = name.trim() && type;
 
@@ -427,15 +443,10 @@ function GlobalAddCategoryForm({ userId, onCreated }) {
             const resp = await fetch(`${API_URL}/Category`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, name: name.trim(), type }),
+                body: JSON.stringify({ user_id: userId, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
-            if (resp.ok) {
-                setName(''); setType('');
-                onCreated();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við skráningu.');
-            }
+            if (resp.ok) { onCreated(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við skráningu.'); }
         } catch {
             setError('Tenging við þjón mistókst.');
         } finally {
@@ -444,43 +455,61 @@ function GlobalAddCategoryForm({ userId, onCreated }) {
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
-            <TextField
-                label="Nafn flokks" value={name}
-                onChange={e => setName(e.target.value)}
-                size="small" fullWidth
-            />
-            <FormControl size="small" fullWidth>
-                <InputLabel>Tegund</InputLabel>
-                <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
-                    {CATEGORY_TYPES.map(t => (
-                        <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista flokk'}
-            </Button>
-        </Paper>
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle>Nýr flokkur</DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
+                <TextField label="Nafn flokks" value={name} onChange={e => setName(e.target.value)} size="small" fullWidth />
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Tegund</InputLabel>
+                    <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                        {CATEGORY_TYPES.map(t => (
+                            <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Bókhaldsreikningur (valfrjálst)</InputLabel>
+                    <Select value={expenseAccountId} label="Bókhaldsreikningur (valfrjálst)" onChange={e => setExpenseAccountId(e.target.value)}>
+                        <MenuItem value=""><em>Enginn</em></MenuItem>
+                        {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
+                            <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
+                    <Select value={incomeAccountId} label="Tekjureikningur (valfrjálst)" onChange={e => setIncomeAccountId(e.target.value)}>
+                        <MenuItem value=""><em>Enginn</em></MenuItem>
+                        {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
+                            <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista flokk'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
-function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
+function GlobalCategoryRow({ category, userId, onSaved, onUpdated, isDisabled }) {
     const [editOpen, setEditOpen] = React.useState(false);
+    const accountLabel = category.expense_account_number
+        ? `${category.expense_account_number} · ${category.expense_account_name}`
+        : category.income_account_number
+            ? `${category.income_account_number} · ${category.income_account_name}`
+            : '—';
     return (
         <>
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{category.name}</TableCell>
                 <TableCell>{typeLabel(category.type)}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
-                    {category.expense_account_number
-                        ? `${category.expense_account_number} · ${category.expense_account_name}`
-                        : '—'}
-                </TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>{accountLabel}</TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -495,7 +524,7 @@ function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
                 category={category}
                 userId={userId}
                 isDisabled={isDisabled}
-                onSaved={() => { setEditOpen(false); onSaved(); }}
+                onSaved={(updated) => { setEditOpen(false); if (updated) onUpdated(updated); onSaved(); }}
             />
         </>
     );
@@ -510,6 +539,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
     const [error, setError] = React.useState('');
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [expenseAccountId, setExpenseAccountId] = React.useState(category.expense_account_id || '');
+    const [incomeAccountId, setIncomeAccountId] = React.useState(category.income_account_id || '');
 
     React.useEffect(() => {
         if (open) {
@@ -517,6 +547,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             setType(category.type);
             setError('');
             setExpenseAccountId(category.expense_account_id || '');
+            setIncomeAccountId(category.income_account_id || '');
             fetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
@@ -533,13 +564,14 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null }),
+                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
             if (resp.ok) {
+                const updated = await resp.json();
                 if (isDisabled) {
                     await fetch(`${API_URL}/Category/enable/${category.id}?user_id=${userId}`, { method: 'PATCH' });
                 }
-                onSaved();
+                onSaved(updated);
             } else {
                 const data = await resp.json();
                 setError(data.detail || 'Villa við uppfærslu.');
@@ -583,14 +615,27 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         </Select>
                     </FormControl>
                     <FormControl size="small" fullWidth>
-                        <InputLabel>Gjaldareikningur (valfrjálst)</InputLabel>
+                        <InputLabel>Bókhaldsreikningur (valfrjálst)</InputLabel>
                         <Select
                             value={expenseAccountId}
-                            label="Gjaldareikningur (valfrjálst)"
+                            label="Bókhaldsreikningur (valfrjálst)"
                             onChange={e => setExpenseAccountId(e.target.value)}
                         >
                             <MenuItem value=""><em>Enginn</em></MenuItem>
                             {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
+                                <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
+                        <Select
+                            value={incomeAccountId}
+                            label="Tekjureikningur (valfrjálst)"
+                            onChange={e => setIncomeAccountId(e.target.value)}
+                        >
+                            <MenuItem value=""><em>Enginn</em></MenuItem>
+                            {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
                                 <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
                             ))}
                         </Select>

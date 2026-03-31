@@ -1,6 +1,7 @@
 import React from 'react';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Box, CircularProgress } from '@mui/material';
 import Login from './controlers/Login';
 import Logout from './controlers/Logout';
 import AuthCallback from './controlers/AuthCallback';
@@ -53,18 +54,33 @@ const theme = createTheme({
   },
 });
 
+// Renders children only after user + associations are resolved; shows spinner in place meanwhile.
+function ProtectedRoute({ children }) {
+  const { user, initializing } = React.useContext(UserContext);
+  if (initializing) return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <CircularProgress color="secondary" />
+    </Box>
+  );
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
 // App component and navigation
 function App() {
   const [user, setUser] = React.useState(null);
   const [associations, setAssociations] = React.useState([]);
   const [currentAssociation, setCurrentAssociationState] = React.useState(null);
   const [impersonating, setImpersonating] = React.useState(false);
+  const [initializing, setInitializing] = React.useState(true);
 
-  //Load any saved user from local storage
+  // Load saved user from localStorage synchronously on mount
   React.useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
+    } else {
+      setInitializing(false); // No user — nothing to wait for
     }
   }, []);
 
@@ -90,7 +106,8 @@ function App() {
         setImpersonating(!!resolved && !isOwn);
         if (resolved) localStorage.setItem('currentAssociation', JSON.stringify(resolved));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setInitializing(false)); // Associations resolved (or failed) — ready to render
   }, [user]);
 
   const setCurrentAssociation = (assoc) => {
@@ -112,7 +129,7 @@ function App() {
   const assocParam = currentAssociation ? `?as=${currentAssociation.id}` : '';
 
   return (
-    <UserContext.Provider value={{ user, setUser, associations, currentAssociation, setCurrentAssociation, stopImpersonating, impersonating, assocParam }}>
+    <UserContext.Provider value={{ user, setUser, associations, currentAssociation, setCurrentAssociation, stopImpersonating, impersonating, assocParam, initializing }}>
       <ThemeProvider theme={theme}>
         <Router>
           <Routes>
@@ -121,20 +138,20 @@ function App() {
             <Route path="/logout" element={<Logout />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/dashboard" element={<Navigate to="/husfelag" replace />} />
-            <Route path="/houseassociation" element={<HouseAssociation />} />
-            <Route path="/husfelag" element={<AssociationPage />} />
-            <Route path="/ibudir" element={<ApartmentsPage />} />
-            <Route path="/ibudir/innflutningur" element={<ApartmentImportPage />} />
-            <Route path="/eigendur" element={<OwnersPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/aaetlun" element={<BudgetPage />} />
-            <Route path="/aaetlun/nyr" element={<BudgetWizardPage />} />
-            <Route path="/flokkar" element={<CategoriesPage />} />
-            <Route path="/faerslur" element={<TransactionsPage />} />
-            <Route path="/flokkunarreglur" element={<CategorisationRulesPage />} />
-            <Route path="/skyrslur" element={<ReportPage />} />
-            <Route path="/innheimta" element={<CollectionPage />} />
-            <Route path="/superadmin" element={<SuperAdminPage />} />
+            <Route path="/houseassociation" element={<ProtectedRoute><HouseAssociation /></ProtectedRoute>} />
+            <Route path="/husfelag" element={<ProtectedRoute><AssociationPage /></ProtectedRoute>} />
+            <Route path="/ibudir" element={<ProtectedRoute><ApartmentsPage /></ProtectedRoute>} />
+            <Route path="/ibudir/innflutningur" element={<ProtectedRoute><ApartmentImportPage /></ProtectedRoute>} />
+            <Route path="/eigendur" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/aaetlun" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
+            <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
+            <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
+            <Route path="/faerslur" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+            <Route path="/flokkunarreglur" element={<ProtectedRoute><CategorisationRulesPage /></ProtectedRoute>} />
+            <Route path="/skyrslur" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+            <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
+            <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
           </Routes>
         </Router> 
       </ThemeProvider>
