@@ -1494,11 +1494,69 @@ class BudgetWizardView(APIView):
 
 class CollectionView(APIView):
     def get(self, request, user_id):
-        """GET /Collection/{user_id} — Annual and monthly amounts per apartment based on active budget."""
+        """GET /Collection/{user_id}
+
+        ?month=M&year=Y  — stored Collection records + unmatched income transactions
+        ?summary=1       — computed-on-the-fly annual/monthly per apartment (legacy)
+        (no params)      — same as ?summary=1
+        """
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
 
+        month_param = request.query_params.get("month")
+        year_param = request.query_params.get("year")
+
+        if month_param and year_param:
+            return self._month_mode(request, association, int(month_param), int(year_param))
+        return self._summary_mode(association)
+
+    def _month_mode(self, request, association, month, year):
+        """Return stored Collection records for the given month + unmatched income transactions."""
+        collections = (
+            Collection.objects
+            .filter(budget__association=association, budget__year=year, budget__is_active=True, month=month)
+            .select_related("apartment", "payer", "paid_transaction")
+            .order_by("apartment__anr")
+        )
+
+        rows = []
+        for col in collections:
+            rows.append({
+                "collection_id": col.id,
+                "apartment_id": col.apartment_id,
+                "anr": col.apartment.anr,
+                "payer_name": col.payer.name if col.payer else None,
+                "payer_kennitala": col.payer.kennitala if col.payer else None,
+                "amount_total": str(col.amount_total),
+                "status": col.status,
+                "paid_transaction_id": col.paid_transaction_id,
+                "paid_transaction_date": str(col.paid_transaction.date) if col.paid_transaction else None,
+            })
+
+        # Unmatched: positive income transactions in this month, not RECONCILED, not linked to any collection
+        unmatched_qs = Transaction.objects.filter(
+            bank_account__association=association,
+            date__year=year,
+            date__month=month,
+            amount__gt=0,
+        ).exclude(status=TransactionStatus.RECONCILED).filter(collection_payment__isnull=True)
+
+        unmatched = [
+            {
+                "transaction_id": tx.id,
+                "date": str(tx.date),
+                "description": tx.description,
+                "amount": str(tx.amount),
+                "payer_kennitala": tx.payer_kennitala,
+            }
+            for tx in unmatched_qs.order_by("date")
+        ]
+
+        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched})
+
+    def _summary_mode(self, association):
+        """Computed-on-the-fly annual/monthly amounts per apartment (legacy behaviour)."""
         year = datetime.date.today().year
         budget = Budget.objects.filter(
             association=association, year=year, is_active=True
@@ -1507,7 +1565,6 @@ class CollectionView(APIView):
         if not budget:
             return Response([], status=status.HTTP_200_OK)
 
-        # Sum budget amounts by category type
         totals = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
         for item in budget.items.all():
             if item.category and item.category.type in totals:
@@ -1517,7 +1574,6 @@ class CollectionView(APIView):
             "ownerships__user"
         ).order_by("anr")
 
-        # Sum shares across all active apartments per type (should each be 100)
         share_sums = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
         apt_list = list(apartments)
         for apt in apt_list:
@@ -1558,7 +1614,6 @@ class CollectionView(APIView):
                 "monthly": monthly,
             })
 
-        # Budget totals per type (only for types that have budget items)
         budget_summary = [
             {"type": t, "budget": totals[t], "share_sum": share_sums[t]}
             for t in ("SHARED", "SHARE2", "SHARE3", "EQUAL")

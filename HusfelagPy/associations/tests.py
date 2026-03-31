@@ -2098,3 +2098,94 @@ class CollectionMatchViewTest(TestCase):
         self.tx.save()
         resp = self._post()
         self.assertEqual(resp.status_code, 400)
+
+
+class CollectionViewMonthTest(TestCase):
+    def setUp(self):
+        import datetime as dt
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="6666666669", name="Admin")
+        self.payer = User.objects.create(kennitala="7777777771", name="Greiðandi")
+        self.association = Association.objects.create(
+            ssn="5050505050", name="Mánuðarfélag",
+            address="Mánuðargata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000006"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000011",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer,
+            share=Decimal("100"), is_payer=True, deleted=False
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+        # Unmatched income transaction — positive, not RECONCILED, not linked
+        self.unmatched_tx = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 12),
+            amount=Decimal("41000"),
+            description="Húsgjöld mars - Sigríður",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+        # Expense transaction — should NOT appear in unmatched
+        Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 5),
+            amount=Decimal("-10000"),
+            description="Raf",
+            reference="",
+            status=TransactionStatus.CATEGORISED,
+        )
+
+    def test_month_mode_returns_collection_rows(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["month"], 3)
+        self.assertEqual(data["year"], 2026)
+        self.assertEqual(len(data["rows"]), 1)
+        row = data["rows"][0]
+        self.assertEqual(row["collection_id"], self.collection.id)
+        self.assertEqual(row["status"], "PENDING")
+        self.assertIsNone(row["paid_transaction_id"])
+
+    def test_month_mode_returns_unmatched_transactions(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        data = resp.json()
+        self.assertEqual(len(data["unmatched"]), 1)
+        self.assertEqual(data["unmatched"][0]["transaction_id"], self.unmatched_tx.id)
+
+    def test_month_mode_excludes_expenses_from_unmatched(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        data = resp.json()
+        amounts = [float(u["amount"]) for u in data["unmatched"]]
+        self.assertNotIn(-10000.0, amounts)
+
+    def test_summary_mode_still_returns_computed_rows(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?summary=1&as={self.association.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("rows", data)
+        self.assertIn("budget_summary", data)
