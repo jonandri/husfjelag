@@ -77,7 +77,7 @@ function CollectionPage() {
     };
 
     const handleMatch = (collectionId, transactionId) => {
-        if (!transactionId) return;
+        if (!collectionId || !transactionId) return;
         setMatchError('');
         fetch(`${API_URL}/Collection/match`, {
             method: 'POST',
