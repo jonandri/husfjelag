@@ -12,7 +12,7 @@ from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
     AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
-    CategoryRule,
+    CategoryRule, Collection, CollectionStatus,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
@@ -957,6 +957,39 @@ class ImportDetectView(APIView):
         return Response(result)
 
 
+def _auto_match_collections(transactions, association):
+    """Auto-match positive income transactions to PENDING collection items by payer kennitala."""
+    to_update_txs = []
+    to_update_cols = []
+    for tx in transactions:
+        if tx.amount <= 0 or not tx.payer_kennitala:
+            continue
+        try:
+            payer = User.objects.get(kennitala=tx.payer_kennitala)
+        except User.DoesNotExist:
+            continue
+        col = Collection.objects.filter(
+            budget__association=association,
+            budget__year=tx.date.year,
+            budget__is_active=True,
+            payer=payer,
+            month=tx.date.month,
+            status=CollectionStatus.PENDING,
+            paid_transaction__isnull=True,
+        ).first()
+        if not col:
+            continue
+        col.paid_transaction = tx
+        col.status = CollectionStatus.PAID
+        tx.status = TransactionStatus.RECONCILED
+        to_update_cols.append(col)
+        to_update_txs.append(tx)
+    if to_update_cols:
+        Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
+    if to_update_txs:
+        Transaction.objects.bulk_update(to_update_txs, ["status"])
+
+
 class ImportConfirmView(APIView):
     def post(self, request):
         """POST /Import/confirm — bulk-create transactions from confirmed rows."""
@@ -1012,11 +1045,13 @@ class ImportConfirmView(APIView):
                 amount=amount,
                 description=description,
                 reference=str(row.get("reference") or ""),
+                payer_kennitala=str(row.get("payer_kennitala") or ""),
                 category=cat,
                 status=tx_status,
             ))
 
-        Transaction.objects.bulk_create(transactions)
+        created_transactions = Transaction.objects.bulk_create(transactions)
+        _auto_match_collections(created_transactions, association)
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
 
 

@@ -27,13 +27,28 @@ def parse_icelandic_amount(val) -> Decimal:
     return Decimal(s)
 
 
+_ICELANDIC_MONTHS = {
+    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'maí': 5, 'jún': 6,
+    'júl': 7, 'ág': 8, 'sep': 9, 'okt': 10, 'nóv': 11, 'des': 12,
+}
+
+
 def parse_icelandic_date(val) -> datetime.date:
-    """Parse date value. Handles datetime objects (from openpyxl) and DD.MM.YYYY strings."""
+    """Parse date value. Handles datetime objects (from openpyxl), DD.MM.YYYY strings,
+    and Icelandic month-name format like '1. jan. 2026'."""
     if isinstance(val, datetime.datetime):
         return val.date()
     if isinstance(val, datetime.date):
         return val
-    return datetime.datetime.strptime(str(val).strip(), "%d.%m.%Y").date()
+    s = str(val).strip()
+    # Try Icelandic named-month format: "1. jan. 2026" or "1. jan 2026"
+    m = re.match(r'^(\d{1,2})\.\s+([a-záðéíóúýþæö]+)\.?\s+(\d{4})$', s, re.IGNORECASE)
+    if m:
+        day, month_str, year = int(m.group(1)), m.group(2).lower()[:3], int(m.group(3))
+        month = _ICELANDIC_MONTHS.get(month_str)
+        if month:
+            return datetime.date(year, month, day)
+    return datetime.datetime.strptime(s, "%d.%m.%Y").date()
 
 
 def _load_sheet(file_obj, ext):
@@ -80,10 +95,11 @@ def parse_arion(file_obj, ext) -> dict:
         row = dict(zip(headers, raw_row))
         try:
             result.append({
-                'date':        parse_icelandic_date(row['Dagsetning']),
-                'amount':      parse_icelandic_amount(row['Upphæð']),
-                'description': str(row.get('Skýring') or row.get('Texti') or '').strip(),
-                'reference':   str(row.get('Seðilnúmer') or '').strip(),
+                'date':            parse_icelandic_date(row['Dagsetning']),
+                'amount':          parse_icelandic_amount(row['Upphæð']),
+                'description':     str(row.get('Skýring') or row.get('Texti') or '').strip(),
+                'reference':       str(row.get('Seðilnúmer') or '').strip(),
+                'payer_kennitala': str(row.get('Kennitala viðtakanda eða greiðanda') or '').strip(),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -116,10 +132,11 @@ def parse_landsbankinn(file_obj, ext) -> dict:
             texti = str(row.get('Texti') or '').strip()
             description = texti if texti else str(row.get('Skýring greiðslu') or '').strip()
             result.append({
-                'date':        parse_icelandic_date(row['Dags']),
-                'amount':      parse_icelandic_amount(row['Upphæð']),
-                'description': description,
-                'reference':   str(row.get('Tnr/Seðilnr.') or '').strip(),
+                'date':            parse_icelandic_date(row['Dags']),
+                'amount':          parse_icelandic_amount(row['Upphæð']),
+                'description':     description,
+                'reference':       str(row.get('Tnr/Seðilnr.') or '').strip(),
+                'payer_kennitala': str(row.get('Kennitala') or '').strip(),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -160,6 +177,8 @@ def parse_islandsbanki(file_obj, ext) -> dict:
         description_col = 'Mótaðili'
         date_col = 'Dags.'
 
+    kennitala_col = '' if is_new else 'Kennitala móttakanda'
+
     result = []
     for raw_row in data_rows:
         if not any(v for v in raw_row if v is not None):
@@ -167,10 +186,11 @@ def parse_islandsbanki(file_obj, ext) -> dict:
         row = dict(zip(headers, raw_row))
         try:
             result.append({
-                'date':        parse_icelandic_date(row[date_col]),
-                'amount':      parse_icelandic_amount(row[amount_col]),
-                'description': str(row.get(description_col) or '').strip(),
-                'reference':   str(row.get('Tilvísun') or '').strip(),
+                'date':            parse_icelandic_date(row[date_col]),
+                'amount':          parse_icelandic_amount(row[amount_col]),
+                'description':     str(row.get(description_col) or '').strip(),
+                'reference':       str(row.get('Tilvísun') or '').strip(),
+                'payer_kennitala': str(row.get(kennitala_col) or '').strip() if kennitala_col else '',
             })
         except (KeyError, ValueError, InvalidOperation):
             continue

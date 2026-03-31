@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
-from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess
+from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, ApartmentOwnership, Collection, CollectionStatus
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1778,3 +1778,168 @@ class ReportViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("100000"))
+
+
+class ImporterKennitalaTest(TestCase):
+    """Verify each parser extracts payer_kennitala from the correct column."""
+
+    def _make_xlsx(self, rows):
+        """Helper: build an in-memory xlsx with the given list-of-lists."""
+        import io
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        for r in rows:
+            ws.append(r)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    def test_arion_extracts_kennitala(self):
+        from .importers import parse_arion
+        rows = [
+            ["Arion banki"],
+            ["0133-26-111111"],
+            [],
+            ["Dagsetning", "Upphæð", "Texti", "Seðilnúmer", "Kennitala viðtakanda eða greiðanda"],
+            ["1. jan. 2026", "45.000", "Húsgjöld", "12345", "1234567890"],
+        ]
+        result = parse_arion(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "1234567890")
+
+    def test_landsbankinn_extracts_kennitala(self):
+        from .importers import parse_landsbankinn
+        rows = [
+            ["Landsbankinn"],
+            ["Færslur á reikningi 0133-26-019111 ..."],
+            ["2026"],
+            [],
+            ["Dags", "Upphæð", "Texti", "Tnr/Seðilnr.", "Kennitala"],
+            ["01.01.2026", "45.000", "Húsgjöld", "99", "0987654321"],
+        ]
+        result = parse_landsbankinn(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "0987654321")
+
+    def test_islandsbanki_old_extracts_kennitala(self):
+        from .importers import parse_islandsbanki
+        rows = [
+            [],
+            [],
+            [],
+            [],
+            ["Dags.", "Upph.ISK", "Mótaðili", "Tilvísun", "Kennitala móttakanda"],
+            ["01.01.2026", "45.000", "Húsgjöld", "REF1", "5555555555"],
+        ]
+        result = parse_islandsbanki(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "5555555555")
+
+    def test_islandsbanki_new_returns_empty_kennitala(self):
+        from .importers import parse_islandsbanki
+        # New format: A4 == "Reikningsnúmer", account in B4, headers on row 12
+        rows = [
+            [],
+            [],
+            [],
+            ["Reikningsnúmer", "0101-26-123456"],
+            [], [], [], [], [], [], [],
+            ["Dagsetning", "Upphæð", "Mótaðili", "Tilvísun"],
+            ["01.01.2026", "45.000", "Húsgjöld", "REF1"],
+        ]
+        result = parse_islandsbanki(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "")
+
+
+class AutoMatchTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1111111119", name="Admin")
+        self.payer_user = User.objects.create(kennitala="1234567890", name="Jón Jónsson")
+        self.association = Association.objects.create(
+            ssn="2020202020", name="Próffélag",
+            address="Prófgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000001"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101",
+            share=Decimal("100"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer_user,
+            share=Decimal("100"), is_payer=True, deleted=False,
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer_user,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+
+    def _import_rows(self, rows):
+        """POST /Import/confirm with given rows for self.bank."""
+        return self.client.post(
+            "/Import/confirm",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": self.bank.id,
+                "rows": rows,
+            }),
+            content_type="application/json",
+        )
+
+    def test_matching_kennitala_auto_matches(self):
+        from decimal import Decimal
+        resp = self._import_rows([{
+            "date": "2026-03-10",
+            "amount": "45000",
+            "description": "Húsgjöld",
+            "reference": "",
+            "payer_kennitala": "1234567890",
+        }])
+        self.assertEqual(resp.status_code, 201)
+        tx = Transaction.objects.get(bank_account=self.bank)
+        self.assertEqual(tx.payer_kennitala, "1234567890")
+        self.assertEqual(tx.status, TransactionStatus.RECONCILED)
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PAID)
+        self.assertEqual(self.collection.paid_transaction_id, tx.id)
+
+    def test_unknown_kennitala_stays_unmatched(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "45000",
+            "description": "Húsgjöld", "reference": "",
+            "payer_kennitala": "9999999999",
+        }])
+        tx = Transaction.objects.get(bank_account=self.bank)
+        self.assertNotEqual(tx.status, TransactionStatus.RECONCILED)
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+    def test_negative_amount_ignored(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "-45000",
+            "description": "Útgreiðsla", "reference": "",
+            "payer_kennitala": "1234567890",
+        }])
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+    def test_empty_kennitala_stays_unmatched(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "45000",
+            "description": "Húsgjöld", "reference": "",
+            "payer_kennitala": "",
+        }])
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
