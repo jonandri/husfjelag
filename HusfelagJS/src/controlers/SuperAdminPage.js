@@ -365,6 +365,7 @@ function GlobalCategoriesPanel({ user }) {
                             <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                 <TableCell>Nafn</TableCell>
                                 <TableCell>Tegund</TableCell>
+                                <TableCell>Reikningur</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -393,6 +394,7 @@ function GlobalCategoriesPanel({ user }) {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                         <TableCell>Nafn</TableCell>
                                         <TableCell>Tegund</TableCell>
+                                        <TableCell>Reikningur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
@@ -474,6 +476,9 @@ function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{category.name}</TableCell>
                 <TableCell>{typeLabel(category.type)}</TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
+                    {category.expense_account_number || '—'}
+                </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -503,7 +508,6 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
     const [error, setError] = React.useState('');
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [expenseAccountId, setExpenseAccountId] = React.useState(category.expense_account_id || '');
-    const [incomeAccountId, setIncomeAccountId] = React.useState(category.income_account_id || '');
 
     React.useEffect(() => {
         if (open) {
@@ -511,7 +515,6 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             setType(category.type);
             setError('');
             setExpenseAccountId(category.expense_account_id || '');
-            setIncomeAccountId(category.income_account_id || '');
             fetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
@@ -528,7 +531,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
+                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null }),
             });
             if (resp.ok) {
                 if (isDisabled) {
@@ -563,7 +566,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
         <>
             <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
                 <DialogTitle>{isDisabled ? 'Óvirkur flokkur' : 'Breyta flokk'}</DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
                     <TextField
                         label="Nafn flokks" value={name}
                         onChange={e => setName(e.target.value)}
@@ -586,19 +589,6 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         >
                             <MenuItem value=""><em>Enginn</em></MenuItem>
                             {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
-                                <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <FormControl size="small" fullWidth>
-                        <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
-                        <Select
-                            value={incomeAccountId}
-                            label="Tekjureikningur (valfrjálst)"
-                            onChange={e => setIncomeAccountId(e.target.value)}
-                        >
-                            <MenuItem value=""><em>Enginn</em></MenuItem>
-                            {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
                                 <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
                             ))}
                         </Select>
@@ -635,7 +625,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                 <DialogTitle>Óvirkja flokk?</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Flokkurinn verður falinn í áætlunarleiðsögn. Núverandi áætlanir haldast óbreyttar.
+                        Flokkurinn verður falinn í áætlunargerð. Núverandi áætlanir haldast óbreyttar.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
