@@ -139,7 +139,7 @@ class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
         fields = [
-            "id", "date", "amount", "description", "reference",
+            "id", "date", "amount", "description", "reference", "payer_kennitala",
             "status", "created_at", "bank_account", "category",
         ]
 

@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
-from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess
+from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, BudgetItem, ApartmentOwnership, Collection, CollectionStatus
 from .scraper import scrape_hms_apartments
 import json
 import logging
@@ -1778,3 +1778,435 @@ class ReportViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(Decimal(data["income_uncategorised"]), Decimal("100000"))
+
+
+class ImporterKennitalaTest(TestCase):
+    """Verify each parser extracts payer_kennitala from the correct column."""
+
+    def _make_xlsx(self, rows):
+        """Helper: build an in-memory xlsx with the given list-of-lists."""
+        import io
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        for r in rows:
+            ws.append(r)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    def test_arion_extracts_kennitala(self):
+        from .importers import parse_arion
+        rows = [
+            ["Arion banki"],
+            ["0133-26-111111"],
+            [],
+            ["Dagsetning", "Upphæð", "Texti", "Seðilnúmer", "Kennitala viðtakanda eða greiðanda"],
+            ["1. jan. 2026", "45.000", "Húsgjöld", "12345", "1234567890"],
+        ]
+        result = parse_arion(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "1234567890")
+
+    def test_landsbankinn_extracts_kennitala(self):
+        from .importers import parse_landsbankinn
+        rows = [
+            ["Landsbankinn"],
+            ["Færslur á reikningi 0133-26-019111 ..."],
+            ["2026"],
+            [],
+            ["Dags", "Upphæð", "Texti", "Tnr/Seðilnr.", "Kennitala"],
+            ["01.01.2026", "45.000", "Húsgjöld", "99", "0987654321"],
+        ]
+        result = parse_landsbankinn(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "0987654321")
+
+    def test_islandsbanki_old_extracts_kennitala(self):
+        from .importers import parse_islandsbanki
+        rows = [
+            [],
+            [],
+            [],
+            [],
+            ["Dags.", "Upph.ISK", "Mótaðili", "Tilvísun", "Kennitala móttakanda"],
+            ["01.01.2026", "45.000", "Húsgjöld", "REF1", "5555555555"],
+        ]
+        result = parse_islandsbanki(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "5555555555")
+
+    def test_islandsbanki_new_returns_empty_kennitala(self):
+        from .importers import parse_islandsbanki
+        # New format: A4 == "Reikningsnúmer", account in B4, headers on row 12
+        rows = [
+            [],
+            [],
+            [],
+            ["Reikningsnúmer", "0101-26-123456"],
+            [], [], [], [], [], [], [],
+            ["Dagsetning", "Upphæð", "Mótaðili", "Tilvísun"],
+            ["01.01.2026", "45.000", "Húsgjöld", "REF1"],
+        ]
+        result = parse_islandsbanki(self._make_xlsx(rows), "xlsx")
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(result["rows"][0]["payer_kennitala"], "")
+
+
+class AutoMatchTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="1111111119", name="Admin")
+        self.payer_user = User.objects.create(kennitala="1234567890", name="Jón Jónsson")
+        self.association = Association.objects.create(
+            ssn="2020202020", name="Próffélag",
+            address="Prófgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000001"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101",
+            share=Decimal("100"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer_user,
+            share=Decimal("100"), is_payer=True, deleted=False,
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer_user,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+
+    def _import_rows(self, rows):
+        """POST /Import/confirm with given rows for self.bank."""
+        return self.client.post(
+            "/Import/confirm",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "bank_account_id": self.bank.id,
+                "rows": rows,
+            }),
+            content_type="application/json",
+        )
+
+    def test_matching_kennitala_auto_matches(self):
+        from decimal import Decimal
+        resp = self._import_rows([{
+            "date": "2026-03-10",
+            "amount": "45000",
+            "description": "Húsgjöld",
+            "reference": "",
+            "payer_kennitala": "1234567890",
+        }])
+        self.assertEqual(resp.status_code, 201)
+        tx = Transaction.objects.get(bank_account=self.bank)
+        self.assertEqual(tx.payer_kennitala, "1234567890")
+        self.assertEqual(tx.status, TransactionStatus.RECONCILED)
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PAID)
+        self.assertEqual(self.collection.paid_transaction_id, tx.id)
+
+    def test_unknown_kennitala_stays_unmatched(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "45000",
+            "description": "Húsgjöld", "reference": "",
+            "payer_kennitala": "9999999999",
+        }])
+        tx = Transaction.objects.get(bank_account=self.bank)
+        self.assertNotEqual(tx.status, TransactionStatus.RECONCILED)
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+    def test_negative_amount_ignored(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "-45000",
+            "description": "Útgreiðsla", "reference": "",
+            "payer_kennitala": "1234567890",
+        }])
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+    def test_empty_kennitala_stays_unmatched(self):
+        self._import_rows([{
+            "date": "2026-03-10", "amount": "45000",
+            "description": "Húsgjöld", "reference": "",
+            "payer_kennitala": "",
+        }])
+        self.collection.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PENDING)
+
+
+class CollectionGenerateViewTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="3333333339", name="Admin")
+        self.payer1 = User.objects.create(kennitala="1111111111", name="Greiðandi 1")
+        self.payer2 = User.objects.create(kennitala="2222222222", name="Greiðandi 2")
+        self.association = Association.objects.create(
+            ssn="3030303030", name="Kynningarfélag",
+            address="Kynningargata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        cat = Category.objects.create(name="Sameiginlegt", type="EQUAL")
+        BudgetItem.objects.create(budget=self.budget, category=cat, amount=Decimal("600000"))
+        self.apt1 = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000001",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("50"),
+        )
+        self.apt2 = Apartment.objects.create(
+            association=self.association, anr="0102", fnr="F000002",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("50"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=self.apt1, user=self.payer1, share=Decimal("100"), is_payer=True, deleted=False
+        )
+        ApartmentOwnership.objects.create(
+            apartment=self.apt2, user=self.payer2, share=Decimal("100"), is_payer=True, deleted=False
+        )
+
+    def _post(self, month=3, year=2026):
+        return self.client.post(
+            "/Collection/generate",
+            data=json.dumps({"user_id": self.user.id, "month": month, "year": year}),
+            content_type="application/json",
+        )
+
+    def test_generates_correct_number_of_items(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["created"], 2)
+        self.assertEqual(data["skipped"], 0)
+        self.assertEqual(Collection.objects.filter(budget=self.budget, month=3).count(), 2)
+
+    def test_is_idempotent(self):
+        self._post()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertEqual(data["skipped"], 2)
+        self.assertEqual(Collection.objects.filter(budget=self.budget, month=3).count(), 2)
+
+    def test_404_no_active_budget(self):
+        resp = self.client.post(
+            "/Collection/generate",
+            data=json.dumps({"user_id": self.user.id, "month": 3, "year": 2025}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_payer_from_current_is_payer_ownership(self):
+        from decimal import Decimal
+        self._post()
+        col = Collection.objects.get(budget=self.budget, apartment=self.apt1, month=3)
+        self.assertEqual(col.payer, self.payer1)
+
+    def test_amounts_calculated_correctly(self):
+        from decimal import Decimal
+        self._post()
+        col = Collection.objects.get(budget=self.budget, apartment=self.apt1, month=3)
+        # Budget 600000 EQUAL, apt1 share_eq=50 → 600000 * 50 / 100 = 300000
+        self.assertEqual(col.amount_equal, Decimal("300000"))
+        self.assertEqual(col.amount_total, Decimal("300000"))
+
+
+class CollectionMatchViewTest(TestCase):
+    def setUp(self):
+        from decimal import Decimal
+        import datetime as dt
+        self.client = Client()
+        self.user = User.objects.create(kennitala="4444444449", name="Admin")
+        self.payer = User.objects.create(kennitala="5555555555", name="Greiðandi")
+        self.association = Association.objects.create(
+            ssn="4040404040", name="Samræmisfélag",
+            address="Samræmisgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000004"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000003",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer, share=Decimal("100"), is_payer=True, deleted=False
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+        self.tx = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 10),
+            amount=Decimal("45000"),
+            description="Húsgjöld",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+
+    def _post(self, collection_id=None, transaction_id=None):
+        return self.client.post(
+            "/Collection/match",
+            data=json.dumps({
+                "user_id": self.user.id,
+                "collection_id": collection_id or self.collection.id,
+                "transaction_id": transaction_id or self.tx.id,
+            }),
+            content_type="application/json",
+        )
+
+    def test_manual_match_sets_paid_and_reconciled(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.collection.refresh_from_db()
+        self.tx.refresh_from_db()
+        self.assertEqual(self.collection.status, CollectionStatus.PAID)
+        self.assertEqual(self.collection.paid_transaction_id, self.tx.id)
+        self.assertEqual(self.tx.status, TransactionStatus.RECONCILED)
+
+    def test_returns_400_if_collection_already_paid(self):
+        self.collection.status = CollectionStatus.PAID
+        self.collection.paid_transaction = self.tx
+        self.collection.save()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+
+    def test_returns_400_if_transaction_not_positive(self):
+        from decimal import Decimal
+        self.tx.amount = Decimal("-100")
+        self.tx.save()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+
+    def test_returns_403_for_cross_association_transaction(self):
+        from decimal import Decimal
+        # Create a separate association and its bank account
+        other_assoc = Association.objects.create(
+            ssn="9090909090", name="Annað félag",
+            address="Önnur gata 1", postal_code="101", city="Reykjavík"
+        )
+        other_bank = BankAccount.objects.create(
+            association=other_assoc, name="Annað bank", account_number="0999-26-999999"
+        )
+        other_tx = Transaction.objects.create(
+            bank_account=other_bank,
+            date=__import__('datetime').date(2026, 3, 10),
+            amount=Decimal("45000"),
+            description="Greiðsla",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+        resp = self._post(transaction_id=other_tx.id)
+        self.assertEqual(resp.status_code, 403)
+
+
+class CollectionViewMonthTest(TestCase):
+    def setUp(self):
+        import datetime as dt
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="6666666669", name="Admin")
+        self.payer = User.objects.create(kennitala="7777777771", name="Greiðandi")
+        self.association = Association.objects.create(
+            ssn="5050505050", name="Mánuðarfélag",
+            address="Mánuðargata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-000006"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000011",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer,
+            share=Decimal("100"), is_payer=True, deleted=False
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("45000"),
+            amount_total=Decimal("45000"), status=CollectionStatus.PENDING,
+        )
+        # Unmatched income transaction — positive, not RECONCILED, not linked
+        self.unmatched_tx = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 12),
+            amount=Decimal("41000"),
+            description="Húsgjöld mars - Sigríður",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+        # Expense transaction — should NOT appear in unmatched
+        Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2026, 3, 5),
+            amount=Decimal("-10000"),
+            description="Raf",
+            reference="",
+            status=TransactionStatus.CATEGORISED,
+        )
+
+    def test_month_mode_returns_collection_rows(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["month"], 3)
+        self.assertEqual(data["year"], 2026)
+        self.assertEqual(len(data["rows"]), 1)
+        row = data["rows"][0]
+        self.assertEqual(row["collection_id"], self.collection.id)
+        self.assertEqual(row["status"], "PENDING")
+        self.assertIsNone(row["paid_transaction_id"])
+
+    def test_month_mode_returns_unmatched_transactions(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        data = resp.json()
+        self.assertEqual(len(data["unmatched"]), 1)
+        self.assertEqual(data["unmatched"][0]["transaction_id"], self.unmatched_tx.id)
+
+    def test_month_mode_excludes_expenses_from_unmatched(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?month=3&year=2026&as={self.association.id}"
+        )
+        data = resp.json()
+        amounts = [float(u["amount"]) for u in data["unmatched"]]
+        self.assertNotIn(-10000.0, amounts)
+
+    def test_summary_mode_still_returns_computed_rows(self):
+        resp = self.client.get(
+            f"/Collection/{self.user.id}?summary=1&as={self.association.id}"
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("rows", data)
+        self.assertIn("budget_summary", data)

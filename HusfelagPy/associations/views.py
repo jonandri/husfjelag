@@ -12,7 +12,7 @@ from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
     AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
-    CategoryRule,
+    CategoryRule, Collection, CollectionStatus,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
@@ -957,6 +957,39 @@ class ImportDetectView(APIView):
         return Response(result)
 
 
+def _auto_match_collections(transactions, association):
+    """Auto-match positive income transactions to PENDING collection items by payer kennitala."""
+    to_update_txs = []
+    to_update_cols = []
+    for tx in transactions:
+        if tx.amount <= 0 or not tx.payer_kennitala:
+            continue
+        try:
+            payer = User.objects.get(kennitala=tx.payer_kennitala)
+        except User.DoesNotExist:
+            continue
+        col = Collection.objects.filter(
+            budget__association=association,
+            budget__year=tx.date.year,
+            budget__is_active=True,
+            payer=payer,
+            month=tx.date.month,
+            status=CollectionStatus.PENDING,
+            paid_transaction__isnull=True,
+        ).first()
+        if not col:
+            continue
+        col.paid_transaction = tx
+        col.status = CollectionStatus.PAID
+        tx.status = TransactionStatus.RECONCILED
+        to_update_cols.append(col)
+        to_update_txs.append(tx)
+    if to_update_cols:
+        with transaction.atomic():
+            Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
+            Transaction.objects.bulk_update(to_update_txs, ["status"])
+
+
 class ImportConfirmView(APIView):
     def post(self, request):
         """POST /Import/confirm — bulk-create transactions from confirmed rows."""
@@ -1012,11 +1045,13 @@ class ImportConfirmView(APIView):
                 amount=amount,
                 description=description,
                 reference=str(row.get("reference") or ""),
+                payer_kennitala=str(row.get("payer_kennitala") or ""),
                 category=cat,
                 status=tx_status,
             ))
 
-        Transaction.objects.bulk_create(transactions)
+        created_transactions = Transaction.objects.bulk_create(transactions)
+        _auto_match_collections(created_transactions, association)
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
 
 
@@ -1459,11 +1494,76 @@ class BudgetWizardView(APIView):
 
 class CollectionView(APIView):
     def get(self, request, user_id):
-        """GET /Collection/{user_id} — Annual and monthly amounts per apartment based on active budget."""
+        """GET /Collection/{user_id}
+
+        ?month=M&year=Y  — stored Collection records + unmatched income transactions
+        ?summary=1       — computed-on-the-fly annual/monthly per apartment (legacy)
+        (no params)      — same as ?summary=1
+        """
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
 
+        month_param = request.query_params.get("month")
+        year_param = request.query_params.get("year")
+
+        if month_param and year_param:
+            try:
+                month = int(month_param)
+                year = int(year_param)
+            except (ValueError, TypeError):
+                return Response({"detail": "month og year verða að vera tölur."}, status=status.HTTP_400_BAD_REQUEST)
+            if not (1 <= month <= 12):
+                return Response({"detail": "month verður að vera á bilinu 1–12."}, status=status.HTTP_400_BAD_REQUEST)
+            return self._month_mode(association, month, year)
+        return self._summary_mode(association)
+
+    def _month_mode(self, association, month, year):
+        """Return stored Collection records for the given month + unmatched income transactions."""
+        collections = (
+            Collection.objects
+            .filter(budget__association=association, budget__year=year, budget__is_active=True, month=month)
+            .select_related("apartment", "payer", "paid_transaction")
+            .order_by("apartment__anr")
+        )
+
+        rows = []
+        for col in collections:
+            rows.append({
+                "collection_id": col.id,
+                "apartment_id": col.apartment_id,
+                "anr": col.apartment.anr,
+                "payer_name": col.payer.name if col.payer else None,
+                "payer_kennitala": col.payer.kennitala if col.payer else None,
+                "amount_total": str(col.amount_total),
+                "status": col.status,
+                "paid_transaction_id": col.paid_transaction_id,
+                "paid_transaction_date": str(col.paid_transaction.date) if col.paid_transaction else None,
+            })
+
+        # Unmatched: positive income transactions in this month, not RECONCILED, not linked to any collection
+        unmatched_qs = Transaction.objects.filter(
+            bank_account__association=association,
+            date__year=year,
+            date__month=month,
+            amount__gt=0,
+        ).exclude(status=TransactionStatus.RECONCILED).filter(collection_payment__isnull=True)
+
+        unmatched = [
+            {
+                "transaction_id": tx.id,
+                "date": str(tx.date),
+                "description": tx.description,
+                "amount": str(tx.amount),
+                "payer_kennitala": tx.payer_kennitala,
+            }
+            for tx in unmatched_qs.order_by("date")
+        ]
+
+        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched})
+
+    def _summary_mode(self, association):
+        """Computed-on-the-fly annual/monthly amounts per apartment (legacy behaviour)."""
         year = datetime.date.today().year
         budget = Budget.objects.filter(
             association=association, year=year, is_active=True
@@ -1472,7 +1572,6 @@ class CollectionView(APIView):
         if not budget:
             return Response([], status=status.HTTP_200_OK)
 
-        # Sum budget amounts by category type
         totals = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
         for item in budget.items.all():
             if item.category and item.category.type in totals:
@@ -1482,7 +1581,6 @@ class CollectionView(APIView):
             "ownerships__user"
         ).order_by("anr")
 
-        # Sum shares across all active apartments per type (should each be 100)
         share_sums = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
         apt_list = list(apartments)
         for apt in apt_list:
@@ -1523,7 +1621,6 @@ class CollectionView(APIView):
                 "monthly": monthly,
             })
 
-        # Budget totals per type (only for types that have budget items)
         budget_summary = [
             {"type": t, "budget": totals[t], "share_sum": share_sums[t]}
             for t in ("SHARED", "SHARE2", "SHARE3", "EQUAL")
@@ -1531,6 +1628,118 @@ class CollectionView(APIView):
         ]
 
         return Response({"rows": rows, "budget_summary": budget_summary})
+
+
+class CollectionGenerateView(APIView):
+    def post(self, request):
+        """POST /Collection/generate — generate collection items for a given month/year."""
+        user_id = request.data.get("user_id")
+        month = request.data.get("month")
+        year = request.data.get("year")
+
+        if not user_id or not month or not year:
+            return Response({"detail": "user_id, month og year eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            month = int(month)
+            year = int(year)
+        except (ValueError, TypeError):
+            return Response({"detail": "month og year verða að vera tölur."}, status=status.HTTP_400_BAD_REQUEST)
+        if not (1 <= month <= 12):
+            return Response({"detail": "month verður að vera á bilinu 1–12."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        budget = Budget.objects.filter(association=association, year=year, is_active=True).first()
+        if not budget:
+            return Response({"detail": "Engin virk áætlun fannst fyrir þetta ár."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Sum budget amounts by category type (same logic as CollectionView)
+        totals = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
+        for item in budget.items.select_related("category").all():
+            if item.category and item.category.type in totals:
+                totals[item.category.type] += item.amount
+
+        apartments = association.apartments.filter(deleted=False).prefetch_related(
+            "ownerships__user"
+        ).order_by("anr")
+
+        created = 0
+        skipped = 0
+        for apt in apartments:
+            payer_ownership = apt.ownerships.filter(is_payer=True, deleted=False).select_related("user").first()
+            payer = payer_ownership.user if payer_ownership else None
+
+            shared_amt = (totals["SHARED"] * apt.share    / Decimal("100")).quantize(Decimal("1"))
+            share2_amt = (totals["SHARE2"] * apt.share_2  / Decimal("100")).quantize(Decimal("1"))
+            share3_amt = (totals["SHARE3"] * apt.share_3  / Decimal("100")).quantize(Decimal("1"))
+            equal_amt  = (totals["EQUAL"]  * apt.share_eq / Decimal("100")).quantize(Decimal("1"))
+            amount_shared = shared_amt + share2_amt + share3_amt
+            amount_total  = amount_shared + equal_amt
+
+            _, was_created = Collection.objects.get_or_create(
+                budget=budget,
+                apartment=apt,
+                month=month,
+                defaults={
+                    "payer": payer,
+                    "amount_shared": amount_shared,
+                    "amount_equal": equal_amt,
+                    "amount_total": amount_total,
+                    "status": CollectionStatus.PENDING,
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                skipped += 1
+
+        return Response({"created": created, "skipped": skipped}, status=status.HTTP_201_CREATED)
+
+
+class CollectionMatchView(APIView):
+    def post(self, request):
+        """POST /Collection/match — manually link a transaction to a collection item."""
+        user_id = request.data.get("user_id")
+        collection_id = request.data.get("collection_id")
+        transaction_id = request.data.get("transaction_id")
+
+        if not user_id or not collection_id or not transaction_id:
+            return Response({"detail": "user_id, collection_id og transaction_id eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            col = Collection.objects.get(id=collection_id, budget__association=association)
+        except Collection.DoesNotExist:
+            return Response({"detail": "Innheimtufærsla ekki fundin."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            tx = Transaction.objects.get(id=transaction_id, bank_account__association=association)
+        except Transaction.DoesNotExist:
+            return Response({"detail": "Færsla ekki fundin."}, status=status.HTTP_403_FORBIDDEN)
+
+        with transaction.atomic():
+            col = Collection.objects.select_for_update().get(id=collection_id, budget__association=association)
+            tx = Transaction.objects.select_for_update().get(id=transaction_id, bank_account__association=association)
+            if col.status == CollectionStatus.PAID:
+                return Response({"detail": "Þessi innheimtufærsla er þegar greidd."}, status=status.HTTP_400_BAD_REQUEST)
+            if tx.amount <= 0:
+                return Response({"detail": "Færslan er ekki jákvæð."}, status=status.HTTP_400_BAD_REQUEST)
+            col.paid_transaction = tx
+            col.status = CollectionStatus.PAID
+            tx.status = TransactionStatus.RECONCILED
+            col.save(update_fields=["paid_transaction", "status"])
+            tx.save(update_fields=["status"])
+
+        return Response({
+            "collection_id": col.id,
+            "status": col.status,
+            "paid_transaction_id": tx.id,
+        })
 
 
 class AssociationListView(APIView):
