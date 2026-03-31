@@ -65,7 +65,7 @@ function CollectionPage() {
     const handleGenerate = () => {
         setGenerating(true);
         setError('');
-        fetch(`${API_URL}/Collection/generate`, {
+        fetch(`${API_URL}/Collection/generate${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, month, year }),
@@ -79,7 +79,7 @@ function CollectionPage() {
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
-        fetch(`${API_URL}/Collection/match`, {
+        fetch(`${API_URL}/Collection/match${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId), transaction_id: parseInt(transactionId) }),

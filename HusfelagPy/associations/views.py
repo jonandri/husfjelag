@@ -985,9 +985,9 @@ def _auto_match_collections(transactions, association):
         to_update_cols.append(col)
         to_update_txs.append(tx)
     if to_update_cols:
-        Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
-    if to_update_txs:
-        Transaction.objects.bulk_update(to_update_txs, ["status"])
+        with transaction.atomic():
+            Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
+            Transaction.objects.bulk_update(to_update_txs, ["status"])
 
 
 class ImportConfirmView(APIView):

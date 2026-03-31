@@ -2099,6 +2099,27 @@ class CollectionMatchViewTest(TestCase):
         resp = self._post()
         self.assertEqual(resp.status_code, 400)
 
+    def test_returns_403_for_cross_association_transaction(self):
+        from decimal import Decimal
+        # Create a separate association and its bank account
+        other_assoc = Association.objects.create(
+            ssn="9090909090", name="Annað félag",
+            address="Önnur gata 1", postal_code="101", city="Reykjavík"
+        )
+        other_bank = BankAccount.objects.create(
+            association=other_assoc, name="Annað bank", account_number="0999-26-999999"
+        )
+        other_tx = Transaction.objects.create(
+            bank_account=other_bank,
+            date=__import__('datetime').date(2026, 3, 10),
+            amount=Decimal("45000"),
+            description="Greiðsla",
+            reference="",
+            status=TransactionStatus.IMPORTED,
+        )
+        resp = self._post(transaction_id=other_tx.id)
+        self.assertEqual(resp.status_code, 403)
+
 
 class CollectionViewMonthTest(TestCase):
     def setUp(self):
