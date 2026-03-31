@@ -365,7 +365,7 @@ function GlobalCategoriesPanel({ user }) {
                             <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                 <TableCell>Nafn</TableCell>
                                 <TableCell>Tegund</TableCell>
-                                <TableCell>Reikningur</TableCell>
+                                <TableCell>Gjaldareikningur</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -394,7 +394,7 @@ function GlobalCategoriesPanel({ user }) {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                         <TableCell>Nafn</TableCell>
                                         <TableCell>Tegund</TableCell>
-                                        <TableCell>Reikningur</TableCell>
+                                        <TableCell>Gjaldareikningur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
@@ -477,7 +477,9 @@ function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
                 <TableCell>{category.name}</TableCell>
                 <TableCell>{typeLabel(category.type)}</TableCell>
                 <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
-                    {category.expense_account_number || '—'}
+                    {category.expense_account_number
+                        ? `${category.expense_account_number} · ${category.expense_account_name}`
+                        : '—'}
                 </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
