@@ -37,6 +37,8 @@ function TransactionsPage() {
     const [importError, setImportError] = useState('');
     const [importUploading, setImportUploading] = useState(false);
     const [importConfirming, setImportConfirming] = useState(false);
+    const [recategorising, setRecategorising] = useState(false);
+    const [recatResult, setRecatResult] = useState(null);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -99,12 +101,43 @@ function TransactionsPage() {
                 {/* Header */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                     <Typography variant="h5">Færslur {year}</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <FormControl size="small">
                             <Select value={year} onChange={e => setYear(e.target.value)}>
                                 {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                             </Select>
                         </FormControl>
+                        {user?.is_superadmin && (
+                            <Button
+                                variant="outlined" size="small"
+                                disabled={recategorising}
+                                onClick={async () => {
+                                    setRecategorising(true);
+                                    setRecatResult(null);
+                                    try {
+                                        const qs = assocParam || '';
+                                        const resp = await fetch(`${API_URL}/Import/recategorise${qs}`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ user_id: user.id }),
+                                        });
+                                        const data = await resp.json();
+                                        setRecatResult(resp.ok ? `${data.categorised}/${data.total} flokkaðar` : (data.detail || 'Villa'));
+                                    } catch {
+                                        setRecatResult('Villa');
+                                    } finally {
+                                        setRecategorising(false);
+                                        reloadTransactions();
+                                    }
+                                }}
+                                sx={{ color: 'text.secondary', borderColor: 'divider', textTransform: 'none', fontSize: '0.8rem' }}
+                            >
+                                {recategorising ? <CircularProgress size={14} color="inherit" /> : '↻ Endurflokka'}
+                            </Button>
+                        )}
+                        {recatResult && (
+                            <Typography variant="caption" color="text.secondary">{recatResult}</Typography>
+                        )}
                         <Button
                             variant="outlined" color="secondary"
                             onClick={() => { setShowImport(v => !v); setShowForm(false); setImportPreview(null); setImportError(''); }}

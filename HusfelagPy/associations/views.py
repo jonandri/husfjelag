@@ -1020,6 +1020,59 @@ class ImportConfirmView(APIView):
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
 
 
+class ImportRecategoriseView(APIView):
+    def post(self, request):
+        """POST /Import/recategorise — re-run auto-categorisation on all IMPORTED (uncategorised)
+        transactions for the association. Superadmin only.
+        Body: {user_id}. Supports ?as= for superadmin impersonation.
+        Returns {categorised, total}.
+        """
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        if not user.is_superadmin:
+            return Response({"detail": "Aðeins superadmin getur keyrt þetta."}, status=status.HTTP_403_FORBIDDEN)
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Félag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        bank_account_ids = list(
+            association.bank_accounts.filter(deleted=False).values_list("id", flat=True)
+        )
+        txs = list(
+            Transaction.objects.filter(
+                bank_account_id__in=bank_account_ids,
+                status=TransactionStatus.IMPORTED,
+            )
+        )
+
+        if not txs:
+            return Response({"categorised": 0, "total": 0})
+
+        try:
+            rules, history = build_categorisation_context(association)
+        except Exception:
+            rules, history = [], {}
+
+        to_update = []
+        for tx in txs:
+            cat = categorise_row(str(tx.description or ""), rules, history)
+            if cat:
+                tx.category = cat
+                tx.status = TransactionStatus.CATEGORISED
+                to_update.append(tx)
+
+        if to_update:
+            Transaction.objects.bulk_update(to_update, ["category", "status"])
+
+        return Response({"categorised": len(to_update), "total": len(txs)})
+
+
 class CategoryRuleView(APIView):
     def get(self, request, user_id):
         """GET /CategoryRule/<user_id> — list association + global rules."""
