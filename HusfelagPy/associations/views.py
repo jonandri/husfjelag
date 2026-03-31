@@ -1508,10 +1508,17 @@ class CollectionView(APIView):
         year_param = request.query_params.get("year")
 
         if month_param and year_param:
-            return self._month_mode(request, association, int(month_param), int(year_param))
+            try:
+                month = int(month_param)
+                year = int(year_param)
+            except (ValueError, TypeError):
+                return Response({"detail": "month og year verða að vera tölur."}, status=status.HTTP_400_BAD_REQUEST)
+            if not (1 <= month <= 12):
+                return Response({"detail": "month verður að vera á bilinu 1–12."}, status=status.HTTP_400_BAD_REQUEST)
+            return self._month_mode(association, month, year)
         return self._summary_mode(association)
 
-    def _month_mode(self, request, association, month, year):
+    def _month_mode(self, association, month, year):
         """Return stored Collection records for the given month + unmatched income transactions."""
         collections = (
             Collection.objects
