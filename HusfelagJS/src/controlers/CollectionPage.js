@@ -82,7 +82,7 @@ function CollectionPage() {
         fetch(`${API_URL}/Collection/match`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user.id, collection_id: collectionId, transaction_id: parseInt(transactionId) }),
+            body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId), transaction_id: parseInt(transactionId) }),
         })
             .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
             .then(() => load())
