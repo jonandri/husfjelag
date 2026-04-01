@@ -18,7 +18,6 @@ import CategoriesPage from './controlers/CategoriesPage';
 import CollectionPage from './controlers/CollectionPage';
 import SuperAdminPage from './controlers/SuperAdminPage';
 import TransactionsPage from './controlers/TransactionsPage';
-import CategorisationRulesPage from './controlers/CategorisationRulesPage';
 import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
 
@@ -89,7 +88,6 @@ function App() {
       setAssociations([]);
       setCurrentAssociationState(null);
       setImpersonating(false);
-      localStorage.removeItem('currentAssociation');
       return;
     }
     fetch(`${API_URL}/Association/list/${user.id}`)
@@ -148,7 +146,6 @@ function App() {
             <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
             <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
             <Route path="/faerslur" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
-            <Route path="/flokkunarreglur" element={<ProtectedRoute><CategorisationRulesPage /></ProtectedRoute>} />
             <Route path="/skyrslur" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
             <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
             <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />

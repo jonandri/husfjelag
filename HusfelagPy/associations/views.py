@@ -926,10 +926,11 @@ class ImportPreviewView(APIView):
 
         serialized = [
             {
-                "date":        r["date"].isoformat(),
-                "amount":      str(r["amount"]),
-                "description": r["description"],
-                "reference":   r["reference"],
+                "date":            r["date"].isoformat(),
+                "amount":          str(r["amount"]),
+                "description":     r["description"],
+                "reference":       r["reference"],
+                "payer_kennitala": r.get("payer_kennitala", ""),
             }
             for r in to_import_rows
         ]

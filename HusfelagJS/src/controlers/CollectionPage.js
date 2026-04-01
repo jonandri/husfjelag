@@ -8,7 +8,7 @@ import {
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
-import { fmtAmount } from '../format';
+import { fmtAmount, fmtKennitala } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -169,6 +169,7 @@ function CollectionPage() {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
                                         <TableCell>Íbúð</TableCell>
                                         <TableCell>Greiðandi</TableCell>
+                                        <TableCell>Kennitala</TableCell>
                                         <TableCell align="right">Upphæð</TableCell>
                                         <TableCell align="center">Staða</TableCell>
                                         <TableCell />
@@ -180,6 +181,7 @@ function CollectionPage() {
                                             sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
                                             <TableCell>{row.anr}</TableCell>
                                             <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                             <TableCell align="right">{fmtAmount(row.amount_total)}</TableCell>
                                             <TableCell align="center">
                                                 <StatusBadge status={row.status} date={row.paid_transaction_date} />
@@ -198,7 +200,7 @@ function CollectionPage() {
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                        <TableCell colSpan={2}>Samtals</TableCell>
+                                        <TableCell colSpan={3}>Samtals</TableCell>
                                         <TableCell align="right">{fmtAmount(totalAmount)}</TableCell>
                                         <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
                                             {paidCount}/{rows.length} greidd
@@ -238,6 +240,7 @@ function CollectionPage() {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
                                         <TableCell>Dags.</TableCell>
                                         <TableCell>Lýsing</TableCell>
+                                        <TableCell>Kennitala</TableCell>
                                         <TableCell align="right">Upphæð</TableCell>
                                         <TableCell>Tengja við</TableCell>
                                     </TableRow>
@@ -247,6 +250,7 @@ function CollectionPage() {
                                         <TableRow key={tx.transaction_id} hover>
                                             <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
                                             <TableCell>{tx.description}</TableCell>
+                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                             <TableCell align="right" sx={{ color: '#2e7d32' }}>+{fmtAmount(tx.amount)}</TableCell>
                                             <TableCell>
                                                 <Select

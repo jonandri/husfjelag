@@ -17,7 +17,6 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
-import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
 import { fmtKennitala, fmtPhone } from '../format';
@@ -38,7 +37,6 @@ const NAV = [
     { path: '/aaetlun',   label: 'Áætlun',    icon: <AssessmentOutlinedIcon            sx={{ fontSize: 20 }} /> },
     { path: '/innheimta',        label: 'Innheimta',        icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },    
     { path: '/faerslur',         label: 'Færslur',          icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
-    { path: '/flokkunarreglur',  label: 'Flokkunarreglur',  icon: <LabelOutlinedIcon                 sx={{ fontSize: 20 }} /> },
     { path: '/skyrslur',         label: 'Skýrslur',         icon: <BarChartOutlinedIcon              sx={{ fontSize: 20 }} /> },
 ];
 
@@ -164,9 +162,7 @@ function SideBar() {
                 sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', pt: 3, pb: 2.5, px: 1, cursor: 'pointer', minHeight: 80, overflow: 'hidden' }}
             >
                 {collapsed ? (
-                    <Box sx={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: ACTIVE_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Typography sx={{ color: TEXT, fontWeight: 700, fontSize: '0.85rem', fontFamily: '"Inter", sans-serif' }}>H</Typography>
-                    </Box>
+                    <img src="/logo192.png" alt="Logo" width={32} height={32} style={{ display: 'block', borderRadius: 6 }} />
                 ) : (
                     <img src={require('../assets/images/logo/logo-no-background.png')} alt="Logo" width={140} style={{ display: 'block' }} />
                 )}

@@ -59,6 +59,10 @@ function ReportPage() {
     const [drillData, setDrillData] = useState(null);
     const [drillLoading, setDrillLoading] = useState(false);
     const [drillError, setDrillError] = useState('');
+    const [catDrill, setCatDrill] = useState(null); // { category_id, category_name }
+    const [catTxs, setCatTxs] = useState([]);
+    const [catLoading, setCatLoading] = useState(false);
+    const [catError, setCatError] = useState('');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -90,6 +94,23 @@ function ReportPage() {
     };
 
     const closeDrill = () => { setDrillMonth(null); setDrillData(null); setDrillError(''); };
+
+    const openCatDrill = (categoryId, categoryName) => {
+        setCatDrill({ category_id: categoryId, category_name: categoryName });
+        setCatTxs([]);
+        setCatLoading(true);
+        setCatError('');
+        const params = new URLSearchParams({ year });
+        const qs = assocParam ? `${assocParam}&${params}` : `?${params}`;
+        fetch(`${API_URL}/Transaction/${user.id}${qs}`)
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(txs => {
+                setCatTxs(txs.filter(tx => tx.category?.id === categoryId));
+                setCatLoading(false);
+            })
+            .catch(() => { setCatLoading(false); setCatError('Villa við að sækja færslur.'); });
+    };
+    const closeCatDrill = () => { setCatDrill(null); setCatTxs([]); setCatError(''); };
 
     if (data === undefined) {
         return (
@@ -198,7 +219,8 @@ function ReportPage() {
                         </TableHead>
                         <TableBody>
                             {income.map(row => (
-                                <TableRow key={row.category_id} hover>
+                                <TableRow key={row.category_id} hover sx={{ cursor: 'pointer' }}
+                                    onClick={() => openCatDrill(row.category_id, row.category_name)}>
                                     <TableCell>{row.category_name}</TableCell>
                                     <TableCell align="right" sx={{ color: '#2e7d32' }}>
                                         {fmtAmount(row.actual)}
@@ -244,7 +266,8 @@ function ReportPage() {
                                 const pct = budgeted > 0 ? (actual / budgeted) * 100 : null;
                                 const color = VARIANCE_COLOR(budgeted, actual);
                                 return (
-                                    <TableRow key={row.category_id} hover>
+                                    <TableRow key={row.category_id} hover sx={{ cursor: 'pointer' }}
+                                        onClick={() => openCatDrill(row.category_id, row.category_name)}>
                                         <TableCell>{row.category_name}</TableCell>
                                         <TableCell align="right" sx={{ color: '#888' }}>
                                             {budgeted > 0 ? fmtAmount(budgeted) : <span style={{ color: '#ccc' }}>—</span>}
@@ -252,7 +275,7 @@ function ReportPage() {
                                         <TableCell align="right">{fmtAmount(actual)}</TableCell>
                                         <TableCell align="right" sx={{ color }}>
                                             {budgeted > 0
-                                                ? (variance >= 0 ? '+' : '') + fmtAmount(variance)
+                                                ? fmtAmount(variance)
                                                 : <span style={{ color: '#ccc' }}>—</span>
                                             }
                                         </TableCell>
@@ -283,7 +306,7 @@ function ReportPage() {
                             >
                                 {(() => {
                                     const v = totalExpenseBudgeted - totalExpenseActual;
-                                    return (v >= 0 ? '+' : '') + fmtAmount(v);
+                                    return fmtAmount(v);
                                 })()}
                             </TableCell>,
                             <TableCell key="pct" align="right"
@@ -309,12 +332,70 @@ function ReportPage() {
                                 <TableCell align="right"
                                     sx={{ color: net >= 0 ? '#80cbc4' : '#ef9a9a', fontWeight: 600, fontSize: '0.9rem' }}
                                 >
-                                    {(net >= 0 ? '+' : '') + fmtAmount(net)}
+                                    {fmtAmount(net)}
                                 </TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>
                 </Paper>
+
+                {/* Category transactions dialog */}
+                <Dialog open={catDrill !== null} onClose={closeCatDrill} maxWidth="sm" fullWidth>
+                    <DialogTitle sx={{ color: '#1D366F', fontWeight: 600 }}>
+                        {catDrill?.category_name}
+                    </DialogTitle>
+                    <DialogContent>
+                        {catLoading && (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                                <CircularProgress color="secondary" />
+                            </Box>
+                        )}
+                        {catError && <Alert severity="error">{catError}</Alert>}
+                        {!catLoading && !catError && catTxs.length === 0 && (
+                            <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                                Engar færslur fundust.
+                            </Typography>
+                        )}
+                        {!catLoading && catTxs.length > 0 && (() => {
+                            const total = catTxs.reduce((s, tx) => s + parseFloat(tx.amount), 0);
+                            return (
+                                <Table size="small">
+                                    <TableHead sx={HEAD_SX}>
+                                        <TableRow>
+                                            <TableCell sx={HEAD_CELL_SX}>Dagsetning</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Lýsing</TableCell>
+                                            <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Upphæð</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {catTxs.map(tx => {
+                                            const amt = parseFloat(tx.amount);
+                                            const dateStr = new Date(tx.date).toLocaleDateString('is-IS', { day: 'numeric', month: 'long' });
+                                            return (
+                                                <TableRow key={tx.id}>
+                                                    <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{dateStr}</TableCell>
+                                                    <TableCell>{tx.description}</TableCell>
+                                                    <TableCell align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: amt >= 0 ? 'success.main' : 'error.main' }}>
+                                                        {fmtAmount(amt)}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                    <TotalsRow cells={[
+                                        <TableCell key="lbl" colSpan={2}>Samtals</TableCell>,
+                                        <TableCell key="val" align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                                            {fmtAmount(total)}
+                                        </TableCell>,
+                                    ]} />
+                                </Table>
+                            );
+                        })()}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 2 }}>
+                        <Button onClick={closeCatDrill}>Loka</Button>
+                    </DialogActions>
+                </Dialog>
 
                 {/* Month drill-down dialog */}
                 <Dialog open={drillMonth !== null} onClose={closeDrill} maxWidth="sm" fullWidth>
@@ -403,7 +484,7 @@ function ReportPage() {
                                             color: dNet >= 0 ? '#80cbc4' : '#ef9a9a',
                                             fontWeight: 600, fontSize: '0.85rem',
                                         }}>
-                                            {(dNet >= 0 ? '+' : '') + fmtAmount(dNet)}
+                                            {fmtAmount(dNet)}
                                         </Typography>
                                     </Box>
                                 </>
