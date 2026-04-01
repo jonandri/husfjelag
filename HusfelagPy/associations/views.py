@@ -926,10 +926,11 @@ class ImportPreviewView(APIView):
 
         serialized = [
             {
-                "date":        r["date"].isoformat(),
-                "amount":      str(r["amount"]),
-                "description": r["description"],
-                "reference":   r["reference"],
+                "date":            r["date"].isoformat(),
+                "amount":          str(r["amount"]),
+                "description":     r["description"],
+                "reference":       r["reference"],
+                "payer_kennitala": r.get("payer_kennitala", ""),
             }
             for r in to_import_rows
         ]
@@ -959,6 +960,7 @@ class ImportDetectView(APIView):
 
 def _auto_match_collections(transactions, association):
     """Auto-match positive income transactions to PENDING collection items by payer kennitala."""
+    hussjoður_cat = Category.objects.filter(type=CategoryType.INCOME, name="Hússjóður", deleted=False).first()
     to_update_txs = []
     to_update_cols = []
     for tx in transactions:
@@ -982,12 +984,14 @@ def _auto_match_collections(transactions, association):
         col.paid_transaction = tx
         col.status = CollectionStatus.PAID
         tx.status = TransactionStatus.RECONCILED
+        if hussjoður_cat:
+            tx.category = hussjoður_cat
         to_update_cols.append(col)
         to_update_txs.append(tx)
     if to_update_cols:
         with transaction.atomic():
             Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
-            Transaction.objects.bulk_update(to_update_txs, ["status"])
+            Transaction.objects.bulk_update(to_update_txs, ["status", "category"])
 
 
 class ImportConfirmView(APIView):
@@ -1655,11 +1659,12 @@ class CollectionGenerateView(APIView):
         if not budget:
             return Response({"detail": "Engin virk áætlun fannst fyrir þetta ár."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Sum budget amounts by category type (same logic as CollectionView)
+        # Sum budget amounts by category type, divided by 12 for a single month
         totals = {"SHARED": Decimal("0"), "SHARE2": Decimal("0"), "SHARE3": Decimal("0"), "EQUAL": Decimal("0")}
         for item in budget.items.select_related("category").all():
             if item.category and item.category.type in totals:
                 totals[item.category.type] += item.amount
+        totals = {k: (v / 12).quantize(Decimal("0.01")) for k, v in totals.items()}
 
         apartments = association.apartments.filter(deleted=False).prefetch_related(
             "ownerships__user"
@@ -1722,6 +1727,7 @@ class CollectionMatchView(APIView):
         except Transaction.DoesNotExist:
             return Response({"detail": "Færsla ekki fundin."}, status=status.HTTP_403_FORBIDDEN)
 
+        hussjoður_cat = Category.objects.filter(type=CategoryType.INCOME, name="Hússjóður", deleted=False).first()
         with transaction.atomic():
             col = Collection.objects.select_for_update().get(id=collection_id, budget__association=association)
             tx = Transaction.objects.select_for_update().get(id=transaction_id, bank_account__association=association)
@@ -1732,14 +1738,51 @@ class CollectionMatchView(APIView):
             col.paid_transaction = tx
             col.status = CollectionStatus.PAID
             tx.status = TransactionStatus.RECONCILED
+            if hussjoður_cat:
+                tx.category = hussjoður_cat
             col.save(update_fields=["paid_transaction", "status"])
-            tx.save(update_fields=["status"])
+            tx.save(update_fields=["status", "category"])
 
         return Response({
             "collection_id": col.id,
             "status": col.status,
             "paid_transaction_id": tx.id,
         })
+
+
+class CollectionUnmatchView(APIView):
+    def post(self, request):
+        """POST /Collection/unmatch — remove the link between a collection item and its transaction."""
+        user_id = request.data.get("user_id")
+        collection_id = request.data.get("collection_id")
+
+        if not user_id or not collection_id:
+            return Response({"detail": "user_id og collection_id eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            col = Collection.objects.get(id=collection_id, budget__association=association)
+        except Collection.DoesNotExist:
+            return Response({"detail": "Innheimtufærsla ekki fundin."}, status=status.HTTP_403_FORBIDDEN)
+
+        with transaction.atomic():
+            col = Collection.objects.select_for_update().get(id=collection_id, budget__association=association)
+            if col.status != CollectionStatus.PAID:
+                return Response({"detail": "Þessi innheimtufærsla er ekki greidd."}, status=status.HTTP_400_BAD_REQUEST)
+            tx = col.paid_transaction
+            col.paid_transaction = None
+            col.status = CollectionStatus.PENDING
+            col.save(update_fields=["paid_transaction", "status"])
+            if tx:
+                tx = Transaction.objects.select_for_update().get(id=tx.id)
+                tx.status = TransactionStatus.IMPORTED
+                tx.category = None
+                tx.save(update_fields=["status", "category"])
+
+        return Response({"collection_id": col.id, "status": col.status})
 
 
 class AssociationListView(APIView):

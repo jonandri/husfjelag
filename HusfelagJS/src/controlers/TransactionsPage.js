@@ -30,13 +30,7 @@ function TransactionsPage() {
     const [filterStatus, setFilterStatus] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [error, setError] = useState('');
-    const [showImport, setShowImport] = useState(false);
-    const [importPreview, setImportPreview] = useState(null);
-    const [importBankAccountId, setImportBankAccountId] = useState('');
-    const [importBank, setImportBank] = useState('arion');
-    const [importError, setImportError] = useState('');
-    const [importUploading, setImportUploading] = useState(false);
-    const [importConfirming, setImportConfirming] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [recategorising, setRecategorising] = useState(false);
     const [recatResult, setRecatResult] = useState(null);
 
@@ -140,13 +134,13 @@ function TransactionsPage() {
                         )}
                         <Button
                             variant="outlined" color="secondary"
-                            onClick={() => { setShowImport(v => !v); setShowForm(false); setImportPreview(null); setImportError(''); }}
+                            onClick={() => setImportOpen(true)}
                         >
-                            {showImport ? 'Loka' : '+ Innflutningur'}
+                            + Innflutningur
                         </Button>
                         <Button
                             variant="contained" color="secondary" sx={{ color: '#fff' }}
-                            onClick={() => { setShowForm(v => !v); setShowImport(false); setImportError(''); }}
+                            onClick={() => setShowForm(v => !v)}
                         >
                             {showForm ? 'Loka' : '+ Færsla'}
                         </Button>
@@ -164,43 +158,14 @@ function TransactionsPage() {
                     />
                 )}
 
-                {/* Import form / preview */}
-                {showImport && !importPreview && (
-                    <ImportForm
-                        userId={user.id}
-                        assocParam={assocParam}
-                        bankAccounts={bankAccounts}
-                        importBankAccountId={importBankAccountId}
-                        setImportBankAccountId={setImportBankAccountId}
-                        importBank={importBank}
-                        setImportBank={setImportBank}
-                        uploading={importUploading}
-                        setUploading={setImportUploading}
-                        error={importError}
-                        setError={setImportError}
-                        onPreviewReady={(preview) => setImportPreview(preview)}
-                    />
-                )}
-                {showImport && importPreview && (
-                    <ImportPreview
-                        preview={importPreview}
-                        userId={user.id}
-                        assocParam={assocParam}
-                        bankAccountId={importBankAccountId}
-                        confirming={importConfirming}
-                        setConfirming={setImportConfirming}
-                        error={importError}
-                        setError={setImportError}
-                        onBack={() => setImportPreview(null)}
-                        onDone={() => {
-                            setShowImport(false);
-                            setImportPreview(null);
-                            setImportBankAccountId('');
-                            setImportBank('arion');
-                            loadAll();
-                        }}
-                    />
-                )}
+                <ImportDialog
+                    open={importOpen}
+                    onClose={() => setImportOpen(false)}
+                    userId={user.id}
+                    assocParam={assocParam}
+                    bankAccounts={bankAccounts}
+                    onDone={() => { setImportOpen(false); loadAll(); }}
+                />
 
                 {/* Filter bar */}
                 <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
@@ -295,7 +260,7 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
                         : <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Óflokkað</Typography>}
                 </TableCell>
                 <TableCell align="right" sx={{ fontFamily: 'monospace', color: amount >= 0 ? 'success.main' : 'error.main', whiteSpace: 'nowrap' }}>
-                    {amount >= 0 ? '+' : ''}{fmtAmount(amount)} kr.
+                    {fmtAmount(amount)}
                 </TableCell>
                 <TableCell>
                     <Chip label={statusInfo.label} size="small" color={statusInfo.color} />
@@ -486,28 +451,33 @@ const BANK_OPTIONS = [
     { value: 'islandsbanki', label: 'Íslandsbanki' },
 ];
 
-function ImportForm({
-    userId, assocParam, bankAccounts,
-    importBankAccountId, setImportBankAccountId,
-    importBank, setImportBank,
-    uploading, setUploading, error, setError,
-    onPreviewReady,
-}) {
+function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone }) {
+    const [preview, setPreview] = useState(null);
+    const [bankAccountId, setBankAccountId] = useState('');
+    const [bank, setBank] = useState('arion');
     const [file, setFile] = useState(null);
     const [dragOver, setDragOver] = useState(false);
     const [detecting, setDetecting] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const [error, setError] = useState('');
     const fileInputRef = React.useRef();
 
-    const isValid = importBankAccountId && importBank && file;
+    const reset = () => {
+        setPreview(null); setBankAccountId(''); setBank('arion');
+        setFile(null); setError(''); setDragOver(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    React.useEffect(() => { if (!open) reset(); }, [open]);
+
+    const handleClose = () => { if (uploading || confirming) return; onClose(); };
 
     const normaliseAcct = (s) => String(s || '').replace(/[-\s]/g, '');
 
     const handleFile = async (f) => {
         const ext = f.name.split('.').pop().toLowerCase();
-        if (!['csv', 'xlsx'].includes(ext)) {
-            setError('Aðeins .csv og .xlsx skrár eru studdar.');
-            return;
-        }
+        if (!['csv', 'xlsx'].includes(ext)) { setError('Aðeins .csv og .xlsx skrár eru studdar.'); return; }
         setError('');
         setFile(f);
         setDetecting(true);
@@ -516,116 +486,36 @@ function ImportForm({
             fd.append('file', f);
             const resp = await fetch(`${API_URL}/Import/detect`, { method: 'POST', body: fd });
             if (resp.ok) {
-                const { bank, file_account_number } = await resp.json();
-                if (bank) setImportBank(bank);
+                const { bank: detectedBank, file_account_number } = await resp.json();
+                if (detectedBank) setBank(detectedBank);
                 if (file_account_number) {
                     const norm = normaliseAcct(file_account_number);
                     const match = bankAccounts.find(b => normaliseAcct(b.account_number) === norm);
-                    if (match) setImportBankAccountId(match.id);
+                    if (match) setBankAccountId(match.id);
                 }
             }
-        } catch {
-            // detection failure is non-fatal
-        } finally {
-            setDetecting(false);
-        }
+        } catch {} finally { setDetecting(false); }
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        setDragOver(false);
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    };
-
-    const handleSubmit = async () => {
+    const handleAnalyse = async () => {
         setError('');
         setUploading(true);
         try {
             const formData = new FormData();
             formData.append('user_id', userId);
-            formData.append('bank_account_id', importBankAccountId);
-            formData.append('bank', importBank);
+            formData.append('bank_account_id', bankAccountId);
+            formData.append('bank', bank);
             formData.append('file', file);
-            const resp = await fetch(`${API_URL}/Import/preview`, {
-                method: 'POST',
-                body: formData,
-            });
+            const resp = await fetch(`${API_URL}/Import/preview`, { method: 'POST', body: formData });
             const data = await resp.json();
-            if (resp.ok) {
-                onPreviewReady(data);
-            } else {
-                setError(data.detail || 'Villa við lestur skráar.');
-                setFile(null);
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            }
+            if (resp.ok) { setPreview(data); }
+            else { setError(data.detail || 'Villa við lestur skráar.'); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }
         } catch {
             setError('Tenging við þjón mistókst.');
-            setFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        } finally {
-            setUploading(false);
-        }
+            setFile(null); if (fileInputRef.current) fileInputRef.current.value = '';
+        } finally { setUploading(false); }
     };
 
-    return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 520 }}>
-            <Typography variant="subtitle2">Flytja inn bankayfirlit</Typography>
-            <Box
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                sx={{
-                    border: `2px dashed ${dragOver ? '#08C076' : '#ddd'}`,
-                    borderRadius: 1, p: 3, textAlign: 'center',
-                    cursor: 'pointer', color: 'text.secondary',
-                    transition: 'border-color 0.2s',
-                    '&:hover': { borderColor: '#08C076' },
-                }}
-            >
-                <input
-                    ref={fileInputRef} type="file" accept=".csv,.xlsx" hidden
-                    onChange={e => e.target.files[0] && handleFile(e.target.files[0])}
-                />
-                {file
-                    ? <Typography variant="body2" color="success.main">{file.name}{detecting ? ' — greini…' : ''}</Typography>
-                    : <Typography variant="body2">Dragðu skrá hingað eða <span style={{ color: '#08C076' }}>veldu skrá</span><br /><small>.csv eða .xlsx</small></Typography>
-                }
-            </Box>
-            <FormControl size="small" fullWidth>
-                <InputLabel>Banki</InputLabel>
-                <Select value={importBank} label="Banki" onChange={e => setImportBank(e.target.value)}>
-                    {BANK_OPTIONS.map(o => (
-                        <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-                <InputLabel>Bankareikningur</InputLabel>
-                <Select value={importBankAccountId} label="Bankareikningur"
-                    onChange={e => setImportBankAccountId(e.target.value)}>
-                    <MenuItem value=""><em>Veldu reikning</em></MenuItem>
-                    {bankAccounts.map(b => (
-                        <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || uploading} onClick={handleSubmit}
-            >
-                {uploading ? <CircularProgress size={20} color="inherit" /> : 'Greina skrá →'}
-            </Button>
-        </Paper>
-    );
-}
-
-function ImportPreview({
-    preview, userId, assocParam, bankAccountId,
-    confirming, setConfirming, error, setError,
-    onBack, onDone,
-}) {
     const handleConfirm = async () => {
         setError('');
         setConfirming(true);
@@ -633,85 +523,127 @@ function ImportPreview({
             const resp = await fetch(`${API_URL}/Import/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    bank_account_id: bankAccountId,
-                    rows: preview.rows,
-                }),
+                body: JSON.stringify({ user_id: userId, bank_account_id: bankAccountId, rows: preview.rows }),
             });
             const data = await resp.json();
-            if (resp.ok) {
-                onDone();
-            } else {
-                setError(data.detail || 'Villa við innflutning.');
-            }
+            if (resp.ok) { reset(); onDone(); }
+            else { setError(data.detail || 'Villa við innflutning.'); }
         } catch {
             setError('Tenging við þjón mistókst.');
-        } finally {
-            setConfirming(false);
-        }
+        } finally { setConfirming(false); }
     };
 
+    const isFormValid = bankAccountId && bank && file;
+
     return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3, maxWidth: 640 }}>
-            <Typography variant="subtitle2" sx={{ mb: 2 }}>Yfirlit innflutnings — staðfesta?</Typography>
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                <Box sx={{ flex: 1, bgcolor: '#f0f9f4', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
-                    <Typography variant="h5" color="success.main" fontWeight={600}>{preview.to_import}</Typography>
-                    <Typography variant="caption" color="text.secondary">Færslur til að flytja inn</Typography>
-                </Box>
-                <Box sx={{ flex: 1, bgcolor: '#f5f5f5', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
-                    <Typography variant="h5" color="text.disabled" fontWeight={600}>{preview.skipped_duplicates}</Typography>
-                    <Typography variant="caption" color="text.secondary">Þegar til (sleppt)</Typography>
-                </Box>
-            </Box>
-            <Table size="small" sx={{ mb: 2 }}>
-                <TableHead>
-                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                        <TableCell>Dagsetning</TableCell>
-                        <TableCell>Lýsing</TableCell>
-                        <TableCell align="right">Upphæð</TableCell>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {preview.rows.slice(0, 10).map((row, i) => {
-                        const amt = parseFloat(row.amount);
-                        return (
-                            <TableRow key={i}>
-                                <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{row.date}</TableCell>
-                                <TableCell>{row.description}</TableCell>
-                                <TableCell align="right" sx={{
-                                    fontFamily: 'monospace',
-                                    color: amt >= 0 ? 'success.main' : 'error.main',
-                                    whiteSpace: 'nowrap',
-                                }}>
-                                    {amt >= 0 ? '+' : ''}{fmtAmount(amt)} kr.
-                                </TableCell>
-                            </TableRow>
-                        );
-                    })}
-                    {preview.rows.length > 10 && (
-                        <TableRow>
-                            <TableCell colSpan={3} sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-                                … {preview.rows.length - 10} færslur til viðbótar
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                <Button onClick={onBack} disabled={confirming}>Til baka</Button>
-                <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    disabled={preview.to_import === 0 || confirming} onClick={handleConfirm}
-                >
-                    {confirming
-                        ? <CircularProgress size={18} color="inherit" />
-                        : `Staðfesta innflutning (${preview.to_import})`}
-                </Button>
-            </Box>
-        </Paper>
+        <Dialog open={open} onClose={handleClose} maxWidth={preview ? 'md' : 'sm'} fullWidth>
+            <DialogTitle>{preview ? 'Staðfesta innflutning' : 'Flytja inn bankayfirlit'}</DialogTitle>
+
+            {!preview ? (
+                <>
+                    <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                        <Box
+                            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                            onDragLeave={() => setDragOver(false)}
+                            onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
+                            onClick={() => fileInputRef.current?.click()}
+                            sx={{
+                                border: `2px dashed ${dragOver ? '#08C076' : '#ddd'}`,
+                                borderRadius: 1, p: 3, textAlign: 'center',
+                                cursor: 'pointer', color: 'text.secondary',
+                                transition: 'border-color 0.2s',
+                                '&:hover': { borderColor: '#08C076' },
+                            }}
+                        >
+                            <input ref={fileInputRef} type="file" accept=".csv,.xlsx" hidden
+                                onChange={e => e.target.files[0] && handleFile(e.target.files[0])} />
+                            {file
+                                ? <Typography variant="body2" color="success.main">{file.name}{detecting ? ' — greini…' : ''}</Typography>
+                                : <Typography variant="body2">Dragðu skrá hingað eða <span style={{ color: '#08C076' }}>veldu skrá</span><br /><small>.csv eða .xlsx</small></Typography>
+                            }
+                        </Box>
+                        <FormControl size="small" fullWidth>
+                            <InputLabel>Banki</InputLabel>
+                            <Select value={bank} label="Banki" onChange={e => setBank(e.target.value)}>
+                                {BANK_OPTIONS.map(o => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+                            </Select>
+                        </FormControl>
+                        <FormControl size="small" fullWidth>
+                            <InputLabel>Bankareikningur</InputLabel>
+                            <Select value={bankAccountId} label="Bankareikningur" onChange={e => setBankAccountId(e.target.value)}>
+                                <MenuItem value=""><em>Veldu reikning</em></MenuItem>
+                                {bankAccounts.map(b => <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>)}
+                            </Select>
+                        </FormControl>
+                        {error && <Alert severity="error">{error}</Alert>}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button onClick={handleClose}>Hætta við</Button>
+                        <Button
+                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            disabled={!isFormValid || uploading} onClick={handleAnalyse}
+                        >
+                            {uploading ? <CircularProgress size={18} color="inherit" /> : 'Greina skrá →'}
+                        </Button>
+                    </DialogActions>
+                </>
+            ) : (
+                <>
+                    <DialogContent>
+                        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                            <Box sx={{ flex: 1, bgcolor: '#f0f9f4', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
+                                <Typography variant="h5" color="success.main" fontWeight={600}>{preview.to_import}</Typography>
+                                <Typography variant="caption" color="text.secondary">Færslur til að flytja inn</Typography>
+                            </Box>
+                            <Box sx={{ flex: 1, bgcolor: '#f5f5f5', borderRadius: 1, p: 1.5, textAlign: 'center' }}>
+                                <Typography variant="h5" color="text.disabled" fontWeight={600}>{preview.skipped_duplicates}</Typography>
+                                <Typography variant="caption" color="text.secondary">Þegar til (sleppt)</Typography>
+                            </Box>
+                        </Box>
+                        <Table size="small">
+                            <TableHead>
+                                <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                    <TableCell>Dagsetning</TableCell>
+                                    <TableCell>Lýsing</TableCell>
+                                    <TableCell align="right">Upphæð</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {preview.rows.slice(0, 10).map((row, i) => {
+                                    const amt = parseFloat(row.amount);
+                                    return (
+                                        <TableRow key={i}>
+                                            <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{row.date}</TableCell>
+                                            <TableCell>{row.description}</TableCell>
+                                            <TableCell align="right" sx={{ fontFamily: 'monospace', color: amt >= 0 ? 'success.main' : 'error.main', whiteSpace: 'nowrap' }}>
+                                                {fmtAmount(amt)}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {preview.rows.length > 10 && (
+                                    <TableRow>
+                                        <TableCell colSpan={3} sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
+                                            … {preview.rows.length - 10} færslur til viðbótar
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                    </DialogContent>
+                    <DialogActions sx={{ px: 3, pb: 2 }}>
+                        <Button onClick={() => { setPreview(null); setError(''); }} disabled={confirming}>Til baka</Button>
+                        <Button
+                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            disabled={preview.to_import === 0 || confirming} onClick={handleConfirm}
+                        >
+                            {confirming ? <CircularProgress size={18} color="inherit" /> : `Staðfesta innflutning (${preview.to_import})`}
+                        </Button>
+                    </DialogActions>
+                </>
+            )}
+        </Dialog>
     );
 }
 

@@ -99,7 +99,7 @@ def parse_arion(file_obj, ext) -> dict:
                 'amount':          parse_icelandic_amount(row['Upphæð']),
                 'description':     str(row.get('Skýring') or row.get('Texti') or '').strip(),
                 'reference':       str(row.get('Seðilnúmer') or '').strip(),
-                'payer_kennitala': str(row.get('Kennitala viðtakanda eða greiðanda') or '').strip(),
+                'payer_kennitala': str(row.get('Kennitala viðtakanda eða greiðanda') or '').strip().replace('-', ''),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -136,7 +136,7 @@ def parse_landsbankinn(file_obj, ext) -> dict:
                 'amount':          parse_icelandic_amount(row['Upphæð']),
                 'description':     description,
                 'reference':       str(row.get('Tnr/Seðilnr.') or '').strip(),
-                'payer_kennitala': str(row.get('Kennitala') or '').strip(),
+                'payer_kennitala': str(row.get('Kennitala') or '').strip().replace('-', ''),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -190,7 +190,7 @@ def parse_islandsbanki(file_obj, ext) -> dict:
                 'amount':          parse_icelandic_amount(row[amount_col]),
                 'description':     str(row.get(description_col) or '').strip(),
                 'reference':       str(row.get('Tilvísun') or '').strip(),
-                'payer_kennitala': str(row.get(kennitala_col) or '').strip() if kennitala_col else '',
+                'payer_kennitala': str(row.get(kennitala_col) or '').strip().replace('-', '') if kennitala_col else '',
             })
         except (KeyError, ValueError, InvalidOperation):
             continue

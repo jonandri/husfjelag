@@ -76,6 +76,7 @@ class CategoryType(models.TextChoices):
     SHARE2 = "SHARE2", "Hiti"
     SHARE3 = "SHARE3", "Lóð"
     EQUAL  = "EQUAL",  "Jafnskipt"
+    INCOME = "INCOME", "Tekjur"
 
 
 class Category(models.Model):

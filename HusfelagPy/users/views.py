@@ -57,17 +57,22 @@ class UserView(APIView):
         return Response(UserSerializer(user).data)
 
     def patch(self, request, user_id):
-        """PATCH /User/{user_id} — Update email and/or phone."""
+        """PATCH /User/{user_id} — Update name, email and/or phone."""
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        if "name" in request.data:
+            name = (request.data["name"] or "").strip()
+            if not name:
+                return Response({"detail": "Nafn má ekki vera tómt."}, status=status.HTTP_400_BAD_REQUEST)
+            user.name = name
         email = request.data.get("email", user.email)
         phone = request.data.get("phone", user.phone)
         user.email = email or None
         user.phone = phone or None
-        user.save(update_fields=["email", "phone"])
+        user.save(update_fields=["name", "email", "phone"])
         return Response(UserSerializer(user).data)
 
 

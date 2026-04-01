@@ -22,6 +22,7 @@ const CATEGORY_TYPES = [
     { value: 'SHARE2', label: 'Hiti' },
     { value: 'SHARE3', label: 'Lóð' },
     { value: 'EQUAL',  label: 'Jafnskipt' },
+    { value: 'INCOME', label: 'Tekjur' },
 ];
 const typeLabel = (type) => CATEGORY_TYPES.find(t => t.value === type)?.label || type;
 
@@ -63,6 +64,9 @@ function SuperAdminPage() {
                     </Grid>
                     <Grid item xs={12}>
                         <GlobalAccountingKeysPanel user={user} />
+                    </Grid>
+                    <Grid item xs={12}>
+                        <GlobalCategoryRulesPanel user={user} />
                     </Grid>
                 </Grid>
             </Box>
@@ -339,18 +343,18 @@ function GlobalCategoriesPanel({ user }) {
                 </Box>
                 <Button
                     variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    onClick={() => setShowForm(v => !v)}
+                    onClick={() => setShowForm(true)}
                 >
-                    {showForm ? 'Loka' : '+ Bæta við flokk'}
+                    + Bæta við flokk
                 </Button>
             </Box>
 
-            <Collapse in={showForm}>
-                <GlobalAddCategoryForm
-                    userId={user.id}
-                    onCreated={() => { setShowForm(false); loadCategories(); }}
-                />
-            </Collapse>
+            <GlobalCreateCategoryDialog
+                open={showForm}
+                onClose={() => setShowForm(false)}
+                userId={user.id}
+                onCreated={() => { setShowForm(false); loadCategories(); }}
+            />
 
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
 
@@ -365,13 +369,14 @@ function GlobalCategoriesPanel({ user }) {
                             <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                 <TableCell>Nafn</TableCell>
                                 <TableCell>Tegund</TableCell>
-                                <TableCell>Gjaldareikningur</TableCell>
+                                <TableCell>Bókhaldsreikningur</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {active.map(c => (
-                                <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} />
+                                <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories}
+                                    onUpdated={updated => setCategories(cats => cats.map(cat => cat.id === updated.id ? updated : cat))} />
                             ))}
                         </TableBody>
                     </Table>
@@ -394,13 +399,14 @@ function GlobalCategoriesPanel({ user }) {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
                                         <TableCell>Nafn</TableCell>
                                         <TableCell>Tegund</TableCell>
-                                        <TableCell>Gjaldareikningur</TableCell>
+                                        <TableCell>Bókhaldsreikningur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {disabled.map(c => (
-                                        <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} isDisabled />
+                                        <GlobalCategoryRow key={c.id} category={c} userId={user.id} onSaved={loadCategories} isDisabled
+                                            onUpdated={updated => setCategories(cats => cats.map(cat => cat.id === updated.id ? updated : cat))} />
                                     ))}
                                 </TableBody>
                             </Table>
@@ -412,11 +418,24 @@ function GlobalCategoriesPanel({ user }) {
     );
 }
 
-function GlobalAddCategoryForm({ userId, onCreated }) {
+function GlobalCreateCategoryDialog({ open, onClose, userId, onCreated }) {
     const [name, setName] = React.useState('');
     const [type, setType] = React.useState('');
+    const [expenseAccountId, setExpenseAccountId] = React.useState('');
+    const [incomeAccountId, setIncomeAccountId] = React.useState('');
+    const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [saving, setSaving] = React.useState(false);
     const [error, setError] = React.useState('');
+
+    React.useEffect(() => {
+        if (open) {
+            setName(''); setType(''); setExpenseAccountId(''); setIncomeAccountId(''); setError('');
+            fetch(`${API_URL}/AccountingKey/list`)
+                .then(r => r.ok ? r.json() : [])
+                .then(data => setAccountingKeys(data))
+                .catch(() => {});
+        }
+    }, [open]);
 
     const isValid = name.trim() && type;
 
@@ -427,15 +446,10 @@ function GlobalAddCategoryForm({ userId, onCreated }) {
             const resp = await fetch(`${API_URL}/Category`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: userId, name: name.trim(), type }),
+                body: JSON.stringify({ user_id: userId, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
-            if (resp.ok) {
-                setName(''); setType('');
-                onCreated();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við skráningu.');
-            }
+            if (resp.ok) { onCreated(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við skráningu.'); }
         } catch {
             setError('Tenging við þjón mistókst.');
         } finally {
@@ -444,43 +458,61 @@ function GlobalAddCategoryForm({ userId, onCreated }) {
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
-            <TextField
-                label="Nafn flokks" value={name}
-                onChange={e => setName(e.target.value)}
-                size="small" fullWidth
-            />
-            <FormControl size="small" fullWidth>
-                <InputLabel>Tegund</InputLabel>
-                <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
-                    {CATEGORY_TYPES.map(t => (
-                        <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista flokk'}
-            </Button>
-        </Paper>
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle>Nýr flokkur</DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
+                <TextField label="Nafn flokks" value={name} onChange={e => setName(e.target.value)} size="small" fullWidth />
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Tegund</InputLabel>
+                    <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                        {CATEGORY_TYPES.map(t => (
+                            <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Bókhaldsreikningur (valfrjálst)</InputLabel>
+                    <Select value={expenseAccountId} label="Bókhaldsreikningur (valfrjálst)" onChange={e => setExpenseAccountId(e.target.value)}>
+                        <MenuItem value=""><em>Enginn</em></MenuItem>
+                        {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
+                            <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
+                    <Select value={incomeAccountId} label="Tekjureikningur (valfrjálst)" onChange={e => setIncomeAccountId(e.target.value)}>
+                        <MenuItem value=""><em>Enginn</em></MenuItem>
+                        {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
+                            <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista flokk'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
-function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
+function GlobalCategoryRow({ category, userId, onSaved, onUpdated, isDisabled }) {
     const [editOpen, setEditOpen] = React.useState(false);
+    const accountLabel = category.expense_account_number
+        ? `${category.expense_account_number} · ${category.expense_account_name}`
+        : category.income_account_number
+            ? `${category.income_account_number} · ${category.income_account_name}`
+            : '—';
     return (
         <>
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{category.name}</TableCell>
                 <TableCell>{typeLabel(category.type)}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>
-                    {category.expense_account_number
-                        ? `${category.expense_account_number} · ${category.expense_account_name}`
-                        : '—'}
-                </TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>{accountLabel}</TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -495,7 +527,7 @@ function GlobalCategoryRow({ category, userId, onSaved, isDisabled }) {
                 category={category}
                 userId={userId}
                 isDisabled={isDisabled}
-                onSaved={() => { setEditOpen(false); onSaved(); }}
+                onSaved={(updated) => { setEditOpen(false); if (updated) onUpdated(updated); onSaved(); }}
             />
         </>
     );
@@ -510,6 +542,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
     const [error, setError] = React.useState('');
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [expenseAccountId, setExpenseAccountId] = React.useState(category.expense_account_id || '');
+    const [incomeAccountId, setIncomeAccountId] = React.useState(category.income_account_id || '');
 
     React.useEffect(() => {
         if (open) {
@@ -517,6 +550,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             setType(category.type);
             setError('');
             setExpenseAccountId(category.expense_account_id || '');
+            setIncomeAccountId(category.income_account_id || '');
             fetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
@@ -533,13 +567,14 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null }),
+                body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
             });
             if (resp.ok) {
+                const updated = await resp.json();
                 if (isDisabled) {
                     await fetch(`${API_URL}/Category/enable/${category.id}?user_id=${userId}`, { method: 'PATCH' });
                 }
-                onSaved();
+                onSaved(updated);
             } else {
                 const data = await resp.json();
                 setError(data.detail || 'Villa við uppfærslu.');
@@ -583,14 +618,27 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         </Select>
                     </FormControl>
                     <FormControl size="small" fullWidth>
-                        <InputLabel>Gjaldareikningur (valfrjálst)</InputLabel>
+                        <InputLabel>Bókhaldsreikningur (valfrjálst)</InputLabel>
                         <Select
                             value={expenseAccountId}
-                            label="Gjaldareikningur (valfrjálst)"
+                            label="Bókhaldsreikningur (valfrjálst)"
                             onChange={e => setExpenseAccountId(e.target.value)}
                         >
                             <MenuItem value=""><em>Enginn</em></MenuItem>
                             {accountingKeys.filter(k => k.type === 'EXPENSE').map(k => (
+                                <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Tekjureikningur (valfrjálst)</InputLabel>
+                        <Select
+                            value={incomeAccountId}
+                            label="Tekjureikningur (valfrjálst)"
+                            onChange={e => setIncomeAccountId(e.target.value)}
+                        >
+                            <MenuItem value=""><em>Enginn</em></MenuItem>
+                            {accountingKeys.filter(k => k.type === 'INCOME').map(k => (
                                 <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
                             ))}
                         </Select>
@@ -966,6 +1014,159 @@ function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, i
                 </DialogActions>
             </Dialog>
         </>
+    );
+}
+
+function GlobalCategoryRulesPanel({ user }) {
+    const [rules, setRules] = React.useState([]);
+    const [categories, setCategories] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState('');
+    const [dialogOpen, setDialogOpen] = React.useState(false);
+    const [editRule, setEditRule] = React.useState(null);
+    const [keyword, setKeyword] = React.useState('');
+    const [categoryId, setCategoryId] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+    const [saveError, setSaveError] = React.useState('');
+    const [deleteRule, setDeleteRule] = React.useState(null);
+    const [deleting, setDeleting] = React.useState(false);
+
+    React.useEffect(() => { load(); }, []);
+
+    const load = () => {
+        if (!user?.id) return;
+        setLoading(true);
+        Promise.all([
+            fetch(`${API_URL}/CategoryRule/${user.id}`).then(r => r.ok ? r.json() : null),
+            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
+        ]).then(([rulesData, cats]) => {
+            if (rulesData) setRules(rulesData.global_rules || []);
+            setCategories(cats || []);
+        }).catch(() => setError('Gat ekki sótt reglur.'))
+        .finally(() => setLoading(false));
+    };
+
+    const openCreate = () => { setEditRule(null); setKeyword(''); setCategoryId(''); setSaveError(''); setDialogOpen(true); };
+    const openEdit = (rule) => { setEditRule(rule); setKeyword(rule.keyword); setCategoryId(rule.category.id); setSaveError(''); setDialogOpen(true); };
+
+    const handleSave = async () => {
+        if (!keyword.trim() || !categoryId) { setSaveError('Lykilorð og flokkur eru nauðsynleg.'); return; }
+        setSaving(true); setSaveError('');
+        try {
+            const resp = editRule
+                ? await fetch(`${API_URL}/CategoryRule/update/${editRule.id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
+                })
+                : await fetch(`${API_URL}/CategoryRule`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: true }),
+                });
+            if (resp.ok) { setDialogOpen(false); load(); }
+            else { const data = await resp.json(); setSaveError(data.detail || 'Villa við vistun.'); }
+        } catch { setSaveError('Tenging við þjón mistókst.'); }
+        finally { setSaving(false); }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteRule) return;
+        setDeleting(true);
+        try {
+            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}`, {
+                method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id }),
+            });
+            if (resp.ok) { setDeleteRule(null); load(); }
+        } catch {}
+        finally { setDeleting(false); }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box>
+                    <Typography variant="h6">Flokkunarreglur</Typography>
+                    <Typography variant="body2" color="text.secondary">Almennar reglur — gilda fyrir öll húsfélög</Typography>
+                </Box>
+                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={openCreate}>
+                    + Ný regla
+                </Button>
+            </Box>
+
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            ) : (
+                <>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {rules.length === 0 ? (
+                        <Typography color="text.secondary">Engar almennar reglur skráðar.</Typography>
+                    ) : (
+                        <Paper variant="outlined">
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                        <TableCell>Lykilorð</TableCell>
+                                        <TableCell>Flokkur</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {rules.map(rule => (
+                                        <TableRow key={rule.id} hover>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{rule.keyword}</TableCell>
+                                            <TableCell>
+                                                <Box component="span" sx={{ background: '#f5f5f5', color: '#555', px: 1, py: 0.25, borderRadius: 3, fontSize: 12 }}>
+                                                    {rule.category.name}
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                                <Typography component="span" sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }} onClick={() => openEdit(rule)}>Breyta</Typography>
+                                                <Typography component="span" sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }} onClick={() => setDeleteRule(rule)}>Eyða</Typography>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
+                </>
+            )}
+
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>{editRule ? 'Breyta reglu' : 'Ný almenn regla'}</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <TextField label="Lykilorð" value={keyword} size="small" fullWidth autoFocus onChange={e => setKeyword(e.target.value)} />
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Flokkur</InputLabel>
+                        <Select value={categoryId} label="Flokkur" onChange={e => setCategoryId(e.target.value)}>
+                            {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                        </Select>
+                    </FormControl>
+                    {saveError && <Alert severity="error">{saveError}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setDialogOpen(false)}>Hætta við</Button>
+                    <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={handleSave} disabled={saving}>
+                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!deleteRule} onClose={() => setDeleteRule(null)} maxWidth="xs" fullWidth>
+                <DialogTitle>Eyða reglu</DialogTitle>
+                <DialogContent>
+                    <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setDeleteRule(null)}>Hætta við</Button>
+                    <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                        {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Paper>
     );
 }
 

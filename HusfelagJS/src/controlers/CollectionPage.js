@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
-    Alert, Chip,
+    Alert, Chip, Tooltip, IconButton,
 } from '@mui/material';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
-import { fmtAmount } from '../format';
+import { fmtAmount, fmtKennitala } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -76,6 +77,19 @@ function CollectionPage() {
             .finally(() => setGenerating(false));
     };
 
+    const handleUnmatch = (collectionId) => {
+        if (!collectionId) return;
+        setMatchError('');
+        fetch(`${API_URL}/Collection/unmatch${assocParam}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId) }),
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => load())
+            .catch(err => setMatchError(typeof err === 'string' ? err : 'Villa við að aftengja greiðslu.'));
+    };
+
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
@@ -116,7 +130,7 @@ function CollectionPage() {
 
                 {/* Header */}
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                    <Typography variant="h5" fontWeight={300}>Innheimta {year}</Typography>
+                    <Typography variant="h5">Innheimta {year}</Typography>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <Select
                             size="small"
@@ -141,6 +155,7 @@ function CollectionPage() {
                 </Box>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
 
                 {/* Collection items table */}
                 {hasItems ? (
@@ -154,8 +169,10 @@ function CollectionPage() {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
                                         <TableCell>Íbúð</TableCell>
                                         <TableCell>Greiðandi</TableCell>
+                                        <TableCell>Kennitala</TableCell>
                                         <TableCell align="right">Upphæð</TableCell>
                                         <TableCell align="center">Staða</TableCell>
+                                        <TableCell />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -164,20 +181,31 @@ function CollectionPage() {
                                             sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
                                             <TableCell>{row.anr}</TableCell>
                                             <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                             <TableCell align="right">{fmtAmount(row.amount_total)}</TableCell>
                                             <TableCell align="center">
                                                 <StatusBadge status={row.status} date={row.paid_transaction_date} />
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ width: 40, pr: 1 }}>
+                                                {row.status === 'PAID' && (
+                                                    <Tooltip title="Aftengja greiðslu">
+                                                        <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
+                                                            <LinkOffIcon fontSize="small" sx={{ color: '#bbb' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                        <TableCell colSpan={2}>Samtals</TableCell>
+                                        <TableCell colSpan={3}>Samtals</TableCell>
                                         <TableCell align="right">{fmtAmount(totalAmount)}</TableCell>
                                         <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
                                             {paidCount}/{rows.length} greidd
                                         </TableCell>
+                                        <TableCell />
                                     </TableRow>
                                 </TableFooter>
                             </Table>
@@ -212,6 +240,7 @@ function CollectionPage() {
                                     <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
                                         <TableCell>Dags.</TableCell>
                                         <TableCell>Lýsing</TableCell>
+                                        <TableCell>Kennitala</TableCell>
                                         <TableCell align="right">Upphæð</TableCell>
                                         <TableCell>Tengja við</TableCell>
                                     </TableRow>
@@ -221,6 +250,7 @@ function CollectionPage() {
                                         <TableRow key={tx.transaction_id} hover>
                                             <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
                                             <TableCell>{tx.description}</TableCell>
+                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                             <TableCell align="right" sx={{ color: '#2e7d32' }}>+{fmtAmount(tx.amount)}</TableCell>
                                             <TableCell>
                                                 <Select

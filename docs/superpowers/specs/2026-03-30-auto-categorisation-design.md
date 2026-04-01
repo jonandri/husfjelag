@@ -117,7 +117,7 @@ One new migration: `CreateCategoryRule`.
 Two sections:
 
 **"Reglur þessa félags"** (green heading)
-- Table: Lykliorð | Flokkur | Breyta / Eyða
+- Table: Lykilorð | Flokkur | Breyta / Eyða
 - "+ Ný regla" button opens an inline form: keyword text field + category dropdown + Save
 - Edit: inline row editing (same form, pre-filled)
 - Delete: confirms with a small dialog

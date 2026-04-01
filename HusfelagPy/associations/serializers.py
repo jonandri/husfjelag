@@ -91,13 +91,16 @@ class CategorySerializer(serializers.ModelSerializer):
     income_account_number = serializers.IntegerField(
         source="income_account.number", read_only=True, allow_null=True
     )
+    income_account_name = serializers.CharField(
+        source="income_account.name", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = Category
         fields = [
             "id", "name", "type", "deleted",
             "expense_account_id", "expense_account_number", "expense_account_name",
-            "income_account_id", "income_account_number",
+            "income_account_id", "income_account_number", "income_account_name",
         ]
 
 

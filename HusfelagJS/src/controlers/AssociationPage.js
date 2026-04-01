@@ -21,6 +21,7 @@ function AssociationPage() {
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
     const [budgetTotal, setBudgetTotal] = useState(null);
+    const [budgetName, setBudgetName] = useState(null);
     const [monthlyTotal, setMonthlyTotal] = useState(null);
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
@@ -52,6 +53,7 @@ function AssociationPage() {
                 const budget = await budgetResp.json();
                 if (budget?.items) {
                     setBudgetTotal(budget.items.reduce((s, i) => s + parseFloat(i.amount || 0), 0));
+                    if (budget.name) setBudgetName(budget.name);
                 }
             }
 
@@ -107,8 +109,8 @@ function AssociationPage() {
 
                 {/* Row 1: association stats */}
                 <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
-                    <KpiCard label="Íbúðir skráðar" value={association.apartment_count} />
-                    <KpiCard label="Eigendur skráðir" value={association.owner_count} />
+                    <KpiCard label="Íbúðir" value={association.apartment_count} />
+                    <KpiCard label="Eigendur" value={association.owner_count} />
                     <RoleCard
                         label="Formaður"
                         value={association.chair || '—'}
@@ -124,7 +126,7 @@ function AssociationPage() {
                 {/* Row 2: financials */}
                 <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
                     <KpiCard
-                        label={`Áætlun ${new Date().getFullYear()}`}
+                        label={budgetName || `Áætlun ${new Date().getFullYear()}`}
                         value={budgetTotal !== null ? fmtAmount(budgetTotal) : '—'}
                         small
                     />
@@ -138,6 +140,7 @@ function AssociationPage() {
                 {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
 
                 <BankAccountsPanel user={user} assocParam={assocParam} />
+                <AssociationRulesPanel user={user} assocParam={assocParam} />
             </Box>
 
             {roleDialog && (
@@ -595,6 +598,156 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
                 </DialogActions>
             </Dialog>
         </>
+    );
+}
+
+function AssociationRulesPanel({ user, assocParam }) {
+    const [rules, setRules] = React.useState([]);
+    const [categories, setCategories] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState('');
+    const [dialogOpen, setDialogOpen] = React.useState(false);
+    const [editRule, setEditRule] = React.useState(null);
+    const [keyword, setKeyword] = React.useState('');
+    const [categoryId, setCategoryId] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+    const [saveError, setSaveError] = React.useState('');
+    const [deleteRule, setDeleteRule] = React.useState(null);
+    const [deleting, setDeleting] = React.useState(false);
+
+    React.useEffect(() => { load(); }, [assocParam]);
+
+    const load = () => {
+        if (!user?.id) return;
+        setLoading(true);
+        Promise.all([
+            fetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
+            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
+        ]).then(([rulesData, cats]) => {
+            if (rulesData) setRules(rulesData.association_rules || []);
+            setCategories(cats || []);
+        }).catch(() => setError('Gat ekki sótt reglur.'))
+        .finally(() => setLoading(false));
+    };
+
+    const openCreate = () => { setEditRule(null); setKeyword(''); setCategoryId(''); setSaveError(''); setDialogOpen(true); };
+    const openEdit = (rule) => { setEditRule(rule); setKeyword(rule.keyword); setCategoryId(rule.category.id); setSaveError(''); setDialogOpen(true); };
+
+    const handleSave = async () => {
+        if (!keyword.trim() || !categoryId) { setSaveError('Lykilorð og flokkur eru nauðsynleg.'); return; }
+        setSaving(true); setSaveError('');
+        try {
+            const resp = editRule
+                ? await fetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
+                })
+                : await fetch(`${API_URL}/CategoryRule${assocParam}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: false }),
+                });
+            if (resp.ok) { setDialogOpen(false); load(); }
+            else { const data = await resp.json(); setSaveError(data.detail || 'Villa við vistun.'); }
+        } catch { setSaveError('Tenging við þjón mistókst.'); }
+        finally { setSaving(false); }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteRule) return;
+        setDeleting(true);
+        try {
+            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
+                method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: user.id }),
+            });
+            if (resp.ok) { setDeleteRule(null); load(); }
+        } catch {}
+        finally { setDeleting(false); }
+    };
+
+    return (
+        <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="h6">Flokkunarreglur</Typography>
+                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={openCreate}>
+                    + Ný regla
+                </Button>
+            </Box>
+
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                    <CircularProgress color="secondary" />
+                </Box>
+            ) : (
+                <>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {rules.length === 0 ? (
+                        <Typography color="text.secondary">Engar reglur skráðar.</Typography>
+                    ) : (
+                        <Paper variant="outlined">
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                        <TableCell>Lykilorð</TableCell>
+                                        <TableCell>Flokkur</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {rules.map(rule => (
+                                        <TableRow key={rule.id} hover>
+                                            <TableCell sx={{ fontFamily: 'monospace' }}>{rule.keyword}</TableCell>
+                                            <TableCell>
+                                                <Box component="span" sx={{ background: '#e8f5e9', color: '#2e7d32', px: 1, py: 0.25, borderRadius: 3, fontSize: 12 }}>
+                                                    {rule.category.name}
+                                                </Box>
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                                <Typography component="span" sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }} onClick={() => openEdit(rule)}>Breyta</Typography>
+                                                <Typography component="span" sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }} onClick={() => setDeleteRule(rule)}>Eyða</Typography>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
+                </>
+            )}
+
+            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+                <DialogTitle>{editRule ? 'Breyta reglu' : 'Ný regla'}</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <TextField label="Lykilorð" value={keyword} size="small" fullWidth autoFocus onChange={e => setKeyword(e.target.value)} />
+                    <FormControl size="small" fullWidth>
+                        <InputLabel>Flokkur</InputLabel>
+                        <Select value={categoryId} label="Flokkur" onChange={e => setCategoryId(e.target.value)}>
+                            {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                        </Select>
+                    </FormControl>
+                    {saveError && <Alert severity="error">{saveError}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setDialogOpen(false)}>Hætta við</Button>
+                    <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={handleSave} disabled={saving}>
+                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={!!deleteRule} onClose={() => setDeleteRule(null)} maxWidth="xs" fullWidth>
+                <DialogTitle>Eyða reglu</DialogTitle>
+                <DialogContent>
+                    <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button onClick={() => setDeleteRule(null)}>Hætta við</Button>
+                    <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                        {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Paper>
     );
 }
 
