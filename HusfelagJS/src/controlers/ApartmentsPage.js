@@ -13,6 +13,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala } from '../format';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -59,152 +60,151 @@ function ApartmentsPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Íbúðir</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button
-                            variant="text"
-                            size="small"
-                            sx={{ color: 'text.secondary', textTransform: 'none', fontSize: '0.8rem' }}
+                            variant="outlined"
+                            sx={secondaryButtonSx}
                             onClick={() => navigate('/ibudir/innflutningur')}
                         >
                             ⬇ HMS innflutningur
                         </Button>
                         <Button
                             variant="contained"
-                            color="secondary"
-                            sx={{ color: '#fff' }}
-                            onClick={() => setShowForm(v => !v)}
+                            sx={primaryButtonSx}
+                            onClick={() => setShowForm(true)}
                         >
-                            {showForm ? 'Loka skráningarformi' : '+ Bæta við íbúð'}
+                            + Bæta við íbúð
                         </Button>
                     </Box>
                 </Box>
 
-                <Collapse in={showForm}>
-                    <AddApartmentForm
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <AddApartmentDialog
+                        open={showForm}
+                        onClose={() => setShowForm(false)}
                         userId={user.id}
                         assocParam={assocParam}
                         apartments={apartments.filter(a => !a.deleted)}
                         onCreated={(updated) => { setShowForm(false); setApartments(updated); }}
                     />
-                </Collapse>
 
-                {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                {(() => {
-                    const active = apartments.filter(a => !a.deleted);
-                    const disabled = apartments.filter(a => a.deleted);
-                    return (
-                        <>
-                            {active.length === 0 ? (
-                                <Paper
-                                    variant="outlined"
-                                    sx={{ mt: 2, p: 3, borderColor: 'secondary.main', bgcolor: 'rgba(8,192,118,0.05)' }}
-                                >
-                                    <Typography variant="subtitle1" color="secondary" sx={{ mb: 0.5 }}>
-                                        Setja upp íbúðir sjálfkrafa
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                        Enginn búinn að skrá íbúðir. Notaðu HMS fasteignaskrána til að flytja inn lista yfir íbúðir sjálfkrafa.
-                                    </Typography>
-                                    <Button
-                                        variant="contained"
-                                        color="secondary"
-                                        sx={{ color: '#fff' }}
-                                        onClick={() => navigate('/ibudir/innflutningur')}
+                    {(() => {
+                        const active = apartments.filter(a => !a.deleted);
+                        const disabled = apartments.filter(a => a.deleted);
+                        return (
+                            <>
+                                {active.length === 0 ? (
+                                    <Paper
+                                        variant="outlined"
+                                        sx={{ p: 3, borderColor: 'secondary.main', bgcolor: 'rgba(8,192,118,0.05)' }}
                                     >
-                                        Flytja inn frá HMS →
-                                    </Button>
-                                </Paper>
-                            ) : (
-                                <Paper variant="outlined" sx={{ mt: 2 }}>
-                                    <Table size="small">
-                                        <TableHead sx={HEAD_SX}>
-                                            <TableRow>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Merking')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('fnr', 'Fastanúmer')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('size', 'Stærð (m²)')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share_2', 'Hiti (%)')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>{lbl('share_3', 'Lóð (%)')}</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Eigendur</TableCell>
-                                                <TableCell />
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {sort(active).map((apt) => (
-                                                <ApartmentRow
-                                                    key={apt.id}
-                                                    apt={apt}
-                                                    apartments={active}
-                                                    onOwnersChanged={loadApartments}
-                                                    onSaved={loadApartments}
-                                                />
-                                            ))}
-                                        </TableBody>
-                                        <TableFooter>
-                                            <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                                <TableCell>Samtals</TableCell>
-                                                <TableCell />
-                                                <TableCell>{active.reduce((s, a) => s + parseFloat(a.size || 0), 0).toFixed(2)} m²</TableCell>
-                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share || 0), 0))}</TableCell>
-                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0))}</TableCell>
-                                                <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0))}</TableCell>
-                                                <TableCell />
-                                                <TableCell />
-                                            </TableRow>
-                                        </TableFooter>
-                                    </Table>
-                                </Paper>
-                            )}
+                                        <Typography variant="subtitle1" color="secondary" sx={{ mb: 0.5 }}>
+                                            Setja upp íbúðir sjálfkrafa
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                                            Enginn búinn að skrá íbúðir. Notaðu HMS fasteignaskrána til að flytja inn lista yfir íbúðir sjálfkrafa.
+                                        </Typography>
+                                        <Button
+                                            variant="contained"
+                                            sx={primaryButtonSx}
+                                            onClick={() => navigate('/ibudir/innflutningur')}
+                                        >
+                                            Flytja inn frá HMS →
+                                        </Button>
+                                    </Paper>
+                                ) : (
+                                    <Paper variant="outlined">
+                                        <Table size="small">
+                                            <TableHead sx={HEAD_SX}>
+                                                <TableRow>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Merking')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('fnr', 'Fastanúmer')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('size', 'Stærð (m²)')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('share_2', 'Hiti (%)')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>{lbl('share_3', 'Lóð (%)')}</TableCell>
+                                                    <TableCell sx={HEAD_CELL_SX}>Eigendur</TableCell>
+                                                    <TableCell />
+                                                </TableRow>
+                                            </TableHead>
+                                            <TableBody>
+                                                {sort(active).map((apt) => (
+                                                    <ApartmentRow
+                                                        key={apt.id}
+                                                        apt={apt}
+                                                        apartments={active}
+                                                        onOwnersChanged={loadApartments}
+                                                        onSaved={loadApartments}
+                                                    />
+                                                ))}
+                                            </TableBody>
+                                            <TableFooter>
+                                                <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                                    <TableCell>Samtals</TableCell>
+                                                    <TableCell />
+                                                    <TableCell>{active.reduce((s, a) => s + parseFloat(a.size || 0), 0).toFixed(2)} m²</TableCell>
+                                                    <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share || 0), 0))}</TableCell>
+                                                    <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_2 || 0), 0))}</TableCell>
+                                                    <TableCell>{fmtPct(active.reduce((s, a) => s + parseFloat(a.share_3 || 0), 0))}</TableCell>
+                                                    <TableCell />
+                                                    <TableCell />
+                                                </TableRow>
+                                            </TableFooter>
+                                        </Table>
+                                    </Paper>
+                                )}
 
-                            {disabled.length > 0 && (
-                                <Box sx={{ mt: 3 }}>
-                                    <Button
-                                        size="small"
-                                        variant="text"
-                                        color="inherit"
-                                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0 }}
-                                        onClick={() => setShowDisabled(v => !v)}
-                                    >
-                                        {showDisabled ? '▲' : '▼'} Óvirkar íbúðir ({disabled.length})
-                                    </Button>
-                                    <Collapse in={showDisabled}>
-                                        <Paper variant="outlined" sx={{ mt: 1 }}>
-                                            <Table size="small">
-                                                <TableHead sx={HEAD_SX}>
-                                                    <TableRow>
-                                                        <TableCell sx={HEAD_CELL_SX}>Merking</TableCell>
-                                                        <TableCell sx={HEAD_CELL_SX}>Fastanúmer</TableCell>
-                                                        <TableCell sx={HEAD_CELL_SX}>Stærð (m²)</TableCell>
-                                                        <TableCell sx={HEAD_CELL_SX}>Matshlutfall (%)</TableCell>
-                                                        <TableCell sx={HEAD_CELL_SX}>Hiti (%)</TableCell>
-                                                        <TableCell sx={HEAD_CELL_SX}>Lóð (%)</TableCell>
-                                                        <TableCell />
-                                                    </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {sort(disabled).map((apt) => (
-                                                        <ApartmentRow
-                                                            key={apt.id}
-                                                            apt={apt}
-                                                            apartments={active}
-                                                            onOwnersChanged={loadApartments}
-                                                            onSaved={loadApartments}
-                                                            isDisabled
-                                                        />
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </Paper>
-                                    </Collapse>
-                                </Box>
-                            )}
-                        </>
-                    );
-                })()}
+                                {disabled.length > 0 && (
+                                    <Box sx={{ mt: 3 }}>
+                                        <Button
+                                            size="small"
+                                            sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
+                                            onClick={() => setShowDisabled(v => !v)}
+                                        >
+                                            {showDisabled ? '▲' : '▼'} Óvirkar íbúðir ({disabled.length})
+                                        </Button>
+                                        <Collapse in={showDisabled}>
+                                            <Paper variant="outlined" sx={{ mt: 1 }}>
+                                                <Table size="small">
+                                                    <TableHead sx={HEAD_SX}>
+                                                        <TableRow>
+                                                            <TableCell sx={HEAD_CELL_SX}>Merking</TableCell>
+                                                            <TableCell sx={HEAD_CELL_SX}>Fastanúmer</TableCell>
+                                                            <TableCell sx={HEAD_CELL_SX}>Stærð (m²)</TableCell>
+                                                            <TableCell sx={HEAD_CELL_SX}>Matshlutfall (%)</TableCell>
+                                                            <TableCell sx={HEAD_CELL_SX}>Hiti (%)</TableCell>
+                                                            <TableCell sx={HEAD_CELL_SX}>Lóð (%)</TableCell>
+                                                            <TableCell />
+                                                        </TableRow>
+                                                    </TableHead>
+                                                    <TableBody>
+                                                        {sort(disabled).map((apt) => (
+                                                            <ApartmentRow
+                                                                key={apt.id}
+                                                                apt={apt}
+                                                                apartments={active}
+                                                                onOwnersChanged={loadApartments}
+                                                                onSaved={loadApartments}
+                                                                isDisabled
+                                                            />
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </Paper>
+                                        </Collapse>
+                                    </Box>
+                                )}
+                            </>
+                        );
+                    })()}
+                </Box>
             </Box>
         </div>
     );
@@ -246,7 +246,7 @@ function SameShareCheckbox({ checked, onChange }) {
     );
 }
 
-function AddApartmentForm({ userId, assocParam, apartments, onCreated }) {
+function AddApartmentDialog({ open, onClose, userId, assocParam, apartments, onCreated }) {
     const [anr, setAnr] = useState('');
     const [fnr, setFnr] = useState('');
     const [size, setSize] = useState('');
@@ -257,6 +257,21 @@ function AddApartmentForm({ userId, assocParam, apartments, onCreated }) {
     const [share3Same, setShare3Same] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    React.useEffect(() => {
+        if (!open) {
+            setAnr('');
+            setFnr('');
+            setSize('');
+            setShare('');
+            setShare2('');
+            setShare2Same(false);
+            setShare3('');
+            setShare3Same(false);
+            setSaving(false);
+            setError('');
+        }
+    }, [open]);
 
     const eff2 = share2Same ? share : share2;
     const eff3 = share3Same ? share : share3;
@@ -292,8 +307,6 @@ function AddApartmentForm({ userId, assocParam, apartments, onCreated }) {
             });
             if (resp.ok) {
                 const updated = await resp.json();
-                setAnr(''); setFnr(''); setSize(''); setShare(''); setShare2(''); setShare3('');
-                setShare2Same(false); setShare3Same(false);
                 onCreated(updated);
             } else {
                 const data = await resp.json();
@@ -307,65 +320,72 @@ function AddApartmentForm({ userId, assocParam, apartments, onCreated }) {
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 600 }}>
-            <Typography variant="subtitle1">Skrá nýja íbúð</Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-                <TextField label="Merking" value={anr} onChange={e => setAnr(e.target.value)} size="small" fullWidth />
-                <TextField label="Fastanúmer" value={fnr} onChange={e => setFnr(e.target.value)} size="small" fullWidth />
-            </Box>
-            <TextField
-                label="Stærð (m²)"
-                value={size}
-                onChange={e => setSize(e.target.value.replace(/[^0-9.]/g, ''))}
-                size="small"
-                type="number"
-                inputProps={{ min: 0, step: 0.01 }}
-                helperText="Flatarmál íbúðar í fermetrum"
-                fullWidth
-            />
-            <ShareField
-                label="Matshlutfall (%)"
-                value={share}
-                onChange={setShare}
-                helperText="Matshluti hverrar íbúðar skv. eignaskiptasamningi"
-                error={shareOver ? 'Heildarhlutfall fer yfir 100%' : ''}
-            />
-            {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
-
-            <Box>
-                <ShareField
-                    label="Matshlutfall hita (%)"
-                    value={eff2}
-                    onChange={setShare2}
-                    helperText="Matshluti hita skv. eignaskiptasamningi"
-                    error={share2Over ? 'Heildarhlutfall fer yfir 100%' : ''}
-                    disabled={share2Same}
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ pb: 0.5 }}>
+                Skrá nýja íbúð
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+                    Íbúðin verður bætt við húsfélagið
+                </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField label="Merking" value={anr} onChange={e => setAnr(e.target.value)} size="small" fullWidth />
+                    <TextField label="Fastanúmer" value={fnr} onChange={e => setFnr(e.target.value)} size="small" fullWidth />
+                </Box>
+                <TextField
+                    label="Stærð (m²)"
+                    value={size}
+                    onChange={e => setSize(e.target.value.replace(/[^0-9.]/g, ''))}
+                    size="small"
+                    type="number"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    helperText="Flatarmál íbúðar í fermetrum"
+                    fullWidth
                 />
-                <SameShareCheckbox checked={share2Same} onChange={setShare2Same} />
-            </Box>
-            {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
-
-            <Box>
                 <ShareField
-                    label="Matshlutfall lóðar (%)"
-                    value={eff3}
-                    onChange={setShare3}
-                    helperText="Matshluti lóðar skv. eignaskiptasamningi"
-                    error={share3Over ? 'Heildarhlutfall fer yfir 100%' : ''}
-                    disabled={share3Same}
+                    label="Matshlutfall (%)"
+                    value={share}
+                    onChange={setShare}
+                    helperText="Matshluti hverrar íbúðar skv. eignaskiptasamningi"
+                    error={shareOver ? 'Heildarhlutfall fer yfir 100%' : ''}
                 />
-                <SameShareCheckbox checked={share3Same} onChange={setShare3Same} />
-            </Box>
-            {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
+                {shareOver && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share) myndi fara yfir 100%</Alert>}
 
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista íbúð'}
-            </Button>
-        </Paper>
+                <Box>
+                    <ShareField
+                        label="Matshlutfall hita (%)"
+                        value={eff2}
+                        onChange={setShare2}
+                        helperText="Matshluti hita skv. eignaskiptasamningi"
+                        error={share2Over ? 'Heildarhlutfall fer yfir 100%' : ''}
+                        disabled={share2Same}
+                    />
+                    <SameShareCheckbox checked={share2Same} onChange={setShare2Same} />
+                </Box>
+                {share2Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 2) myndi fara yfir 100%</Alert>}
+
+                <Box>
+                    <ShareField
+                        label="Matshlutfall lóðar (%)"
+                        value={eff3}
+                        onChange={setShare3}
+                        helperText="Matshluti lóðar skv. eignaskiptasamningi"
+                        error={share3Over ? 'Heildarhlutfall fer yfir 100%' : ''}
+                        disabled={share3Same}
+                    />
+                    <SameShareCheckbox checked={share3Same} onChange={setShare3Same} />
+                </Box>
+                {share3Over && <Alert severity="error" sx={{ mt: -1 }}>Heildarhlutfall (share 3) myndi fara yfir 100%</Alert>}
+
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'flex-end' }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Skrá íbúð'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
@@ -590,18 +610,20 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
                 <Box>
                     {!isDisabled && (
                         <Button
+                            sx={{ ...destructiveButtonSx, fontSize: '0.8rem' }}
                             onClick={() => setConfirmDelete(true)}
-                            sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
                         >
                             Óvirkja íbúð
                         </Button>
                     )}
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button onClick={onClose}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                     <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        disabled={!isValid || saving} onClick={isDisabled ? handleEnable : handleSave}
+                        variant="contained"
+                        sx={primaryButtonSx}
+                        disabled={!isValid || saving}
+                        onClick={isDisabled ? handleEnable : handleSave}
                     >
                         {saving
                             ? <CircularProgress size={18} color="inherit" />
@@ -619,8 +641,8 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
                 </DialogContentText>
             </DialogContent>
             <DialogActions>
-                <Button onClick={() => setConfirmDelete(false)}>Hætta við</Button>
-                <Button color="error" variant="contained" disabled={deleting} onClick={handleDisable}>
+                <Button sx={ghostButtonSx} onClick={() => setConfirmDelete(false)}>Hætta við</Button>
+                <Button variant="contained" sx={destructiveButtonSx} disabled={deleting} onClick={handleDisable}>
                     {deleting ? <CircularProgress size={18} color="inherit" /> : 'Já, óvirkja'}
                 </Button>
             </DialogActions>
@@ -694,7 +716,7 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
                                     <Typography variant="body2" fontWeight={500}>{o.name}</Typography>
                                     <Typography variant="caption" color="text.secondary">{fmtKennitala(o.kennitala)} · {o.share}%{o.is_payer ? ' · Greiðandi' : ''}</Typography>
                                 </Box>
-                                <Button size="small" color="error" onClick={() => handleRemove(o.id)}>Fjarlægja</Button>
+                                <Button size="small" sx={destructiveButtonSx} onClick={() => handleRemove(o.id)}>Fjarlægja</Button>
                             </Box>
                         ))}
                         <Typography variant="caption" color="text.secondary">
@@ -739,9 +761,9 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>Loka</Button>
+                <Button sx={ghostButtonSx} onClick={onClose}>Loka</Button>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     disabled={!isValid || saving} onClick={handleAdd}
                 >
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Skrá eiganda'}
