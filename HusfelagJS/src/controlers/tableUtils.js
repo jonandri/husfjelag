@@ -1,23 +1,51 @@
-import { useState } from 'react';
-import { TableSortLabel } from '@mui/material';
+// src/controlers/tableUtils.js
+import React, { useState } from 'react';
+import { TableCell, TableSortLabel } from '@mui/material';
+import { fmtAmount } from '../format';
 
-/** Sx applied to <TableHead> for a distinct, branded header */
+/** Sx applied to <TableHead> */
 export const HEAD_SX = {
-    backgroundColor: 'rgba(29,54,111,0.07)',
-    '& th': {
-        borderBottom: '2px solid rgba(29,54,111,0.15)',
-    },
+    backgroundColor: '#f5f5f5',
+    '& th': { borderBottom: '1px solid #e8e8e8' },
 };
 
 /** Sx applied to each <TableCell> inside the header */
 export const HEAD_CELL_SX = {
-    fontWeight: 700,
-    fontSize: '0.78rem',
-    letterSpacing: '0.03em',
+    fontWeight: 600,
+    fontSize: '0.7rem',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
-    color: 'text.secondary',
+    color: '#888',
     py: 1.25,
+    whiteSpace: 'nowrap',
 };
+
+/** Sx for totals/footer rows */
+export const TOTALS_ROW_SX = {
+    '& td': {
+        fontWeight: 600,
+        borderTop: '2px solid rgba(0,0,0,0.12)',
+        color: 'text.primary',
+    },
+};
+
+/**
+ * Table cell for currency amounts.
+ * Green for positive, red for negative, grey for zero.
+ */
+export function AmountCell({ value, sx = {}, ...props }) {
+    const n = parseFloat(value) || 0;
+    const color = n > 0 ? '#2e7d32' : n < 0 ? '#c62828' : 'text.disabled';
+    return (
+        <TableCell
+            align="right"
+            sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color, ...sx }}
+            {...props}
+        >
+            {fmtAmount(n)}
+        </TableCell>
+    );
+}
 
 /**
  * Sorting hook for tables.
@@ -40,7 +68,6 @@ export function useSort(defaultKey, defaultDir = 'asc') {
         if (av == null && bv == null) return 0;
         if (av == null) return 1;
         if (bv == null) return -1;
-        // Numeric strings (e.g. Decimal fields from API)
         const na = parseFloat(av), nb = parseFloat(bv);
         const cmp = (!isNaN(na) && !isNaN(nb) && typeof av !== 'boolean')
             ? (na - nb)
