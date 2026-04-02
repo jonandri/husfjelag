@@ -340,23 +340,146 @@ export function LabelChip({ label }) {
 
 ---
 
-## Navigation / Sidebar
+## Colors
 
-- "Yfirlit" (Reports/Overview page) is always the **first** item in the sidebar
-- Route: `/yfirlit`
-- "Yfirlit" is the **default post-login landing page** — the `/dashboard` redirect goes to `/yfirlit`
-- Sidebar icon for Yfirlit: `BarChartOutlinedIcon`
+| Role | Value | Usage |
+|------|-------|-------|
+| Navy (primary) | `#1D366F` | Buttons, sidebar background, active states |
+| Green (secondary) | `#08C076` | StatusChip accents, toggle chips |
+| Page background | `#FFFFFF` | All page surfaces |
+| Toolbar background | `#fafafa` | Zone ② toolbar |
+| Table header | `#f5f5f5` | `HEAD_SX` background |
+| Border | `#e8e8e8` | Zone dividers, table header border |
+| Row divider | `#f2f2f2` | Table row borders |
+| Active filter bg | `#eef1f8` | Focused filter, selected row highlight |
+| Sidebar text | `#FFFFFF` | Nav items, icons in sidebar |
+| Positive amount | `#2e7d32` | Green |
+| Negative amount | `#c62828` | Red |
+| Destructive | `#c62828` | Delete/disable button text |
+| Subtle text | `#888` | Table header labels, budget amounts |
 
 ---
 
 ## Typography
 
-- Page title: `Typography variant="h5"` — bold via theme (`fontWeight: 600`)
-- Subtitle / association context: `Typography variant="body2" color="text.secondary"`
-- Table column headers: `HEAD_CELL_SX` (0.7rem, uppercase, 600 weight, #888)
-- Result counts in toolbar: `variant="caption" color="text.disabled"`
-- Filter controls: `fontSize: 13` on both the `Select sx` and the `InputLabel sx`
-- Deactivate entity buttons (e.g. "Óvirkja eiganda", "Óvirkja íbúð"): `fontSize: '0.8rem'` — keep consistent across owner and apartment pages
+- **Font**: Inter (Google Fonts), loaded in `public/index.html`
+- **Feature settings**: `"tnum"` (tabular numbers — important for share/percentage columns)
+- **Page title**: `Typography variant="h5"`, `fontWeight: 600` via theme
+- **Subtitle / association context**: `Typography variant="body2" color="text.secondary"`
+- **Table column headers**: `HEAD_CELL_SX` (0.7rem, uppercase, 600 weight, #888)
+- **Result counts in toolbar**: `variant="caption" color="text.disabled"`
+- **Filter controls**: `fontSize: 13` on both the `Select sx` and the `InputLabel sx`
+- **Deactivate entity buttons** (e.g. "Óvirkja eiganda", "Óvirkja íbúð"): `fontSize: '0.8rem'` — keep consistent across owner and apartment pages
+
+---
+
+## Navigation / Sidebar
+
+- "Yfirlit" (Overview/Reports page) is always the **first** item in the sidebar
+- Route: `/yfirlit`; default post-login landing — `/dashboard` redirects to `/yfirlit`
+- Sidebar icon for Yfirlit: `BarChartOutlinedIcon`
+- Sidebar background: `#1D366F`; text/icons: `#FFFFFF`
+- Logo: clickable → navigates to `/dashboard`
+- Nav items: `fontFamily: Inter`, `fontWeight: 400`, `lineHeight: 2`
+- Bottom icons: stacked vertically, `p: 1`, `gap: 0.5`
+  - Account icon → user settings dialog
+  - Logout icon → `/logout`, turns `#ff6b6b` on hover
+- Icon hover: `color: secondary.main` (green `#08C076`)
+
+---
+
+## Inactive / Disabled Rows
+
+- Inactive records are shown in a **collapsed section below** the active table
+- Toggle button: `▼ Óvirkir X (n)` / `▲ Óvirkir X (n)` — subtle text style
+- Inactive rows: `sx={{ opacity: 0.55 }}`
+- Sorted alphabetically by primary identifier using Icelandic locale: `.sort((a, b) => a.anr.localeCompare(b.anr, 'is'))`
+
+---
+
+## Number Formatting
+
+All numbers use Icelandic locale (`.` thousands separator, `,` decimal). Always use helpers from `src/controlers/format.js` — never `.toFixed()` or `.toLocaleString()` directly.
+
+| Type | Format | Example | Helper |
+|------|--------|---------|--------|
+| Currency | `#.##0 kr.` | `981.500 kr.` | `fmtAmount(n)` |
+| Percentage | `#0,00%` | `33,33%` | `fmtPct(n)` |
+
+- `fmtAmount` rounds to nearest integer — no decimal places
+- `fmtPct` always shows exactly 2 decimal places
+- Negative amounts use Unicode minus `−` (U+2212), not hyphen-minus
+
+---
+
+## Validation
+
+### Email
+```js
+/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+```
+Only validate when non-empty. Helper text: `'Netfang verður að innihalda @ og lén (t.d. jon@husfelag.is)'`
+
+### Phone
+```js
+/^(\+\d{1,3}[\s-]?)?\d{3}[\s]?\d{4}$/.test(phone.trim())
+```
+Accepts `555 1234`, `5551234`, `+354 555 1234`. Helper text: `'Símanúmer: 7 tölustafir (t.d. 555 1234 eða +354 555 1234)'`
+
+### Share percentages
+- Validate against the sum of *active* (non-deleted) records only
+- Show error as `<Alert severity="error">` inline inside the form/dialog
+- Primary action button disabled while invalid
+
+---
+
+## Loading States
+
+| Context | Component |
+|---------|-----------|
+| Full-page | `<CircularProgress color="secondary" />` centered |
+| Button | `<CircularProgress size={18} color="inherit" />` replacing label |
+| Dialog content | `<CircularProgress size={24} />` centered in `DialogContent` |
+
+---
+
+## Icelandic Glossary
+
+| Icelandic | Meaning |
+|-----------|---------|
+| Vista | Save |
+| Hætta við | Cancel |
+| Breyta | Edit |
+| Óvirkja | Disable / Deactivate |
+| Virkja | Enable / Re-activate |
+| Skrá | Register / Create |
+| Nafn | Name |
+| Kennitala | National ID (10 digits) |
+| Netfang | Email |
+| Símanúmer | Phone number |
+| Íbúð | Apartment |
+| Eigandi | Owner |
+| Hlutfall | Share / percentage |
+| Greiðandi | Payer |
+| Samtals | Total |
+| Yfirlit | Overview / Dashboard |
+| Innheimta | Collection |
+| Tekjur | Income |
+| Gjöld | Expenses |
+| Áætlun | Budget |
+| Raun | Actual |
+
+---
+
+## API Conventions
+
+- `GET /Entity/{user_id}` — list entities for a user's association
+- `POST /Entity` — create
+- `PUT /Entity/update/{id}` — update
+- `PATCH /Entity/enable/{id}` — re-enable a soft-deleted record
+- `DELETE /Entity/delete/{id}` — soft-delete (sets `deleted=True`)
+- **Never hard-delete user data** — always soft-delete via `deleted = BooleanField(default=False)`
+- Share sums validated server-side against active records only
 
 ---
 
@@ -367,5 +490,5 @@ export function LabelChip({ label }) {
 | Button sx constants | `src/ui/buttons.js` |
 | StatusChip, LabelChip | `src/ui/chips.js` |
 | HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell | `src/controlers/tableUtils.js` |
-| fmtAmount | `src/controlers/format.js` |
+| fmtAmount, fmtPct | `src/controlers/format.js` |
 | Theme (primary navy, secondary green) | `src/App.js` |
