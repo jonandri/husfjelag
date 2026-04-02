@@ -8,7 +8,10 @@ import {
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
-import { fmtAmount, fmtKennitala } from '../format';
+import { fmtKennitala } from '../format';
+import { primaryButtonSx } from '../ui/buttons';
+import { StatusChip } from '../ui/chips';
+import { AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -16,20 +19,6 @@ const MONTH_NAMES = [
     '', 'Janúar', 'Febrúar', 'Mars', 'Apríl', 'Maí', 'Júní',
     'Júlí', 'Ágúst', 'September', 'Október', 'Nóvember', 'Desember',
 ];
-
-function StatusBadge({ status, date }) {
-    if (status === 'PAID') {
-        return (
-            <Box>
-                <Chip label="GREITT" size="small" sx={{ bgcolor: '#e8f5e9', color: '#2e7d32', fontWeight: 700, fontSize: 11 }} />
-                {date && <Typography variant="caption" display="block" color="text.secondary">{date}</Typography>}
-            </Box>
-        );
-    }
-    return (
-        <Chip label="ÓGREITT" size="small" sx={{ bgcolor: '#fff3e0', color: '#e65100', fontWeight: 700, fontSize: 11 }} />
-    );
-}
 
 function CollectionPage() {
     const navigate = useNavigate();
@@ -126,156 +115,161 @@ function CollectionPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-
-                {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                    <Typography variant="h5">Innheimta {year}</Typography>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Select
-                            size="small"
-                            value={month}
-                            onChange={e => setMonth(e.target.value)}
-                            sx={{ fontSize: 13 }}
-                        >
-                            {MONTH_NAMES.slice(1).map((name, i) => (
-                                <MenuItem key={i + 1} value={i + 1}>{name} {year}</MenuItem>
-                            ))}
-                        </Select>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            sx={{ color: '#fff', textTransform: 'none', whiteSpace: 'nowrap' }}
-                            onClick={handleGenerate}
-                            disabled={generating || hasItems}
-                        >
-                            {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
-                        </Button>
-                    </Box>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Typography variant="h5">Innheimta</Typography>
+                    <Button
+                        variant="contained"
+                        sx={primaryButtonSx}
+                        onClick={handleGenerate}
+                        disabled={generating || hasItems}
+                    >
+                        {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
+                    </Button>
                 </Box>
+                {/* Zone 2: Toolbar — month navigation / filters */}
+                <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                    <Select
+                        size="small"
+                        value={month}
+                        onChange={e => setMonth(e.target.value)}
+                        sx={{ fontSize: 13 }}
+                    >
+                        {MONTH_NAMES.slice(1).map((name, i) => (
+                            <MenuItem key={i + 1} value={i + 1}>{name} {year}</MenuItem>
+                        ))}
+                    </Select>
+                </Box>
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
 
-                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
 
-                {/* Collection items table */}
-                {hasItems ? (
-                    <>
-                        <Typography variant="overline" sx={{ color: '#1D366F', letterSpacing: 0.5, mb: 1, display: 'block' }}>
-                            Húsgjöld — {MONTH_NAMES[month]} {year}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ mb: 3 }}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
-                                        <TableCell>Íbúð</TableCell>
-                                        <TableCell>Greiðandi</TableCell>
-                                        <TableCell>Kennitala</TableCell>
-                                        <TableCell align="right">Upphæð</TableCell>
-                                        <TableCell align="center">Staða</TableCell>
-                                        <TableCell />
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {rows.map(row => (
-                                        <TableRow key={row.collection_id} hover
-                                            sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
-                                            <TableCell>{row.anr}</TableCell>
-                                            <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
-                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
-                                            <TableCell align="right">{fmtAmount(row.amount_total)}</TableCell>
-                                            <TableCell align="center">
-                                                <StatusBadge status={row.status} date={row.paid_transaction_date} />
-                                            </TableCell>
-                                            <TableCell align="right" sx={{ width: 40, pr: 1 }}>
-                                                {row.status === 'PAID' && (
-                                                    <Tooltip title="Aftengja greiðslu">
-                                                        <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
-                                                            <LinkOffIcon fontSize="small" sx={{ color: '#bbb' }} />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                                <TableFooter>
-                                    <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                        <TableCell colSpan={3}>Samtals</TableCell>
-                                        <TableCell align="right">{fmtAmount(totalAmount)}</TableCell>
-                                        <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
-                                            {paidCount}/{rows.length} greidd
-                                        </TableCell>
-                                        <TableCell />
-                                    </TableRow>
-                                </TableFooter>
-                            </Table>
-                        </Paper>
-                    </>
-                ) : (
-                    <Typography color="text.secondary" sx={{ mb: 3 }}>
-                        Engin innheimta hefur verið búin til fyrir {MONTH_NAMES[month]}. Smelltu á „+ Búa til {MONTH_NAMES[month]}" til að búa til færslur.
-                    </Typography>
-                )}
-
-                {/* Unmatched transactions section */}
-                {unmatched.length > 0 && (
-                    <>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                            <Typography variant="overline" sx={{ color: '#c62828', letterSpacing: 0.5 }}>
-                                Ósamræmdar tekjufærslur — {MONTH_NAMES[month]} {year}
+                    {/* Collection items table */}
+                    {hasItems ? (
+                        <>
+                            <Typography variant="overline" sx={{ color: '#1D366F', letterSpacing: 0.5, mb: 1, display: 'block' }}>
+                                Húsgjöld — {MONTH_NAMES[month]} {year}
                             </Typography>
-                            <Chip
-                                label={unmatched.length}
-                                size="small"
-                                sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, height: 18, fontSize: 10 }}
-                            />
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                            Greiðslur sem bárust en kennitala greiðanda fannst ekki. Tengdu þær handvirkt.
-                        </Typography>
-                        {matchError && <Alert severity="error" sx={{ mb: 1 }}>{matchError}</Alert>}
-                        <Paper variant="outlined">
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
-                                        <TableCell>Dags.</TableCell>
-                                        <TableCell>Lýsing</TableCell>
-                                        <TableCell>Kennitala</TableCell>
-                                        <TableCell align="right">Upphæð</TableCell>
-                                        <TableCell>Tengja við</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {unmatched.map(tx => (
-                                        <TableRow key={tx.transaction_id} hover>
-                                            <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
-                                            <TableCell>{tx.description}</TableCell>
-                                            <TableCell sx={{ color: '#888', fontSize: 12 }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
-                                            <TableCell align="right" sx={{ color: '#2e7d32' }}>+{fmtAmount(tx.amount)}</TableCell>
-                                            <TableCell>
-                                                <Select
-                                                    size="small"
-                                                    displayEmpty
-                                                    value=""
-                                                    onChange={e => handleMatch(e.target.value.split(':')[0], e.target.value.split(':')[1])}
-                                                    sx={{ fontSize: 12, minWidth: 180 }}
-                                                    renderValue={() => 'Veldu íbúð...'}
-                                                >
-                                                    <MenuItem value="" disabled>Veldu íbúð...</MenuItem>
-                                                    {pendingRows.map(col => (
-                                                        <MenuItem key={col.collection_id} value={`${col.collection_id}:${tx.transaction_id}`}>
-                                                            {col.anr} — {col.payer_name ?? '(enginn greiðandi)'}
-                                                        </MenuItem>
-                                                    ))}
-                                                </Select>
-                                            </TableCell>
+                            <Paper variant="outlined" sx={{ mb: 3 }}>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
+                                            <TableCell>Íbúð</TableCell>
+                                            <TableCell>Greiðandi</TableCell>
+                                            <TableCell>Kennitala</TableCell>
+                                            <TableCell align="right">Upphæð</TableCell>
+                                            <TableCell align="center">Staða</TableCell>
+                                            <TableCell />
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Paper>
-                    </>
-                )}
+                                    </TableHead>
+                                    <TableBody>
+                                        {rows.map(row => (
+                                            <TableRow key={row.collection_id} hover
+                                                sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
+                                                <TableCell>{row.anr}</TableCell>
+                                                <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                                <TableCell sx={{ color: '#888', fontSize: 12 }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                                <AmountCell value={row.amount_total} />
+                                                <TableCell align="center">
+                                                    <StatusChip status={row.status === 'PAID' ? 'PAID' : 'UNPAID'} />
+                                                    {row.status === 'PAID' && row.paid_transaction_date && (
+                                                        <Typography variant="caption" display="block" color="text.secondary">{row.paid_transaction_date}</Typography>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ width: 40, pr: 1 }}>
+                                                    {row.status === 'PAID' && (
+                                                        <Tooltip title="Aftengja greiðslu">
+                                                            <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
+                                                                <LinkOffIcon fontSize="small" sx={{ color: '#bbb' }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                    <TableFooter>
+                                        <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                            <TableCell colSpan={3}>Samtals</TableCell>
+                                            <AmountCell value={totalAmount} sx={{ fontWeight: 600 }} />
+                                            <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
+                                                {paidCount}/{rows.length} greidd
+                                            </TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+                            </Paper>
+                        </>
+                    ) : (
+                        <Typography color="text.secondary" sx={{ mb: 3 }}>
+                            Engin innheimta hefur verið búin til fyrir {MONTH_NAMES[month]}. Smelltu á „+ Búa til {MONTH_NAMES[month]}" til að búa til færslur.
+                        </Typography>
+                    )}
+
+                    {/* Unmatched transactions section */}
+                    {unmatched.length > 0 && (
+                        <>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                                <Typography variant="overline" sx={{ color: '#c62828', letterSpacing: 0.5 }}>
+                                    Ósamræmdar tekjufærslur — {MONTH_NAMES[month]} {year}
+                                </Typography>
+                                <Chip
+                                    label={unmatched.length}
+                                    size="small"
+                                    sx={{ bgcolor: '#ffebee', color: '#c62828', fontWeight: 700, height: 18, fontSize: 10 }}
+                                />
+                            </Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                Greiðslur sem bárust en kennitala greiðanda fannst ekki. Tengdu þær handvirkt.
+                            </Typography>
+                            {matchError && <Alert severity="error" sx={{ mb: 1 }}>{matchError}</Alert>}
+                            <Paper variant="outlined">
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
+                                            <TableCell>Dags.</TableCell>
+                                            <TableCell>Lýsing</TableCell>
+                                            <TableCell>Kennitala</TableCell>
+                                            <TableCell align="right">Upphæð</TableCell>
+                                            <TableCell>Tengja við</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {unmatched.map(tx => (
+                                            <TableRow key={tx.transaction_id} hover>
+                                                <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
+                                                <TableCell>{tx.description}</TableCell>
+                                                <TableCell sx={{ color: '#888', fontSize: 12 }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                                <AmountCell value={tx.amount} />
+                                                <TableCell>
+                                                    <Select
+                                                        size="small"
+                                                        displayEmpty
+                                                        value=""
+                                                        onChange={e => handleMatch(e.target.value.split(':')[0], e.target.value.split(':')[1])}
+                                                        sx={{ fontSize: 12, minWidth: 180 }}
+                                                        renderValue={() => 'Veldu íbúð...'}
+                                                    >
+                                                        <MenuItem value="" disabled>Veldu íbúð...</MenuItem>
+                                                        {pendingRows.map(col => (
+                                                            <MenuItem key={col.collection_id} value={`${col.collection_id}:${tx.transaction_id}`}>
+                                                                {col.anr} — {col.payer_name ?? '(enginn greiðandi)'}
+                                                            </MenuItem>
+                                                        ))}
+                                                    </Select>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </Paper>
+                        </>
+                    )}
+                </Box>
             </Box>
         </div>
     );
