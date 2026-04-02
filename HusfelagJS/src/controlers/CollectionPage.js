@@ -6,6 +6,11 @@ import {
     Alert, Chip, Tooltip, IconButton,
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
+import AddLinkIcon from '@mui/icons-material/AddLink';
+import {
+    Dialog, DialogTitle, DialogContent, DialogActions,
+} from '@mui/material';
+import { ghostButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
@@ -31,6 +36,7 @@ function CollectionPage() {
     const [error, setError] = useState('');
     const [generating, setGenerating] = useState(false);
     const [matchError, setMatchError] = useState('');
+    const [matchTarget, setMatchTarget] = useState(null);
 
     const load = useCallback(() => {
         if (!user) return;
@@ -143,6 +149,17 @@ function CollectionPage() {
                 </Box>
                 {/* Zone 3: Content */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <ManualMatchDialog
+                        open={!!matchTarget}
+                        row={matchTarget}
+                        userId={user?.id}
+                        assocParam={assocParam}
+                        onClose={() => setMatchTarget(null)}
+                        onMatched={(collectionId, transactionId) => {
+                            setMatchTarget(null);
+                            handleMatch(collectionId, transactionId);
+                        }}
+                    />
 
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                     {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
@@ -184,6 +201,13 @@ function CollectionPage() {
                                                         <Tooltip title="Aftengja greiðslu">
                                                             <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
                                                                 <LinkOffIcon fontSize="small" sx={{ color: '#bbb' }} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                    {row.status === 'PENDING' && (
+                                                        <Tooltip title="Tengja greiðslu">
+                                                            <IconButton size="small" onClick={() => setMatchTarget(row)}>
+                                                                <AddLinkIcon fontSize="small" sx={{ color: '#bbb' }} />
                                                             </IconButton>
                                                         </Tooltip>
                                                     )}
@@ -272,6 +296,87 @@ function CollectionPage() {
                 </Box>
             </Box>
         </div>
+    );
+}
+
+function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }) {
+    const [candidates, setCandidates] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [selected, setSelected] = useState(null);
+
+    React.useEffect(() => {
+        if (!open || !row) return;
+        setSelected(null);
+        setError('');
+        setCandidates([]);
+        setLoading(true);
+        const qs = assocParam
+            ? `${assocParam}&user_id=${userId}`
+            : `?user_id=${userId}`;
+        fetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`)
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(data => { setCandidates(data); setLoading(false); })
+            .catch(() => { setError('Villa við að sækja greiðslur.'); setLoading(false); });
+    }, [open, row]);
+
+    if (!row) return null;
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle>Tengja greiðslu við {row.payer_name}</DialogTitle>
+            <DialogContent sx={{ pt: 1 }}>
+                {loading && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                        <CircularProgress size={24} color="secondary" />
+                    </Box>
+                )}
+                {error && <Alert severity="error">{error}</Alert>}
+                {!loading && !error && candidates.length === 0 && (
+                    <Typography color="text.secondary" sx={{ py: 2 }}>
+                        Engar ósamræmdar greiðslur fundust fyrir þennan greiðanda.
+                    </Typography>
+                )}
+                {!loading && candidates.length > 0 && (
+                    <Table size="small">
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={HEAD_CELL_SX}>Dags.</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Lýsing</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Reikningur</TableCell>
+                                <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {candidates.map(tx => (
+                                <TableRow
+                                    key={tx.transaction_id}
+                                    hover
+                                    selected={selected === tx.transaction_id}
+                                    onClick={() => setSelected(tx.transaction_id)}
+                                    sx={{ cursor: 'pointer', bgcolor: selected === tx.transaction_id ? 'rgba(29,54,111,0.06)' : undefined }}
+                                >
+                                    <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{tx.date}</TableCell>
+                                    <TableCell>{tx.description}</TableCell>
+                                    <TableCell sx={{ color: 'text.secondary', fontSize: 12 }}>{tx.bank_account_name}</TableCell>
+                                    <AmountCell value={tx.amount} />
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button
+                    variant="contained" sx={primaryButtonSx}
+                    disabled={!selected}
+                    onClick={() => onMatched(row.collection_id, selected)}
+                >
+                    Tengja
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
