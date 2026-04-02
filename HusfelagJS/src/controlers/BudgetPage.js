@@ -10,8 +10,8 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
-import { fmtAmount } from '../format';
-import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { useSort, HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell } from './tableUtils';
+import { primaryButtonSx, ghostButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -70,56 +70,63 @@ function BudgetPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h5">{budgetTitle}</Typography>
-                    <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        onClick={handleCreate}
-                    >
-                        + Búa til nýja áætlun {year}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Typography variant="h5">{budgetTitle}</Typography>
+                        {budget && (
+                            <Typography variant="body2" color="text.secondary">
+                                {budget.year}
+                                {budget.version > 1 ? ` — útgáfa ${budget.version}` : ''}
+                            </Typography>
+                        )}
+                    </Box>
+                    <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
+                        + Ný áætlun
                     </Button>
                 </Box>
 
-                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                {!budget ? null : budget.items.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Áætlun er til en engir flokkar eru skráðir.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table size="small">
-                            <TableHead sx={HEAD_SX}>
-                                <TableRow>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('category_name', 'Flokkur')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('category_type', 'Tegund')}</TableCell>
-                                    <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('amount', 'Upphæð')}</TableCell>
-                                    <TableCell sx={{ width: 48 }} />
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sort(budget.items).map(item => (
-                                    <BudgetItemRow
-                                        key={item.id}
-                                        item={item}
-                                        onSaved={loadBudget}
-                                    />
-                                ))}
-                            </TableBody>
-                            <TableFooter>
-                                <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
-                                    <TableCell>Samtals</TableCell>
-                                    <TableCell />
-                                    <TableCell align="right">
-                                        {fmtAmount(total)}
-                                    </TableCell>
-                                    <TableCell />
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </Paper>
-                )}
+                    {!budget ? null : budget.items.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ mt: 4 }}>
+                            Áætlun er til en engir flokkar eru skráðir.
+                        </Typography>
+                    ) : (
+                        <Paper variant="outlined" sx={{ mt: 2 }}>
+                            <Table size="small">
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('category_name', 'Flokkur')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('category_type', 'Tegund')}</TableCell>
+                                        <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>{lbl('amount', 'Upphæð')}</TableCell>
+                                        <TableCell sx={{ width: 48 }} />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {sort(budget.items).map(item => (
+                                        <BudgetItemRow
+                                            key={item.id}
+                                            item={item}
+                                            onSaved={loadBudget}
+                                        />
+                                    ))}
+                                </TableBody>
+                                <TableFooter>
+                                    <TableRow sx={TOTALS_ROW_SX}>
+                                        <TableCell>Samtals</TableCell>
+                                        <TableCell />
+                                        <AmountCell value={total} />
+                                        <TableCell />
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </Paper>
+                    )}
+                </Box>
             </Box>
         </div>
     );
@@ -132,9 +139,7 @@ function BudgetItemRow({ item, onSaved }) {
             <TableRow hover>
                 <TableCell>{item.category_name}</TableCell>
                 <TableCell>{TYPE_LABELS[item.category_type] || item.category_type}</TableCell>
-                <TableCell align="right">
-                    {fmtAmount(item.amount)}
-                </TableCell>
+                <AmountCell value={item.amount} />
                 <TableCell align="right">
                     <Tooltip title="Breyta upphæð">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -206,9 +211,9 @@ function EditAmountDialog({ open, onClose, item, onSaved }) {
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose}>Hætta við</Button>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     disabled={!isValid || saving} onClick={handleSave}
                 >
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
