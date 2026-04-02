@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, Divider, Paper, TextField, Button,
+    Box, Typography, Paper, TextField, Button,
     CircularProgress, Alert, Grid,
     Dialog, DialogTitle, DialogContent, DialogActions,
     Table, TableHead, TableRow, TableCell, TableBody,
@@ -14,6 +14,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -49,26 +50,29 @@ function SuperAdminPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Typography variant="h5" gutterBottom>Kerfisstjóri</Typography>
-                <Divider sx={{ mb: 4 }} />
-                <Grid container spacing={4}>
-                    <Grid item xs={12} md={6}>
-                        <CreateAssociationPanel user={user} onCreated={(assoc) => setCurrentAssociation(assoc)} />
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+                    <Typography variant="h5">Kerfisstjóri</Typography>
+                </Box>
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <Grid container spacing={4}>
+                        <Grid item xs={12} md={6}>
+                            <CreateAssociationPanel user={user} onCreated={(assoc) => setCurrentAssociation(assoc)} />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                            <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <GlobalCategoriesPanel user={user} />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <GlobalAccountingKeysPanel user={user} />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <GlobalCategoryRulesPanel user={user} />
+                        </Grid>
                     </Grid>
-                    <Grid item xs={12} md={6}>
-                        <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <GlobalCategoriesPanel user={user} />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <GlobalAccountingKeysPanel user={user} />
-                    </Grid>
-                    <Grid item xs={12}>
-                        <GlobalCategoryRulesPanel user={user} />
-                    </Grid>
-                </Grid>
+                </Box>
             </Box>
         </div>
     );
@@ -171,7 +175,7 @@ function CreateAssociationPanel({ user, onCreated }) {
                     </Alert>
                 )}
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || looking}
                     onClick={handleLookup}
                 >
@@ -196,7 +200,7 @@ function CreateAssociationPanel({ user, onCreated }) {
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setIsatWarningOpen(false)}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={() => setIsatWarningOpen(false)}>Hætta við</Button>
                     <Button
                         variant="contained" color="warning"
                         onClick={() => { setIsatWarningOpen(false); setConfirmOpen(true); }}
@@ -222,9 +226,9 @@ function CreateAssociationPanel({ user, onCreated }) {
                     {saveError && <Alert severity="error">{saveError}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Hætta við</Button>
                     <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
+                        variant="contained" sx={primaryButtonSx}
                         onClick={handleCreate}
                         disabled={saving}
                     >
@@ -287,7 +291,7 @@ function ImpersonatePanel({ user, onSelect }) {
                             <Typography variant="caption" color="text.secondary">{fmtKennitala(a.ssn)}</Typography>
                         </Box>
                         <Button
-                            size="small" variant="outlined" color="secondary"
+                            size="small" variant="outlined" sx={secondaryButtonSx}
                             onClick={() => { onSelect(a); navigate('/husfelag'); }}
                         >
                             Opna
@@ -342,7 +346,7 @@ function GlobalCategoriesPanel({ user }) {
                     <Typography variant="body2" color="text.secondary">Gildir fyrir öll húsfélög</Typography>
                 </Box>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     onClick={() => setShowForm(true)}
                 >
                     + Bæta við flokk
@@ -386,8 +390,8 @@ function GlobalCategoriesPanel({ user }) {
             {disabled.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                     <Button
-                        size="small" variant="text" color="inherit"
-                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
+                        size="small" variant="text"
+                        sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
                         onClick={() => setShowDisabled(v => !v)}
                     >
                         {showDisabled ? '▲' : '▼'} Óvirkir flokkar ({disabled.length})
@@ -491,8 +495,8 @@ function GlobalCreateCategoryDialog({ open, onClose, userId, onCreated }) {
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose}>Hætta við</Button>
-                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} disabled={!isValid || saving} onClick={handleSubmit}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista flokk'}
                 </Button>
             </DialogActions>
@@ -650,16 +654,16 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                         {!isDisabled && (
                             <Button
                                 onClick={() => setConfirmDisable(true)}
-                                sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
+                                sx={{ ...destructiveButtonSx, fontSize: '0.8rem' }}
                             >
                                 Óvirkja flokk
                             </Button>
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isValid || saving}
                             onClick={handleSave}
                         >
@@ -679,10 +683,10 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={() => setConfirmDisable(false)}>Hætta við</Button>
                     <Button
+                        sx={destructiveButtonSx}
                         onClick={handleDisable}
-                        color="error"
                         disabled={disabling}
                     >
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Óvirkja'}
@@ -735,7 +739,7 @@ function GlobalAccountingKeysPanel({ user }) {
                     </Typography>
                 </Box>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     onClick={() => setShowForm(v => !v)}
                 >
                     {showForm ? 'Loka' : '+ Bæta við lykli'}
@@ -776,8 +780,8 @@ function GlobalAccountingKeysPanel({ user }) {
             {disabled.length > 0 && (
                 <Box sx={{ mt: 3 }}>
                     <Button
-                        size="small" variant="text" color="inherit"
-                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
+                        size="small" variant="text"
+                        sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
                         onClick={() => setShowDisabled(v => !v)}
                     >
                         {showDisabled ? '▲' : '▼'} Óvirkir lyklar ({disabled.length})
@@ -864,7 +868,7 @@ function GlobalAddAccountingKeyForm({ userId, onCreated }) {
             </FormControl>
             {error && <Alert severity="error">{error}</Alert>}
             <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
+                variant="contained" sx={{ ...primaryButtonSx, alignSelf: 'flex-start' }}
                 disabled={!isValid || saving} onClick={handleSubmit}
             >
                 {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista lykil'}
@@ -978,16 +982,16 @@ function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, i
                         {!isDisabled && (
                             <Button
                                 onClick={() => setConfirmDisable(true)}
-                                sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
+                                sx={{ ...destructiveButtonSx, fontSize: '0.8rem' }}
                             >
                                 Óvirkja lykil
                             </Button>
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isValid || saving}
                             onClick={handleSave}
                         >
@@ -1007,8 +1011,8 @@ function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, i
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
-                    <Button onClick={handleDisable} color="error" disabled={disabling}>
+                    <Button sx={ghostButtonSx} onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button sx={destructiveButtonSx} onClick={handleDisable} disabled={disabling}>
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Óvirkja'}
                     </Button>
                 </DialogActions>
@@ -1088,7 +1092,7 @@ function GlobalCategoryRulesPanel({ user }) {
                     <Typography variant="h6">Flokkunarreglur</Typography>
                     <Typography variant="body2" color="text.secondary">Almennar reglur — gilda fyrir öll húsfélög</Typography>
                 </Box>
-                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={openCreate}>
+                <Button variant="contained" sx={primaryButtonSx} onClick={openCreate}>
                     + Ný regla
                 </Button>
             </Box>
@@ -1147,8 +1151,8 @@ function GlobalCategoryRulesPanel({ user }) {
                     {saveError && <Alert severity="error">{saveError}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDialogOpen(false)}>Hætta við</Button>
-                    <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={handleSave} disabled={saving}>
+                    <Button sx={ghostButtonSx} onClick={() => setDialogOpen(false)}>Hætta við</Button>
+                    <Button variant="contained" sx={primaryButtonSx} onClick={handleSave} disabled={saving}>
                         {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
                     </Button>
                 </DialogActions>
@@ -1160,8 +1164,8 @@ function GlobalCategoryRulesPanel({ user }) {
                     <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDeleteRule(null)}>Hætta við</Button>
-                    <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                    <Button sx={ghostButtonSx} onClick={() => setDeleteRule(null)}>Hætta við</Button>
+                    <Button sx={destructiveButtonSx} onClick={handleDelete} disabled={deleting}>
                         {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
                     </Button>
                 </DialogActions>
