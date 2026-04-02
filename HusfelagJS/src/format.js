@@ -7,9 +7,11 @@
  *   Percentages:  #0,00%       e.g. 33,33%
  */
 
-/** Format integer with . as thousands separator */
+/** Format integer with . as thousands separator, Unicode minus for negatives */
 function intWithDots(n) {
-    return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const rounded = Math.round(n);
+    const abs = Math.abs(rounded).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return rounded < 0 ? `\u2212${abs}` : abs;
 }
 
 /** Format decimal with , as decimal separator and . as thousands separator */
@@ -26,7 +28,7 @@ export function fmtKennitala(kt) {
     return `${s.slice(0, 6)}-${s.slice(6)}`;
 }
 
-/** Format a currency amount as "981.500 kr." */
+/** Format a currency amount as "981.500 kr." or "−2.805 kr." */
 export function fmtAmount(n) {
     return intWithDots(parseFloat(n) || 0) + ' kr.';
 }
