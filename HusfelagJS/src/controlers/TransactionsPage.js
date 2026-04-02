@@ -5,19 +5,17 @@ import {
     Table, TableHead, TableRow, TableCell, TableBody,
     Button, Chip, Dialog, DialogTitle, DialogContent,
     DialogActions, Alert, MenuItem, Select, FormControl,
-    InputLabel, TextField,
+    InputLabel, TextField, Divider,
 } from '@mui/material';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
+import { StatusChip } from '../ui/chips';
+import { AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
-const STATUS_LABELS = {
-    IMPORTED:    { label: 'Óflokkað', color: 'warning' },
-    CATEGORISED: { label: 'Flokkað',  color: 'success' },
-    RECONCILED:  { label: 'Jafnað',   color: 'default' },
-};
 
 function TransactionsPage() {
     const navigate = useNavigate();
@@ -91,19 +89,28 @@ function TransactionsPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h5">Færslur {year}</Typography>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <FormControl size="small">
-                            <Select value={year} onChange={e => setYear(e.target.value)}>
-                                {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
-                            </Select>
-                        </FormControl>
+            {/* Three-zone layout */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Typography variant="h5">Færslur</Typography>
+                    </Box>
+                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                        + Ný færsla
+                    </Button>
+                </Box>
+
+                {/* Zone 2: Toolbar */}
+                <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Button variant="outlined" sx={secondaryButtonSx} onClick={() => setImportOpen(true)}>
+                            + Innflutningur
+                        </Button>
                         {user?.is_superadmin && (
                             <Button
-                                variant="outlined" size="small"
+                                variant="outlined"
+                                sx={{ ...secondaryButtonSx, fontSize: '0.8rem' }}
                                 disabled={recategorising}
                                 onClick={async () => {
                                     setRecategorising(true);
@@ -124,7 +131,6 @@ function TransactionsPage() {
                                         reloadTransactions();
                                     }
                                 }}
-                                sx={{ color: 'text.secondary', borderColor: 'divider', textTransform: 'none', fontSize: '0.8rem' }}
                             >
                                 {recategorising ? <CircularProgress size={14} color="inherit" /> : '↻ Endurflokka'}
                             </Button>
@@ -132,105 +138,101 @@ function TransactionsPage() {
                         {recatResult && (
                             <Typography variant="caption" color="text.secondary">{recatResult}</Typography>
                         )}
-                        <Button
-                            variant="outlined" color="secondary"
-                            onClick={() => setImportOpen(true)}
-                        >
-                            + Innflutningur
-                        </Button>
-                        <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
-                            onClick={() => setShowForm(v => !v)}
-                        >
-                            {showForm ? 'Loka' : '+ Færsla'}
-                        </Button>
+                        <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                        {/* Year filter */}
+                        <FormControl size="small">
+                            <Select value={year} onChange={e => setYear(e.target.value)}>
+                                {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+                            </Select>
+                        </FormControl>
+                        {/* Bank account filter */}
+                        <FormControl size="small" sx={{ minWidth: 180 }}>
+                            <InputLabel>Bankareikningur</InputLabel>
+                            <Select
+                                value={filterBankAccount}
+                                label="Bankareikningur"
+                                onChange={e => setFilterBankAccount(e.target.value)}
+                            >
+                                <MenuItem value="">Allir reikningar</MenuItem>
+                                {bankAccounts.map(b => (
+                                    <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                        {/* Status filter */}
+                        <FormControl size="small" sx={{ minWidth: 160 }}>
+                            <InputLabel>Staða</InputLabel>
+                            <Select
+                                value={filterStatus}
+                                label="Staða"
+                                onChange={e => setFilterStatus(e.target.value)}
+                            >
+                                <MenuItem value="">Allar stöður</MenuItem>
+                                <MenuItem value="IMPORTED">Óflokkað</MenuItem>
+                                <MenuItem value="CATEGORISED">Flokkað</MenuItem>
+                                <MenuItem value="RECONCILED">Jafnað</MenuItem>
+                            </Select>
+                        </FormControl>
                     </Box>
+                    <Typography variant="caption" color="text.disabled">{filtered.length} færslur</Typography>
                 </Box>
 
-                {/* Add transaction form */}
-                {showForm && (
-                    <AddTransactionForm
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <AddTransactionDialog
+                        open={showForm}
+                        onClose={() => setShowForm(false)}
                         userId={user.id}
                         assocParam={assocParam}
                         bankAccounts={bankAccounts}
                         categories={categories}
                         onCreated={() => { setShowForm(false); reloadTransactions(); }}
                     />
-                )}
 
-                <ImportDialog
-                    open={importOpen}
-                    onClose={() => setImportOpen(false)}
-                    userId={user.id}
-                    assocParam={assocParam}
-                    bankAccounts={bankAccounts}
-                    onDone={() => { setImportOpen(false); loadAll(); }}
-                />
+                    <ImportDialog
+                        open={importOpen}
+                        onClose={() => setImportOpen(false)}
+                        userId={user.id}
+                        assocParam={assocParam}
+                        bankAccounts={bankAccounts}
+                        onDone={() => { setImportOpen(false); loadAll(); }}
+                    />
 
-                {/* Filter bar */}
-                <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                        <InputLabel>Bankareikningur</InputLabel>
-                        <Select
-                            value={filterBankAccount}
-                            label="Bankareikningur"
-                            onChange={e => setFilterBankAccount(e.target.value)}
-                        >
-                            <MenuItem value="">Allir reikningar</MenuItem>
-                            {bankAccounts.map(b => (
-                                <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 160 }}>
-                        <InputLabel>Staða</InputLabel>
-                        <Select
-                            value={filterStatus}
-                            label="Staða"
-                            onChange={e => setFilterStatus(e.target.value)}
-                        >
-                            <MenuItem value="">Allar stöður</MenuItem>
-                            <MenuItem value="IMPORTED">Óflokkað</MenuItem>
-                            <MenuItem value="CATEGORISED">Flokkað</MenuItem>
-                            <MenuItem value="RECONCILED">Jafnað</MenuItem>
-                        </Select>
-                    </FormControl>
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+                    {filtered.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
+                            Engar færslur fundust.
+                        </Typography>
+                    ) : (
+                        <Paper variant="outlined">
+                            <Table size="small">
+                                <TableHead>
+                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
+                                        <TableCell>Dagsetning</TableCell>
+                                        <TableCell>Lýsing</TableCell>
+                                        <TableCell>Reikningur</TableCell>
+                                        <TableCell>Flokkur</TableCell>
+                                        <TableCell align="right">Upphæð</TableCell>
+                                        <TableCell>Staða</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {filtered.map(tx => (
+                                        <TransactionRow
+                                            key={tx.id}
+                                            transaction={tx}
+                                            userId={user.id}
+                                            assocParam={assocParam}
+                                            categories={categories}
+                                            onUpdated={reloadTransactions}
+                                        />
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
                 </Box>
-
-                {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-                {filtered.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
-                        Engar færslur fundust.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined">
-                        <Table size="small">
-                            <TableHead>
-                                <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                    <TableCell>Dagsetning</TableCell>
-                                    <TableCell>Lýsing</TableCell>
-                                    <TableCell>Reikningur</TableCell>
-                                    <TableCell>Flokkur</TableCell>
-                                    <TableCell align="right">Upphæð</TableCell>
-                                    <TableCell>Staða</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {filtered.map(tx => (
-                                    <TransactionRow
-                                        key={tx.id}
-                                        transaction={tx}
-                                        userId={user.id}
-                                        assocParam={assocParam}
-                                        categories={categories}
-                                        onUpdated={reloadTransactions}
-                                    />
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Paper>
-                )}
             </Box>
         </div>
     );
@@ -238,8 +240,6 @@ function TransactionsPage() {
 
 function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpdated }) {
     const [categoriseOpen, setCategoriseOpen] = useState(false);
-    const amount = parseFloat(tx.amount);
-    const statusInfo = STATUS_LABELS[tx.status] || { label: tx.status, color: 'default' };
 
     const dateObj = new Date(tx.date);
     const dateStr = dateObj.toLocaleDateString('is-IS', { day: 'numeric', month: 'long' });
@@ -259,11 +259,9 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
                         ? <Chip label={tx.category.name} size="small" variant="outlined" />
                         : <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Óflokkað</Typography>}
                 </TableCell>
-                <TableCell align="right" sx={{ fontFamily: 'monospace', color: amount >= 0 ? 'success.main' : 'error.main', whiteSpace: 'nowrap' }}>
-                    {fmtAmount(amount)}
-                </TableCell>
+                <AmountCell value={tx.amount} />
                 <TableCell>
-                    <Chip label={statusInfo.label} size="small" color={statusInfo.color} />
+                    <StatusChip status={tx.status} />
                 </TableCell>
             </TableRow>
             <CategoriseDialog
@@ -331,9 +329,9 @@ function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, 
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose}>Hætta við</Button>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     disabled={!categoryId || saving} onClick={handleSave}
                 >
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
@@ -343,7 +341,7 @@ function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, 
     );
 }
 
-function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCreated }) {
+function AddTransactionDialog({ open, onClose, userId, assocParam, bankAccounts, categories, onCreated }) {
     const [bankAccountId, setBankAccountId] = useState('');
     const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
     const [amount, setAmount] = useState('');
@@ -352,6 +350,13 @@ function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCr
     const [categoryId, setCategoryId] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    React.useEffect(() => {
+        if (!open) {
+            setBankAccountId(''); setDate(new Date().toISOString().slice(0, 10));
+            setAmount(''); setDescription(''); setReference(''); setCategoryId(''); setError('');
+        }
+    }, [open]);
 
     const isValid = bankAccountId && date && amount && !isNaN(parseFloat(amount)) && description.trim();
 
@@ -362,86 +367,61 @@ function AddTransactionForm({ userId, assocParam, bankAccounts, categories, onCr
             const resp = await fetch(`${API_URL}/Transaction${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    bank_account_id: bankAccountId,
-                    date,
-                    amount,
-                    description: description.trim(),
-                    reference: reference.trim(),
-                    category_id: categoryId || null,
-                }),
+                body: JSON.stringify({ user_id: userId, bank_account_id: bankAccountId, date, amount, description: description.trim(), reference: reference.trim(), category_id: categoryId || null }),
             });
-            if (resp.ok) {
-                setBankAccountId(''); setDate(new Date().toISOString().slice(0, 10));
-                setAmount(''); setDescription(''); setReference(''); setCategoryId('');
-                onCreated();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við skráningu.');
-            }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-        } finally {
-            setSaving(false);
-        }
+            if (resp.ok) { onCreated(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við skráningu.'); }
+        } catch { setError('Tenging við þjón mistókst.'); }
+        finally { setSaving(false); }
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="subtitle2">Ný færsla</Typography>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <TextField
-                    label="Dagsetning" type="date" value={date}
-                    onChange={e => setDate(e.target.value)}
-                    size="small" InputLabelProps={{ shrink: true }} sx={{ width: 160 }}
-                />
-                <TextField
-                    label="Upphæð" type="number" value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    size="small" sx={{ width: 140 }}
-                    placeholder="-50000"
-                    helperText="Neikvætt = útgjöld"
-                />
-                <FormControl size="small" sx={{ minWidth: 180 }}>
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ pb: 0.5 }}>
+                Ný færsla
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+                    Skráðu nýja bankafærslu handvirkt
+                </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField label="Dagsetning" type="date" value={date}
+                        onChange={e => setDate(e.target.value)}
+                        size="small" InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
+                    <TextField label="Upphæð" type="number" value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        size="small" sx={{ flex: 1 }} placeholder="-50000"
+                        helperText="Neikvætt = útgjöld" />
+                </Box>
+                <FormControl size="small" fullWidth>
                     <InputLabel>Bankareikningur</InputLabel>
                     <Select value={bankAccountId} label="Bankareikningur" onChange={e => setBankAccountId(e.target.value)}>
                         <MenuItem value=""><em>Veldu reikning</em></MenuItem>
-                        {bankAccounts.map(b => (
-                            <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
-                        ))}
+                        {bankAccounts.map(b => <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>)}
                     </Select>
                 </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <TextField
-                    label="Lýsing" value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    size="small" sx={{ flex: 1, minWidth: 200 }}
-                />
-                <TextField
-                    label="Tilvísun (valfrjálst)" value={reference}
-                    onChange={e => setReference(e.target.value)}
-                    size="small" sx={{ width: 160 }}
-                />
-                <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>Flokkur (valfrjálst)</InputLabel>
-                    <Select value={categoryId} label="Flokkur (valfrjálst)" onChange={e => setCategoryId(e.target.value)}>
-                        <MenuItem value=""><em>Enginn</em></MenuItem>
-                        {categories.map(c => (
-                            <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            </Box>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Skrá færslu'}
-            </Button>
-        </Paper>
+                <TextField label="Lýsing" value={description}
+                    onChange={e => setDescription(e.target.value)} size="small" fullWidth />
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <TextField label="Tilvísun (valfrjálst)" value={reference}
+                        onChange={e => setReference(e.target.value)} size="small" sx={{ flex: 1 }} />
+                    <FormControl size="small" sx={{ flex: 1 }}>
+                        <InputLabel>Flokkur (valfrjálst)</InputLabel>
+                        <Select value={categoryId} label="Flokkur (valfrjálst)" onChange={e => setCategoryId(e.target.value)}>
+                            <MenuItem value=""><em>Enginn</em></MenuItem>
+                            {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                        </Select>
+                    </FormControl>
+                </Box>
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'flex-end' }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Skrá færslu'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
@@ -578,9 +558,9 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
                         {error && <Alert severity="error">{error}</Alert>}
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
-                        <Button onClick={handleClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isFormValid || uploading} onClick={handleAnalyse}
                         >
                             {uploading ? <CircularProgress size={18} color="inherit" /> : 'Greina skrá →'}
@@ -633,9 +613,9 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
                         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
                     </DialogContent>
                     <DialogActions sx={{ px: 3, pb: 2 }}>
-                        <Button onClick={() => { setPreview(null); setError(''); }} disabled={confirming}>Til baka</Button>
+                        <Button sx={ghostButtonSx} onClick={() => { setPreview(null); setError(''); }} disabled={confirming}>Til baka</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={preview.to_import === 0 || confirming} onClick={handleConfirm}
                         >
                             {confirming ? <CircularProgress size={18} color="inherit" /> : `Staðfesta innflutning (${preview.to_import})`}
