@@ -16,6 +16,7 @@ import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { LabelChip } from '../ui/chips';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -516,8 +517,8 @@ function GlobalCategoryRow({ category, userId, onSaved, onUpdated, isDisabled })
         <>
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{category.name}</TableCell>
-                <TableCell>{typeLabel(category.type)}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontSize: '0.82rem' }}>{accountLabel}</TableCell>
+                <TableCell><LabelChip label={typeLabel(category.type)} /></TableCell>
+                <TableCell>{accountLabel !== '—' ? <LabelChip label={accountLabel} /> : <Typography variant="body2" color="text.disabled">—</Typography>}</TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -885,7 +886,7 @@ function GlobalAccountingKeyRow({ accountingKey, userId, onSaved, isDisabled }) 
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{accountingKey.number}</TableCell>
                 <TableCell>{accountingKey.name}</TableCell>
-                <TableCell>{keyTypeLabel(accountingKey.type)}</TableCell>
+                <TableCell><LabelChip label={keyTypeLabel(accountingKey.type)} /></TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -1121,11 +1122,7 @@ function GlobalCategoryRulesPanel({ user }) {
                                     {rules.map(rule => (
                                         <TableRow key={rule.id} hover>
                                             <TableCell>{rule.keyword}</TableCell>
-                                            <TableCell>
-                                                <Box component="span" sx={{ background: '#f5f5f5', color: '#555', px: 1, py: 0.25, borderRadius: 3, fontSize: 12 }}>
-                                                    {rule.category.name}
-                                                </Box>
-                                            </TableCell>
+                                            <TableCell><LabelChip label={rule.category.name} /></TableCell>
                                             <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                                 <Typography component="span" sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }} onClick={() => openEdit(rule)}>Breyta</Typography>
                                                 <Typography component="span" sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }} onClick={() => setDeleteRule(rule)}>Eyða</Typography>

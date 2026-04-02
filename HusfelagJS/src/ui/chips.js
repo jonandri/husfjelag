@@ -10,6 +10,25 @@ const CHIP_STYLES = {
     UNPAID:      { bg: '#fff3e0', color: '#e65100',  label: 'Ógreitt'   },
 };
 
+export function LabelChip({ label }) {
+    if (!label) return null;
+    return (
+        <Box component="span" sx={{
+            background: '#e8f5e9',
+            color: '#2e7d32',
+            px: 1,
+            py: 0.25,
+            borderRadius: 3,
+            fontSize: 11,
+            fontWeight: 600,
+            display: 'inline-block',
+            whiteSpace: 'nowrap',
+        }}>
+            {label}
+        </Box>
+    );
+}
+
 export function StatusChip({ status }) {
     const s = CHIP_STYLES[status] || { bg: '#f3f4f6', color: '#555', label: status };
     return (

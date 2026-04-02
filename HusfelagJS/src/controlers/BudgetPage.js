@@ -12,6 +12,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx } from '../ui/buttons';
+import { LabelChip } from '../ui/chips';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -138,7 +139,7 @@ function BudgetItemRow({ item, onSaved }) {
         <>
             <TableRow hover>
                 <TableCell>{item.category_name}</TableCell>
-                <TableCell>{TYPE_LABELS[item.category_type] || item.category_type}</TableCell>
+                <TableCell><LabelChip label={TYPE_LABELS[item.category_type] || item.category_type} /></TableCell>
                 <AmountCell value={item.amount} />
                 <TableCell align="right">
                     <Tooltip title="Breyta upphæð">

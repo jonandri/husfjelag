@@ -13,6 +13,7 @@ import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
 import { fmtAmount, fmtKennitala } from '../format';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -465,10 +466,10 @@ function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSav
             <TableRow hover>
                 <TableCell>{bankAccount.name}</TableCell>
                 <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{bankAccount.account_number}</TableCell>
-                <TableCell sx={{ color: 'text.secondary' }}>
+                <TableCell>
                     {bankAccount.asset_account
-                        ? `${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`
-                        : '—'}
+                        ? <LabelChip label={`${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`} />
+                        : <Typography variant="body2" color="text.disabled">—</Typography>}
                 </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title="Breyta">
@@ -715,11 +716,7 @@ function AssociationRulesPanel({ user, assocParam }) {
                                     {rules.map(rule => (
                                         <TableRow key={rule.id} hover>
                                             <TableCell>{rule.keyword}</TableCell>
-                                            <TableCell>
-                                                <Box component="span" sx={{ background: '#e8f5e9', color: '#2e7d32', px: 1, py: 0.25, borderRadius: 3, fontSize: 12 }}>
-                                                    {rule.category.name}
-                                                </Box>
-                                            </TableCell>
+                                            <TableCell><LabelChip label={rule.category.name} /></TableCell>
                                             <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                                                 <Typography component="span" sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }} onClick={() => openEdit(rule)}>Breyta</Typography>
                                                 <Typography component="span" sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }} onClick={() => setDeleteRule(rule)}>Eyða</Typography>

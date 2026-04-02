@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Paper,
     Table, TableHead, TableRow, TableCell, TableBody,
-    Button, Chip, Dialog, DialogTitle, DialogContent,
+    Button, Dialog, DialogTitle, DialogContent,
     DialogActions, Alert, MenuItem, Select, FormControl,
     InputLabel, TextField, Divider,
 } from '@mui/material';
@@ -11,7 +11,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
-import { StatusChip } from '../ui/chips';
+import { StatusChip, LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -256,7 +256,7 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
                 <TableCell sx={{ color: 'text.secondary' }}>{tx.bank_account.name}</TableCell>
                 <TableCell>
                     {tx.category
-                        ? <Chip label={tx.category.name} size="small" variant="outlined" />
+                        ? <LabelChip label={tx.category.name} />
                         : <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Óflokkað</Typography>}
                 </TableCell>
                 <AmountCell value={tx.amount} />
