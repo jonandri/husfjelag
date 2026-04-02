@@ -13,6 +13,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala, fmtPhone } from '../format';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -66,113 +67,118 @@ function OwnersPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <Typography variant="h5">Eigendur</Typography>
-                    <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        onClick={() => setShowForm(v => !v)}
-                    >
-                        {showForm ? 'Loka skráningarformi' : '+ Bæta við eiganda'}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Typography variant="h5">Eigendur</Typography>
+                    </Box>
+                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                        + Bæta við eiganda
                     </Button>
                 </Box>
-
-                <Collapse in={showForm}>
-                    <AddOwnerForm
+                {/* Zone 3: Content (no toolbar needed — no filters) */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <AddOwnerDialog
+                        open={showForm}
+                        onClose={() => setShowForm(false)}
                         userId={user.id}
                         assocParam={assocParam}
                         apartments={apartments}
                         ownerships={active}
                         onCreated={() => { setShowForm(false); loadAll(); }}
                     />
-                </Collapse>
 
-                {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
 
-                {active.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Enginn eigandi skráður. Smelltu á „+ Bæta við eiganda" til að hefja skráningu.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table size="small">
-                            <TableHead sx={HEAD_SX}>
-                                <TableRow>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('kennitala', 'Kennitala')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('email', 'Netfang')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('phone', 'Símanúmer')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Íbúð')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('is_payer', 'Greiðandi')}</TableCell>
-                                    <TableCell />
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sort(active).map(o => (
-                                    <OwnerRow
-                                        key={o.id}
-                                        ownership={o}
-                                        ownerships={active}
-                                        onSaved={loadAll}
-                                    />
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Paper>
-                )}
+                    {active.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ mt: 4 }}>
+                            Enginn eigandi skráður. Smelltu á „+ Bæta við eiganda" til að hefja skráningu.
+                        </Typography>
+                    ) : (
+                        <Paper variant="outlined" sx={{ mt: 2 }}>
+                            <Table size="small">
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('kennitala', 'Kennitala')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('email', 'Netfang')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('phone', 'Símanúmer')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Íbúð')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('is_payer', 'Greiðandi')}</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {sort(active).map(o => (
+                                        <OwnerRow
+                                            key={o.id}
+                                            ownership={o}
+                                            ownerships={active}
+                                            onSaved={loadAll}
+                                        />
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
 
-                {disabled.length > 0 && (
-                    <Box sx={{ mt: 3 }}>
-                        <Button
-                            size="small" variant="text" color="inherit"
-                            sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
-                            onClick={() => setShowDisabled(v => !v)}
-                        >
-                            {showDisabled ? '▲' : '▼'} Óvirkir eigendur ({disabled.length})
-                        </Button>
-                        <Collapse in={showDisabled}>
-                            <Paper variant="outlined" sx={{ mt: 1 }}>
-                                <Table size="small">
-                                    <TableHead sx={HEAD_SX}>
-                                        <TableRow>
-                                            <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Netfang</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Símanúmer</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Íbúð</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Hlutfall (%)</TableCell>
-                                            <TableCell />
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {sort(disabled).map(o => (
-                                            <OwnerRow
-                                                key={o.id}
-                                                ownership={o}
-                                                ownerships={active}
-                                                onSaved={loadAll}
-                                                isDisabled
-                                            />
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </Paper>
-                        </Collapse>
-                    </Box>
-                )}
+                    {disabled.length > 0 && (
+                        <Box sx={{ mt: 3 }}>
+                            <Button
+                                size="small" sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
+                                onClick={() => setShowDisabled(v => !v)}
+                            >
+                                {showDisabled ? '▲' : '▼'} Óvirkir eigendur ({disabled.length})
+                            </Button>
+                            <Collapse in={showDisabled}>
+                                <Paper variant="outlined" sx={{ mt: 1 }}>
+                                    <Table size="small">
+                                        <TableHead sx={HEAD_SX}>
+                                            <TableRow>
+                                                <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Netfang</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Símanúmer</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Íbúð</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Hlutfall (%)</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {sort(disabled).map(o => (
+                                                <OwnerRow
+                                                    key={o.id}
+                                                    ownership={o}
+                                                    ownerships={active}
+                                                    onSaved={loadAll}
+                                                    isDisabled
+                                                />
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </Paper>
+                            </Collapse>
+                        </Box>
+                    )}
+                </Box>
             </Box>
         </div>
     );
 }
 
-function AddOwnerForm({ userId, assocParam, apartments, ownerships, onCreated }) {
+function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownerships, onCreated }) {
     const [kennitala, setKennitala] = useState('');
     const [apartmentId, setApartmentId] = useState('');
     const [share, setShare] = useState('');
     const [isPayer, setIsPayer] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    React.useEffect(() => {
+        if (!open) { setKennitala(''); setApartmentId(''); setShare(''); setIsPayer(false); setError(''); }
+    }, [open]);
 
     const aptActive = ownerships.filter(o => String(o.apartment_id) === String(apartmentId));
     const existingSum = aptActive.reduce((s, o) => s + parseFloat(o.share || 0), 0);
@@ -210,61 +216,68 @@ function AddOwnerForm({ userId, assocParam, apartments, ownerships, onCreated })
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 560 }}>
-            <Typography variant="subtitle1">Skrá nýjan eiganda</Typography>
-            <TextField
-                label="Kennitala eiganda"
-                value={kennitala}
-                onChange={e => setKennitala(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                inputProps={{ inputMode: 'numeric', maxLength: 10 }}
-                helperText={`${kennitala.length}/10`}
-                size="small"
-                fullWidth
-            />
-            <FormControl size="small" fullWidth>
-                <InputLabel>Íbúð</InputLabel>
-                <Select value={apartmentId} label="Íbúð" onChange={e => setApartmentId(e.target.value)}>
-                    {apartments.map(a => (
-                        <MenuItem key={a.id} value={a.id}>{a.anr} — {a.fnr}</MenuItem>
-                    ))}
-                </Select>
-                {apartmentId && (
-                    <FormHelperText>
-                        Núverandi hlutfall: {fmtPct(existingSum)} / 100%
-                    </FormHelperText>
-                )}
-            </FormControl>
-            <TextField
-                label="Hlutfall (%)"
-                value={share}
-                onChange={e => setShare(e.target.value.replace(/[^0-9.]/g, ''))}
-                size="small"
-                type="number"
-                inputProps={{ min: 0, max: 100, step: 0.01 }}
-                helperText="Hlutdeild þessa eiganda í íbúðinni"
-                error={shareOver}
-                fullWidth
-            />
-            {shareOver && <Alert severity="error">Heildarhlutfall eigenda myndi fara yfir 100% fyrir þessa íbúð.</Alert>}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Chip
-                    label="Greiðandi"
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ pb: 0.5 }}>
+                Skrá nýjan eiganda
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+                    Eigandinn verður tengdur við valda íbúð
+                </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+                <TextField
+                    label="Kennitala eiganda"
+                    value={kennitala}
+                    onChange={e => setKennitala(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                    helperText={`${kennitala.length}/10`}
                     size="small"
-                    color={isPayer ? 'secondary' : 'default'}
-                    variant={isPayer ? 'filled' : 'outlined'}
-                    onClick={() => setIsPayer(v => !v)}
-                    sx={{ cursor: 'pointer' }}
+                    fullWidth
                 />
-                <Typography variant="caption" color="text.secondary">Merkja sem greiðanda reikninga fyrir þessa íbúð</Typography>
-            </Box>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista eiganda'}
-            </Button>
-        </Paper>
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Íbúð</InputLabel>
+                    <Select value={apartmentId} label="Íbúð" onChange={e => setApartmentId(e.target.value)}>
+                        {apartments.map(a => (
+                            <MenuItem key={a.id} value={a.id}>{a.anr} — {a.fnr}</MenuItem>
+                        ))}
+                    </Select>
+                    {apartmentId && (
+                        <FormHelperText>
+                            Núverandi hlutfall: {fmtPct(existingSum)} / 100%
+                        </FormHelperText>
+                    )}
+                </FormControl>
+                <TextField
+                    label="Hlutfall (%)"
+                    value={share}
+                    onChange={e => setShare(e.target.value.replace(/[^0-9.]/g, ''))}
+                    size="small"
+                    type="number"
+                    inputProps={{ min: 0, max: 100, step: 0.01 }}
+                    helperText="Hlutdeild þessa eiganda í íbúðinni"
+                    error={shareOver}
+                    fullWidth
+                />
+                {shareOver && <Alert severity="error">Heildarhlutfall eigenda myndi fara yfir 100% fyrir þessa íbúð.</Alert>}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                        label="Greiðandi"
+                        size="small"
+                        color={isPayer ? 'secondary' : 'default'}
+                        variant={isPayer ? 'filled' : 'outlined'}
+                        onClick={() => setIsPayer(v => !v)}
+                        sx={{ cursor: 'pointer' }}
+                    />
+                    <Typography variant="caption" color="text.secondary">Merkja sem greiðanda reikninga fyrir þessa íbúð</Typography>
+                </Box>
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'flex-end' }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Skrá eiganda'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
@@ -466,18 +479,15 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                 <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
                     <Box>
                         {!isDisabled && (
-                            <Button
-                                onClick={() => setConfirmDisable(true)}
-                                sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
-                            >
+                            <Button sx={destructiveButtonSx} onClick={() => setConfirmDisable(true)}>
                                 Óvirkja eiganda
                             </Button>
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isValid || saving} onClick={handleSave}
                         >
                             {saving
@@ -496,8 +506,8 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
-                    <Button color="error" variant="contained" disabled={disabling} onClick={handleDisable}>
+                    <Button sx={ghostButtonSx} onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button variant="contained" sx={destructiveButtonSx} disabled={disabling} onClick={handleDisable}>
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Já, óvirkja'}
                     </Button>
                 </DialogActions>
