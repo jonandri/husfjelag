@@ -4,12 +4,10 @@ import {
     Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Chip, Tooltip, IconButton,
+    Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
-import {
-    Dialog, DialogTitle, DialogContent, DialogActions,
-} from '@mui/material';
 import { ghostButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
@@ -305,8 +303,9 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
     const [error, setError] = useState('');
     const [selected, setSelected] = useState(null);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (!open || !row) return;
+        const controller = new AbortController();
         setSelected(null);
         setError('');
         setCandidates([]);
@@ -314,17 +313,22 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
         const qs = assocParam
             ? `${assocParam}&user_id=${userId}`
             : `?user_id=${userId}`;
-        fetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`)
+        fetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`, { signal: controller.signal })
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(data => { setCandidates(data); setLoading(false); })
-            .catch(() => { setError('Villa við að sækja greiðslur.'); setLoading(false); });
-    }, [open, row]);
+            .catch(err => {
+                if (err.name === 'AbortError') return;
+                setError('Villa við að sækja greiðslur');
+                setLoading(false);
+            });
+        return () => controller.abort();
+    }, [open, row, assocParam, userId]);
 
     if (!row) return null;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Tengja greiðslu við {row.payer_name}</DialogTitle>
+            <DialogTitle>Tengja greiðslu við {row.payer_name ?? 'greiðanda'}</DialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 {loading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
