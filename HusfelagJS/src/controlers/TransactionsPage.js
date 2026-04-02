@@ -5,8 +5,9 @@ import {
     Table, TableHead, TableRow, TableCell, TableBody,
     Button, Dialog, DialogTitle, DialogContent,
     DialogActions, Alert, MenuItem, Select, FormControl,
-    InputLabel, TextField, Divider,
+    InputLabel, TextField, Divider, IconButton, Tooltip,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
@@ -215,6 +216,7 @@ function TransactionsPage() {
                                         <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
                                         <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
                                         <TableCell sx={HEAD_CELL_SX}>Staða</TableCell>
+                                        <TableCell sx={{ width: 48 }} />
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -262,6 +264,13 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
                 <AmountCell value={tx.amount} />
                 <TableCell>
                     <StatusChip status={tx.status} />
+                </TableCell>
+                <TableCell align="right" sx={{ width: 48 }}>
+                    <Tooltip title="Breyta">
+                        <IconButton size="small" onClick={e => { e.stopPropagation(); setCategoriseOpen(true); }}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
                 </TableCell>
             </TableRow>
             <CategoriseDialog

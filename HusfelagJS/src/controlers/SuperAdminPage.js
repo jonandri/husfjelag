@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
@@ -1123,9 +1124,17 @@ function GlobalCategoryRulesPanel({ user }) {
                                         <TableRow key={rule.id} hover>
                                             <TableCell>{rule.keyword}</TableCell>
                                             <TableCell><LabelChip label={rule.category.name} /></TableCell>
-                                            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                                <Typography component="span" sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }} onClick={() => openEdit(rule)}>Breyta</Typography>
-                                                <Typography component="span" sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }} onClick={() => setDeleteRule(rule)}>Eyða</Typography>
+                                            <TableCell align="right" sx={{ width: 80 }}>
+                                                <Tooltip title="Breyta">
+                                                    <IconButton size="small" onClick={() => openEdit(rule)}>
+                                                        <EditIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                <Tooltip title="Eyða">
+                                                    <IconButton size="small" sx={{ color: '#c62828' }} onClick={() => setDeleteRule(rule)}>
+                                                        <DeleteOutlineIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     ))}
