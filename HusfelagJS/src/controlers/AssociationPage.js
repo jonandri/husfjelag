@@ -66,7 +66,9 @@ function AssociationPage() {
                 const col = await collectionResp.json();
                 if (col?.rows) {
                     setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
-                    setUnpaidTotal(col.rows.filter(r => r.status === 'PENDING').reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
+                }
+                if (col?.pending_total !== undefined) {
+                    setUnpaidTotal(parseFloat(col.pending_total));
                 }
             }
         } catch {

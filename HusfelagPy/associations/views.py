@@ -1661,7 +1661,11 @@ class CollectionView(APIView):
             if totals[t] > 0
         ]
 
-        return Response({"rows": rows, "budget_summary": budget_summary})
+        pending_total = Collection.objects.filter(
+            budget__association=association, status=CollectionStatus.PENDING,
+        ).aggregate(total=django_models.Sum("amount_total"))["total"] or Decimal("0")
+
+        return Response({"rows": rows, "budget_summary": budget_summary, "pending_total": str(pending_total)})
 
 
 class CollectionGenerateView(APIView):
