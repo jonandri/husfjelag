@@ -27,6 +27,7 @@ function AssociationPage() {
     const [budgetTotal, setBudgetTotal] = useState(null);
     const [budgetName, setBudgetName] = useState(null);
     const [monthlyTotal, setMonthlyTotal] = useState(null);
+    const [unpaidTotal, setUnpaidTotal] = useState(null);
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
 
@@ -65,6 +66,7 @@ function AssociationPage() {
                 const col = await collectionResp.json();
                 if (col?.rows) {
                     setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
+                    setUnpaidTotal(col.rows.filter(r => r.status === 'PENDING').reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
                 }
             }
         } catch {
@@ -138,6 +140,12 @@ function AssociationPage() {
                             value={monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—'}
                             small
                         />
+                        <KpiCard
+                            label="Ógreidd innheimta"
+                            value={unpaidTotal !== null ? fmtAmount(unpaidTotal) : '—'}
+                            small
+                            alert={unpaidTotal > 0}
+                        />
                     </Grid>
 
                     {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
@@ -164,14 +172,13 @@ function AssociationPage() {
     );
 }
 
-function KpiCard({ label, value, small }) {
+function KpiCard({ label, value, small, alert }) {
     return (
         <Grid item xs={12} sm={6} md={3} lg={2} sx={{ display: 'flex' }}>
             <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 110 }}>
                 <Typography
                     variant={small ? 'h6' : 'h4'}
-                    color="secondary.main"
-                    sx={{ fontWeight: small ? 400 : 300, lineHeight: 1.2 }}
+                    sx={{ fontWeight: small ? 400 : 300, lineHeight: 1.2, color: alert ? '#c62828' : 'secondary.main' }}
                 >
                     {value}
                 </Typography>
