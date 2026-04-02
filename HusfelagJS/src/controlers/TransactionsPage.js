@@ -5,7 +5,7 @@ import {
     Table, TableHead, TableRow, TableCell, TableBody,
     Button, Dialog, DialogTitle, DialogContent,
     DialogActions, Alert, MenuItem, Select, FormControl,
-    InputLabel, TextField, Divider, IconButton, Tooltip,
+    InputLabel, TextField, IconButton, Tooltip,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
@@ -97,17 +97,7 @@ function TransactionsPage() {
                     <Box>
                         <Typography variant="h5">Færslur</Typography>
                     </Box>
-                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
-                        + Ný færsla
-                    </Button>
-                </Box>
-
-                {/* Zone 2: Toolbar */}
-                <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: 1, flexWrap: 'wrap' }}>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Button variant="outlined" sx={secondaryButtonSx} onClick={() => setImportOpen(true)}>
-                            + Innflutningur
-                        </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         {user?.is_superadmin && (
                             <Button
                                 variant="outlined"
@@ -136,23 +126,35 @@ function TransactionsPage() {
                                 {recategorising ? <CircularProgress size={14} color="inherit" /> : '↻ Endurflokka'}
                             </Button>
                         )}
+                        <Button variant="outlined" sx={secondaryButtonSx} onClick={() => setImportOpen(true)}>
+                            + Innflutningur
+                        </Button>                        
                         {recatResult && (
                             <Typography variant="caption" color="text.secondary">{recatResult}</Typography>
                         )}
-                        <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                        <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                            + Ný færsla
+                        </Button>
+                    </Box>
+                </Box>
+
+                {/* Zone 2: Toolbar */}
+                <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                         {/* Year filter */}
                         <FormControl size="small">
-                            <Select value={year} onChange={e => setYear(e.target.value)}>
+                            <Select value={year} onChange={e => setYear(e.target.value)} sx={{ fontSize: 13 }}>
                                 {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                             </Select>
                         </FormControl>
                         {/* Bank account filter */}
                         <FormControl size="small" sx={{ minWidth: 180 }}>
-                            <InputLabel>Bankareikningur</InputLabel>
+                            <InputLabel sx={{ fontSize: 13 }}>Bankareikningur</InputLabel>
                             <Select
                                 value={filterBankAccount}
                                 label="Bankareikningur"
                                 onChange={e => setFilterBankAccount(e.target.value)}
+                                sx={{ fontSize: 13 }}
                             >
                                 <MenuItem value="">Allir reikningar</MenuItem>
                                 {bankAccounts.map(b => (
@@ -162,11 +164,12 @@ function TransactionsPage() {
                         </FormControl>
                         {/* Status filter */}
                         <FormControl size="small" sx={{ minWidth: 160 }}>
-                            <InputLabel>Staða</InputLabel>
+                            <InputLabel sx={{ fontSize: 13 }}>Staða</InputLabel>
                             <Select
                                 value={filterStatus}
                                 label="Staða"
                                 onChange={e => setFilterStatus(e.target.value)}
+                                sx={{ fontSize: 13 }}
                             >
                                 <MenuItem value="">Allar stöður</MenuItem>
                                 <MenuItem value="IMPORTED">Óflokkað</MenuItem>
@@ -255,7 +258,7 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
             >
                 <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{dateStr}</TableCell>
                 <TableCell>{tx.description}</TableCell>
-                <TableCell sx={{ color: 'text.secondary' }}>{tx.bank_account.name}</TableCell>
+                <TableCell><LabelChip label={tx.bank_account.name} /></TableCell>
                 <TableCell>
                     {tx.category
                         ? <LabelChip label={tx.category.name} />

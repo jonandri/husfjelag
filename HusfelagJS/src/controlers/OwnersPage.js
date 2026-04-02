@@ -14,6 +14,7 @@ import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala, fmtPhone } from '../format';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { LabelChip } from '../ui/chips';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -295,7 +296,7 @@ function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
                 <TableCell>{ownership.share}%</TableCell>
                 {!isDisabled && (
                     <TableCell>
-                        {ownership.is_payer && <Chip label="Greiðandi" size="small" color="secondary" />}
+                        {ownership.is_payer && <LabelChip label="Greiðandi" />}
                     </TableCell>
                 )}
                 <TableCell align="right" sx={{ width: 48 }}>
@@ -479,7 +480,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                 <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
                     <Box>
                         {!isDisabled && (
-                            <Button sx={destructiveButtonSx} onClick={() => setConfirmDisable(true)}>
+                            <Button sx={{ ...destructiveButtonSx, fontSize: '0.8rem' }} onClick={() => setConfirmDisable(true)}>
                                 Óvirkja eiganda
                             </Button>
                         )}
@@ -505,9 +506,9 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                         Ertu viss um að þú viljir óvirkja eigandann <strong>{ownership.name}</strong> á íbúð <strong>{ownership.anr}</strong>?
                     </DialogContentText>
                 </DialogContent>
-                <DialogActions>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
                     <Button sx={ghostButtonSx} onClick={() => setConfirmDisable(false)}>Hætta við</Button>
-                    <Button variant="contained" sx={destructiveButtonSx} disabled={disabling} onClick={handleDisable}>
+                    <Button sx={destructiveButtonSx} disabled={disabling} onClick={handleDisable}>
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Já, óvirkja'}
                     </Button>
                 </DialogActions>

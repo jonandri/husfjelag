@@ -149,12 +149,12 @@ function ReportPage() {
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                    <Typography variant="h5">Skýrslur</Typography>
+                    <Typography variant="h5">Yfirlit</Typography>
                     {/* no primary action button */}
                 </Box>
                 {/* Zone 2: Toolbar — year selector */}
                 <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                    <Select size="small" value={year} onChange={e => setYear(e.target.value)} sx={{ minWidth: 90 }}>
+                    <Select size="small" value={year} onChange={e => setYear(e.target.value)} sx={{ minWidth: 90, fontSize: 13 }}>
                         {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                     </Select>
                 </Box>
@@ -260,10 +260,10 @@ function ReportPage() {
                                     <TableRow key={row.category_id} hover sx={{ cursor: 'pointer' }}
                                         onClick={() => openCatDrill(row.category_id, row.category_name)}>
                                         <TableCell>{row.category_name}</TableCell>
-                                        <TableCell align="right" sx={{ color: '#888' }}>
-                                            {budgeted > 0 ? fmtAmount(budgeted) : <span style={{ color: '#ccc' }}>—</span>}
+                                        <TableCell align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888' }}>
+                                            {budgeted > 0 ? fmtAmount(-budgeted) : <span style={{ color: '#ccc' }}>—</span>}
                                         </TableCell>
-                                        <AmountCell value={actual} />
+                                        <AmountCell value={actual > 0 ? -actual : actual} />
                                         {budgeted > 0
                                             ? <AmountCell value={variance} />
                                             : <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
@@ -278,7 +278,7 @@ function ReportPage() {
                                 <TableRow hover>
                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
-                                    <AmountCell value={expenseUncat} />
+                                    <AmountCell value={-expenseUncat} />
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
                                 </TableRow>
@@ -286,10 +286,10 @@ function ReportPage() {
                         </TableBody>
                         <TotalsRow cells={[
                             <TableCell key="lbl">Samtals gjöld</TableCell>,
-                            <TableCell key="bud" align="right" sx={{ color: '#888' }}>
-                                {fmtAmount(totalExpenseBudgeted)}
+                            <TableCell key="bud" align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888' }}>
+                                {fmtAmount(-totalExpenseBudgeted)}
                             </TableCell>,
-                            <AmountCell key="act" value={totalExpenseActual} />,
+                            <AmountCell key="act" value={-totalExpenseActual} />,
                             <AmountCell key="var" value={totalExpenseBudgeted - totalExpenseActual} />,
                             <TableCell key="pct" align="right"
                                 sx={{ color: VARIANCE_COLOR(totalExpenseBudgeted, totalExpenseActual) }}
