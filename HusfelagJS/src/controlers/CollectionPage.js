@@ -11,7 +11,7 @@ import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 import { primaryButtonSx } from '../ui/buttons';
 import { StatusChip } from '../ui/chips';
-import { AmountCell } from './tableUtils';
+import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -155,13 +155,13 @@ function CollectionPage() {
                             </Typography>
                             <Paper variant="outlined" sx={{ mb: 3 }}>
                                 <Table size="small">
-                                    <TableHead>
-                                        <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
-                                            <TableCell>Íbúð</TableCell>
-                                            <TableCell>Greiðandi</TableCell>
-                                            <TableCell>Kennitala</TableCell>
-                                            <TableCell align="right">Upphæð</TableCell>
-                                            <TableCell align="center">Staða</TableCell>
+                                    <TableHead sx={HEAD_SX}>
+                                        <TableRow>
+                                            <TableCell sx={HEAD_CELL_SX}>Íbúð</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Greiðandi</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
+                                            <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
+                                            <TableCell align="center" sx={HEAD_CELL_SX}>Staða</TableCell>
                                             <TableCell />
                                         </TableRow>
                                     </TableHead>
@@ -229,13 +229,13 @@ function CollectionPage() {
                             {matchError && <Alert severity="error" sx={{ mb: 1 }}>{matchError}</Alert>}
                             <Paper variant="outlined">
                                 <Table size="small">
-                                    <TableHead>
-                                        <TableRow sx={{ '& th': { fontWeight: 500, color: '#888', fontSize: 11, textTransform: 'uppercase' } }}>
-                                            <TableCell>Dags.</TableCell>
-                                            <TableCell>Lýsing</TableCell>
-                                            <TableCell>Kennitala</TableCell>
-                                            <TableCell align="right">Upphæð</TableCell>
-                                            <TableCell>Tengja við</TableCell>
+                                    <TableHead sx={HEAD_SX}>
+                                        <TableRow>
+                                            <TableCell sx={HEAD_CELL_SX}>Dags.</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Lýsing</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
+                                            <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
+                                            <TableCell sx={HEAD_CELL_SX}>Tengja við</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>

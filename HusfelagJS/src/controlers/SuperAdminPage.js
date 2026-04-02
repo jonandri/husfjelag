@@ -15,6 +15,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -369,11 +370,11 @@ function GlobalCategoriesPanel({ user }) {
             ) : (
                 <Paper variant="outlined" sx={{ mt: 2 }}>
                     <Table size="small">
-                        <TableHead>
-                            <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                <TableCell>Nafn</TableCell>
-                                <TableCell>Tegund</TableCell>
-                                <TableCell>Bókhaldsreikningur</TableCell>
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Bókhaldsreikningur</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -399,11 +400,11 @@ function GlobalCategoriesPanel({ user }) {
                     <Collapse in={showDisabled}>
                         <Paper variant="outlined" sx={{ mt: 1 }}>
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                        <TableCell>Nafn</TableCell>
-                                        <TableCell>Tegund</TableCell>
-                                        <TableCell>Bókhaldsreikningur</TableCell>
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Bókhaldsreikningur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
@@ -760,11 +761,11 @@ function GlobalAccountingKeysPanel({ user }) {
             ) : (
                 <Paper variant="outlined" sx={{ mt: 2 }}>
                     <Table size="small">
-                        <TableHead>
-                            <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                <TableCell sx={{ width: 80 }}>Númer</TableCell>
-                                <TableCell>Heiti</TableCell>
-                                <TableCell>Tegund</TableCell>
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={{ ...HEAD_CELL_SX, width: 80 }}>Númer</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -789,11 +790,11 @@ function GlobalAccountingKeysPanel({ user }) {
                     <Collapse in={showDisabled}>
                         <Paper variant="outlined" sx={{ mt: 1 }}>
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                        <TableCell sx={{ width: 80 }}>Númer</TableCell>
-                                        <TableCell>Heiti</TableCell>
-                                        <TableCell>Tegund</TableCell>
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={{ ...HEAD_CELL_SX, width: 80 }}>Númer</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>
@@ -1109,10 +1110,10 @@ function GlobalCategoryRulesPanel({ user }) {
                     ) : (
                         <Paper variant="outlined">
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                        <TableCell>Lykilorð</TableCell>
-                                        <TableCell>Flokkur</TableCell>
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>

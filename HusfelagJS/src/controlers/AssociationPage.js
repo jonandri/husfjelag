@@ -13,6 +13,7 @@ import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
 import { fmtAmount, fmtKennitala } from '../format';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -430,11 +431,11 @@ function BankAccountsPanel({ user, assocParam }) {
             ) : (
                 <Paper variant="outlined" sx={{ mt: 2 }}>
                     <Table size="small">
-                        <TableHead>
-                            <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                <TableCell>Heiti</TableCell>
-                                <TableCell>Reikningsnúmer</TableCell>
-                                <TableCell>Bókhaldslykill</TableCell>
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Reikningsnúmer</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Bókhaldslykill</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -703,10 +704,10 @@ function AssociationRulesPanel({ user, assocParam }) {
                     ) : (
                         <Paper variant="outlined">
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                        <TableCell>Lykilorð</TableCell>
-                                        <TableCell>Flokkur</TableCell>
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
                                         <TableCell />
                                     </TableRow>
                                 </TableHead>

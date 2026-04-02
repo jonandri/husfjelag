@@ -9,6 +9,7 @@ import {
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -251,10 +252,10 @@ function RulesTable({ rules, isGlobal, canEdit, onEdit, onDelete }) {
 
     return (
         <Table size="small" sx={{ mb: 1 }}>
-            <TableHead>
-                <TableRow sx={{ '& th': { color: '#555', fontWeight: 500, borderBottom: '2px solid #eee' } }}>
-                    <TableCell>Lykilorð</TableCell>
-                    <TableCell>Flokkur</TableCell>
+            <TableHead sx={HEAD_SX}>
+                <TableRow>
+                    <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
+                    <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
                     <TableCell />
                 </TableRow>
             </TableHead>

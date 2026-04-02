@@ -12,7 +12,7 @@ import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
 import { StatusChip } from '../ui/chips';
-import { AmountCell } from './tableUtils';
+import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -207,14 +207,14 @@ function TransactionsPage() {
                     ) : (
                         <Paper variant="outlined">
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                        <TableCell>Dagsetning</TableCell>
-                                        <TableCell>Lýsing</TableCell>
-                                        <TableCell>Reikningur</TableCell>
-                                        <TableCell>Flokkur</TableCell>
-                                        <TableCell align="right">Upphæð</TableCell>
-                                        <TableCell>Staða</TableCell>
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>Dagsetning</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Lýsing</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Reikningur</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
+                                        <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>Staða</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -581,11 +581,11 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
                             </Box>
                         </Box>
                         <Table size="small">
-                            <TableHead>
-                                <TableRow sx={{ '& th': { fontWeight: 500, color: 'text.secondary' } }}>
-                                    <TableCell>Dagsetning</TableCell>
-                                    <TableCell>Lýsing</TableCell>
-                                    <TableCell align="right">Upphæð</TableCell>
+                            <TableHead sx={HEAD_SX}>
+                                <TableRow>
+                                    <TableCell sx={HEAD_CELL_SX}>Dagsetning</TableCell>
+                                    <TableCell sx={HEAD_CELL_SX}>Lýsing</TableCell>
+                                    <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
