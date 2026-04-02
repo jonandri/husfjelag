@@ -8,7 +8,7 @@ from .views import (
     ImportPreviewView, ImportConfirmView, ImportDetectView, ImportRecategoriseView,
     CategoryRuleView,
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
-    CollectionGenerateView, CollectionMatchView, CollectionUnmatchView,
+    CollectionGenerateView, CollectionMatchView, CollectionUnmatchView, CollectionCandidatesView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
     ReportView,
 )
@@ -68,6 +68,7 @@ urlpatterns = [
     path("Collection/generate", CollectionGenerateView.as_view(), name="collection-generate"),
     path("Collection/match", CollectionMatchView.as_view(), name="collection-match"),
     path("Collection/unmatch", CollectionUnmatchView.as_view(), name="collection-unmatch"),
+    path("Collection/candidates/<int:collection_id>", CollectionCandidatesView.as_view(), name="collection-candidates"),
     path("Collection/<int:user_id>", CollectionView.as_view(), name="collection-list"),
     path("Report/<int:user_id>", ReportView.as_view(), name="report"),
 ]
