@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, CircularProgress, Divider, Paper, Grid,
+    Box, Typography, CircularProgress, Paper, Grid,
     IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText,
     DialogActions, Button, Alert, Autocomplete, TextField,
-    Collapse, Table, TableHead, TableRow, TableCell, TableBody,
+    Table, TableHead, TableRow, TableCell, TableBody,
     FormControl, InputLabel, Select, MenuItem,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
@@ -12,6 +12,7 @@ import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
 import { fmtAmount, fmtKennitala } from '../format';
+import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -97,50 +98,50 @@ function AssociationPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                {/* Header */}
-                <Typography variant="h5" gutterBottom sx={{ mb: 0.5 }}>
-                    {association.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    {subtitle}
-                </Typography>
-                <Divider sx={{ mb: 3 }} />
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Header zone */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+                    <Typography variant="h5">{association.name}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
+                </Box>
 
-                {/* Row 1: association stats */}
-                <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
-                    <KpiCard label="Íbúðir" value={association.apartment_count} />
-                    <KpiCard label="Eigendur" value={association.owner_count} />
-                    <RoleCard
-                        label="Formaður"
-                        value={association.chair || '—'}
-                        onEdit={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
-                    />
-                    <RoleCard
-                        label="Gjaldkeri"
-                        value={association.cfo || '—'}
-                        onEdit={() => setRoleDialog({ role: 'CFO', label: 'Gjaldkeri', currentName: association.cfo })}
-                    />
-                </Grid>
+                {/* Scrollable content zone */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    {/* Row 1: association stats */}
+                    <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
+                        <KpiCard label="Íbúðir" value={association.apartment_count} />
+                        <KpiCard label="Eigendur" value={association.owner_count} />
+                        <RoleCard
+                            label="Formaður"
+                            value={association.chair || '—'}
+                            onEdit={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
+                        />
+                        <RoleCard
+                            label="Gjaldkeri"
+                            value={association.cfo || '—'}
+                            onEdit={() => setRoleDialog({ role: 'CFO', label: 'Gjaldkeri', currentName: association.cfo })}
+                        />
+                    </Grid>
 
-                {/* Row 2: financials */}
-                <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-                    <KpiCard
-                        label={budgetName || `Áætlun ${new Date().getFullYear()}`}
-                        value={budgetTotal !== null ? fmtAmount(budgetTotal) : '—'}
-                        small
-                    />
-                    <KpiCard
-                        label="Mánaðarleg innheimta"
-                        value={monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—'}
-                        small
-                    />
-                </Grid>
+                    {/* Row 2: financials */}
+                    <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
+                        <KpiCard
+                            label={budgetName || `Áætlun ${new Date().getFullYear()}`}
+                            value={budgetTotal !== null ? fmtAmount(budgetTotal) : '—'}
+                            small
+                        />
+                        <KpiCard
+                            label="Mánaðarleg innheimta"
+                            value={monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—'}
+                            small
+                        />
+                    </Grid>
 
-                {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
+                    {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
 
-                <BankAccountsPanel user={user} assocParam={assocParam} />
-                <AssociationRulesPanel user={user} assocParam={assocParam} />
+                    <BankAccountsPanel user={user} assocParam={assocParam} />
+                    <AssociationRulesPanel user={user} assocParam={assocParam} />
+                </Box>
             </Box>
 
             {roleDialog && (
@@ -259,12 +260,107 @@ function RoleDialog({ open, role, label, currentName, owners, userId, assocParam
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
-                <Button onClick={onClose}>Hætta við</Button>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
+                    variant="contained" sx={primaryButtonSx}
                     disabled={!selected || saving} onClick={handleSave}
                 >
                     {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
+                </Button>
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, onCreated }) {
+    const [name, setName] = React.useState('');
+    const [accountNumber, setAccountNumber] = React.useState('');
+    const [assetAccountId, setAssetAccountId] = React.useState('');
+    const [description, setDescription] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    React.useEffect(() => {
+        if (!open) {
+            setName('');
+            setAccountNumber('');
+            setAssetAccountId('');
+            setDescription('');
+            setError('');
+            setSaving(false);
+        }
+    }, [open]);
+
+    const isValid = name.trim() && accountNumber.trim();
+
+    const handleSubmit = async () => {
+        setError('');
+        setSaving(true);
+        try {
+            const resp = await fetch(`${API_URL}/BankAccount${assocParam}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    name: name.trim(),
+                    account_number: accountNumber.trim(),
+                    asset_account_id: assetAccountId || null,
+                    description: description.trim(),
+                }),
+            });
+            if (resp.ok) {
+                onClose();
+                onCreated();
+            } else {
+                const data = await resp.json();
+                setError(data.detail || 'Villa við skráningu.');
+            }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ pb: 0.5 }}>
+                Nýr bankareikningur
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+                    Tengdu bankareikning við húsfélagið
+                </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+                <TextField label="Heiti reiknings" value={name} onChange={e => setName(e.target.value)} size="small" fullWidth />
+                <TextField
+                    label="Reikningsnúmer" value={accountNumber}
+                    onChange={e => setAccountNumber(e.target.value)}
+                    size="small" fullWidth placeholder="0101-26-123456"
+                />
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Bókhaldslykill (EIGN)</InputLabel>
+                    <Select
+                        value={assetAccountId}
+                        label="Bókhaldslykill (EIGN)"
+                        onChange={e => setAssetAccountId(e.target.value)}
+                    >
+                        <MenuItem value=""><em>Enginn</em></MenuItem>
+                        {accountingKeys.map(k => (
+                            <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <TextField
+                    label="Lýsing (valfrjálst)" value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    size="small" fullWidth
+                />
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'flex-end' }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista reikning'}
                 </Button>
             </DialogActions>
         </Dialog>
@@ -311,21 +407,21 @@ function BankAccountsPanel({ user, assocParam }) {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6">Bankareikningar</Typography>
                 <Button
-                    variant="contained" color="secondary" sx={{ color: '#fff' }}
-                    onClick={() => setShowForm(v => !v)}
+                    variant="contained" sx={primaryButtonSx}
+                    onClick={() => setShowForm(true)}
                 >
-                    {showForm ? 'Loka' : '+ Bæta við reikning'}
+                    + Bæta við reikning
                 </Button>
             </Box>
 
-            <Collapse in={showForm}>
-                <BankAccountForm
-                    userId={user.id}
-                    assocParam={assocParam}
-                    accountingKeys={accountingKeys}
-                    onCreated={() => { setShowForm(false); loadBankAccounts(); }}
-                />
-            </Collapse>
+            <BankAccountDialog
+                open={showForm}
+                onClose={() => setShowForm(false)}
+                userId={user.id}
+                assocParam={assocParam}
+                accountingKeys={accountingKeys}
+                onCreated={loadBankAccounts}
+            />
 
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
 
@@ -357,82 +453,6 @@ function BankAccountsPanel({ user, assocParam }) {
                     </Table>
                 </Paper>
             )}
-        </Paper>
-    );
-}
-
-function BankAccountForm({ userId, assocParam, accountingKeys, onCreated }) {
-    const [name, setName] = React.useState('');
-    const [accountNumber, setAccountNumber] = React.useState('');
-    const [assetAccountId, setAssetAccountId] = React.useState('');
-    const [description, setDescription] = React.useState('');
-    const [saving, setSaving] = React.useState(false);
-    const [error, setError] = React.useState('');
-
-    const isValid = name.trim() && accountNumber.trim();
-
-    const handleSubmit = async () => {
-        setError('');
-        setSaving(true);
-        try {
-            const resp = await fetch(`${API_URL}/BankAccount${assocParam}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    name: name.trim(),
-                    account_number: accountNumber.trim(),
-                    asset_account_id: assetAccountId || null,
-                    description: description.trim(),
-                }),
-            });
-            if (resp.ok) {
-                setName(''); setAccountNumber(''); setAssetAccountId(''); setDescription('');
-                onCreated();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við skráningu.');
-            }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
-            <TextField label="Heiti reiknings" value={name} onChange={e => setName(e.target.value)} size="small" fullWidth />
-            <TextField
-                label="Reikningsnúmer" value={accountNumber}
-                onChange={e => setAccountNumber(e.target.value)}
-                size="small" fullWidth placeholder="0101-26-123456"
-            />
-            <FormControl size="small" fullWidth>
-                <InputLabel>Bókhaldslykill (EIGN)</InputLabel>
-                <Select
-                    value={assetAccountId}
-                    label="Bókhaldslykill (EIGN)"
-                    onChange={e => setAssetAccountId(e.target.value)}
-                >
-                    <MenuItem value=""><em>Enginn</em></MenuItem>
-                    {accountingKeys.map(k => (
-                        <MenuItem key={k.id} value={k.id}>{k.number} · {k.name}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            <TextField
-                label="Lýsing (valfrjálst)" value={description}
-                onChange={e => setDescription(e.target.value)}
-                size="small" fullWidth
-            />
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista reikning'}
-            </Button>
         </Paper>
     );
 }
@@ -565,16 +585,13 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
                     {error && <Alert severity="error">{error}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-                    <Button
-                        onClick={() => setConfirmDelete(true)}
-                        sx={{ color: 'text.disabled', textTransform: 'none', fontSize: '0.8rem', p: 0, minWidth: 0 }}
-                    >
+                    <Button sx={destructiveButtonSx} onClick={() => setConfirmDelete(true)}>
                         Eyða reikningi
                     </Button>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isValid || saving} onClick={handleSave}
                         >
                             {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
@@ -591,8 +608,8 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDelete(false)}>Hætta við</Button>
-                    <Button onClick={handleDelete} color="error" disabled={deleting}>
+                    <Button sx={ghostButtonSx} onClick={() => setConfirmDelete(false)}>Hætta við</Button>
+                    <Button sx={destructiveButtonSx} onClick={handleDelete} disabled={deleting}>
                         {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
                     </Button>
                 </DialogActions>
@@ -669,7 +686,7 @@ function AssociationRulesPanel({ user, assocParam }) {
         <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6">Flokkunarreglur</Typography>
-                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={openCreate}>
+                <Button variant="contained" sx={primaryButtonSx} onClick={openCreate}>
                     + Ný regla
                 </Button>
             </Box>
@@ -728,8 +745,8 @@ function AssociationRulesPanel({ user, assocParam }) {
                     {saveError && <Alert severity="error">{saveError}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDialogOpen(false)}>Hætta við</Button>
-                    <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={handleSave} disabled={saving}>
+                    <Button sx={ghostButtonSx} onClick={() => setDialogOpen(false)}>Hætta við</Button>
+                    <Button variant="contained" sx={primaryButtonSx} onClick={handleSave} disabled={saving}>
                         {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
                     </Button>
                 </DialogActions>
@@ -741,8 +758,8 @@ function AssociationRulesPanel({ user, assocParam }) {
                     <Typography>Ertu viss um að þú viljir eyða reglunni <strong>"{deleteRule?.keyword}"</strong>?</Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDeleteRule(null)}>Hætta við</Button>
-                    <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                    <Button sx={ghostButtonSx} onClick={() => setDeleteRule(null)}>Hætta við</Button>
+                    <Button sx={destructiveButtonSx} onClick={handleDelete} disabled={deleting}>
                         {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
                     </Button>
                 </DialogActions>
