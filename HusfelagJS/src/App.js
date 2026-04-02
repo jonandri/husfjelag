@@ -48,8 +48,8 @@ const theme = createTheme({
     h2: { fontWeight: 200 },
     h3: { fontWeight: 200 },
     h4: { fontWeight: 200 },
-    h5: { fontWeight: 200 },
-    h6: { fontWeight: 200 },
+    h5: { fontWeight: 600 },
+    h6: { fontWeight: 400 },
   },
 });
 
@@ -135,7 +135,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/dashboard" element={<Navigate to="/husfelag" replace />} />
+            <Route path="/dashboard" element={<Navigate to="/yfirlit" replace />} />
             <Route path="/houseassociation" element={<ProtectedRoute><HouseAssociation /></ProtectedRoute>} />
             <Route path="/husfelag" element={<ProtectedRoute><AssociationPage /></ProtectedRoute>} />
             <Route path="/ibudir" element={<ProtectedRoute><ApartmentsPage /></ProtectedRoute>} />
@@ -146,7 +146,7 @@ function App() {
             <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
             <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
             <Route path="/faerslur" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
-            <Route path="/skyrslur" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+            <Route path="/yfirlit" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
             <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
             <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
           </Routes>

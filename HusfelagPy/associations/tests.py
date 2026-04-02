@@ -2210,3 +2210,114 @@ class CollectionViewMonthTest(TestCase):
         data = resp.json()
         self.assertIn("rows", data)
         self.assertIn("budget_summary", data)
+
+
+class CollectionCandidatesViewTest(TestCase):
+    def setUp(self):
+        import datetime as dt
+        from decimal import Decimal
+        self.client = Client()
+        self.user = User.objects.create(kennitala="8888888881", name="Admin")
+        self.payer = User.objects.create(kennitala="9999999991", name="Greiðandi")
+        self.association = Association.objects.create(
+            ssn="6060606060", name="Frambjóðendasfélag",
+            address="Framgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(user=self.user, association=self.association, active=True)
+        self.bank = BankAccount.objects.create(
+            association=self.association, name="Reikningur", account_number="0101-26-000099"
+        )
+        self.budget = Budget.objects.create(
+            association=self.association, year=2026, version=1, is_active=True
+        )
+        apt = Apartment.objects.create(
+            association=self.association, anr="0101", fnr="F000099",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        ApartmentOwnership.objects.create(
+            apartment=apt, user=self.payer, share=Decimal("100"), is_payer=True, deleted=False
+        )
+        self.collection = Collection.objects.create(
+            budget=self.budget, apartment=apt, payer=self.payer,
+            month=1, amount_shared=Decimal("0"), amount_equal=Decimal("17000"),
+            amount_total=Decimal("17000"), status=CollectionStatus.PENDING,
+        )
+        self.tx_dec = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2025, 12, 28),
+            amount=Decimal("17000"),
+            description="Húsgjöld des",
+            reference="",
+            payer_kennitala="9999999991",
+            status=TransactionStatus.IMPORTED,
+        )
+        self.tx_reconciled = Transaction.objects.create(
+            bank_account=self.bank,
+            date=dt.date(2025, 11, 5),
+            amount=Decimal("17000"),
+            description="Húsgjöld nóv",
+            reference="",
+            payer_kennitala="9999999991",
+            status=TransactionStatus.RECONCILED,
+        )
+
+    def _get(self, collection_id=None):
+        cid = collection_id or self.collection.id
+        return self.client.get(
+            f"/Collection/candidates/{cid}?user_id={self.user.id}"
+        )
+
+    def test_returns_unreconciled_transactions_for_payer(self):
+        resp = self._get()
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["transaction_id"], self.tx_dec.id)
+        self.assertEqual(data[0]["date"], "2025-12-28")
+        self.assertIn("description", data[0])
+        self.assertIn("amount", data[0])
+        self.assertIn("bank_account_name", data[0])
+
+    def test_excludes_reconciled_transactions(self):
+        resp = self._get()
+        ids = [r["transaction_id"] for r in resp.json()]
+        self.assertNotIn(self.tx_reconciled.id, ids)
+
+    def test_excludes_transactions_already_linked_to_another_collection(self):
+        import datetime as dt
+        from decimal import Decimal
+        apt2 = Apartment.objects.create(
+            association=self.association, anr="0202", fnr="F000098",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        other_col = Collection.objects.create(
+            budget=self.budget, apartment=apt2, payer=self.payer,
+            month=2, amount_shared=Decimal("0"), amount_equal=Decimal("17000"),
+            amount_total=Decimal("17000"), status=CollectionStatus.PAID,
+            paid_transaction=self.tx_dec,
+        )
+        resp = self._get()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.json()), 0)
+
+    def test_returns_404_for_unknown_collection(self):
+        resp = self._get(collection_id=999999)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_returns_400_if_collection_has_no_payer(self):
+        import datetime as dt
+        from decimal import Decimal
+        apt3 = Apartment.objects.create(
+            association=self.association, anr="0303", fnr="F000097",
+            share=Decimal("0"), share_2=Decimal("0"),
+            share_3=Decimal("0"), share_eq=Decimal("100"),
+        )
+        no_payer_col = Collection.objects.create(
+            budget=self.budget, apartment=apt3, payer=None,
+            month=3, amount_shared=Decimal("0"), amount_equal=Decimal("17000"),
+            amount_total=Decimal("17000"), status=CollectionStatus.PENDING,
+        )
+        resp = self._get(collection_id=no_payer_col.id)
+        self.assertEqual(resp.status_code, 400)

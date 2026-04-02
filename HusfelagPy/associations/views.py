@@ -958,9 +958,29 @@ class ImportDetectView(APIView):
         return Response(result)
 
 
+def _husgjold_category():
+    """Return the 'Tekjur af húsgjöldum' category (income_account 4100), or None."""
+    return Category.objects.filter(
+        income_account__number=4100, deleted=False
+    ).first()
+
+
+def _owner_kennitala_set(association):
+    """Return a set of kennitala strings for all active owners in the association."""
+    return set(
+        ApartmentOwnership.objects.filter(
+            apartment__association=association,
+            deleted=False,
+        ).values_list("user__kennitala", flat=True)
+    )
+
+
 def _auto_match_collections(transactions, association):
-    """Auto-match positive income transactions to PENDING collection items by payer kennitala."""
+    """Auto-match positive income transactions to PENDING collection items by payer kennitala.
+    If no matching collection exists but payer is an owner, categorise as Tekjur af húsgjöldum."""
     hussjoður_cat = Category.objects.filter(type=CategoryType.INCOME, name="Hússjóður", deleted=False).first()
+    husgjold_cat = _husgjold_category()
+    owner_kennitala = _owner_kennitala_set(association)
     to_update_txs = []
     to_update_cols = []
     for tx in transactions:
@@ -979,18 +999,23 @@ def _auto_match_collections(transactions, association):
             status=CollectionStatus.PENDING,
             paid_transaction__isnull=True,
         ).first()
-        if not col:
-            continue
-        col.paid_transaction = tx
-        col.status = CollectionStatus.PAID
-        tx.status = TransactionStatus.RECONCILED
-        if hussjoður_cat:
-            tx.category = hussjoður_cat
-        to_update_cols.append(col)
-        to_update_txs.append(tx)
+        if col:
+            col.paid_transaction = tx
+            col.status = CollectionStatus.PAID
+            tx.status = TransactionStatus.RECONCILED
+            if hussjoður_cat:
+                tx.category = hussjoður_cat
+            to_update_cols.append(col)
+            to_update_txs.append(tx)
+        elif tx.payer_kennitala in owner_kennitala and husgjold_cat and tx.category is None:
+            tx.category = husgjold_cat
+            tx.status = TransactionStatus.CATEGORISED
+            to_update_txs.append(tx)
     if to_update_cols:
         with transaction.atomic():
             Collection.objects.bulk_update(to_update_cols, ["paid_transaction", "status"])
+    if to_update_txs:
+        with transaction.atomic():
             Transaction.objects.bulk_update(to_update_txs, ["status", "category"])
 
 
@@ -1098,9 +1123,14 @@ class ImportRecategoriseView(APIView):
         except Exception:
             rules, history = [], {}
 
+        husgjold_cat = _husgjold_category()
+        owner_kennitala = _owner_kennitala_set(association)
+
         to_update = []
         for tx in txs:
             cat = categorise_row(str(tx.description or ""), rules, history)
+            if not cat and husgjold_cat and tx.payer_kennitala and tx.payer_kennitala in owner_kennitala and tx.amount > 0:
+                cat = husgjold_cat
             if cat:
                 tx.category = cat
                 tx.status = TransactionStatus.CATEGORISED
@@ -1631,7 +1661,11 @@ class CollectionView(APIView):
             if totals[t] > 0
         ]
 
-        return Response({"rows": rows, "budget_summary": budget_summary})
+        pending_total = Collection.objects.filter(
+            budget__association=association, status=CollectionStatus.PENDING,
+        ).aggregate(total=django_models.Sum("amount_total"))["total"] or Decimal("0")
+
+        return Response({"rows": rows, "budget_summary": budget_summary, "pending_total": str(pending_total)})
 
 
 class CollectionGenerateView(APIView):
@@ -1783,6 +1817,56 @@ class CollectionUnmatchView(APIView):
                 tx.save(update_fields=["status", "category"])
 
         return Response({"collection_id": col.id, "status": col.status})
+
+
+class CollectionCandidatesView(APIView):
+    def get(self, request, collection_id):
+        """GET /Collection/candidates/<collection_id>
+        Returns positive unreconciled transactions for the payer of this collection item,
+        across all months/years. Excludes transactions already linked to another collection.
+        Query params: user_id (required), ?as= (superadmin impersonation).
+        """
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return Response({"detail": "user_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            col = Collection.objects.select_related("payer").get(
+                id=collection_id, budget__association=association
+            )
+        except Collection.DoesNotExist:
+            return Response({"detail": "Innheimtufærsla ekki fundin."}, status=status.HTTP_404_NOT_FOUND)
+
+        if not col.payer:
+            return Response({"detail": "Innheimtufærslan hefur engan greiðanda."}, status=status.HTTP_400_BAD_REQUEST)
+
+        txs = (
+            Transaction.objects
+            .filter(
+                bank_account__association=association,
+                payer_kennitala=col.payer.kennitala,
+                amount__gt=0,
+            )
+            .exclude(status=TransactionStatus.RECONCILED)
+            .exclude(collection_payment__isnull=False)
+            .select_related("bank_account")
+            .order_by("-date")
+        )
+
+        return Response([
+            {
+                "transaction_id": tx.id,
+                "date": str(tx.date),
+                "description": tx.description,
+                "amount": str(tx.amount),
+                "bank_account_name": tx.bank_account.name,
+            }
+            for tx in txs
+        ])
 
 
 class AssociationListView(APIView):

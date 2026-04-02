@@ -8,6 +8,8 @@ import {
 } from '@mui/material';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -149,76 +151,75 @@ export default function CategorisationRulesPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ maxWidth: 800 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Typography variant="h5">Flokkunarreglur</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Reglur sem nota lykilorð til að flokka færslur sjálfkrafa við innflutning
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        {user?.is_superadmin && (
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => openCreate(true)}>+ Almenn regla</Button>
+                        )}
+                        <Button variant="contained" sx={primaryButtonSx} onClick={() => openCreate(false)}>
+                            + Ný regla
+                        </Button>
+                    </Box>
+                </Box>
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3, maxWidth: 800 }}>
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-            {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-                <Box>
-                    <Typography variant="h5">Flokkunarreglur</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Reglur sem nota lykilorð til að flokka færslur sjálfkrafa við innflutning.
+                    {/* Association rules */}
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#08C076', letterSpacing: 0.5, display: 'block', mb: 1 }}>
+                        REGLUR ÞESSA FÉLAGS
                     </Typography>
-                </Box>
-                <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={() => openCreate(false)}>
-                    + Ný regla
-                </Button>
-            </Box>
-
-            {/* Association rules */}
-            <Typography variant="caption" sx={{ fontWeight: 600, color: '#08C076', letterSpacing: 0.5, display: 'block', mb: 1 }}>
-                REGLUR ÞESSA FÉLAGS
-            </Typography>
-            <RulesTable
-                rules={assocRules}
-                isGlobal={false}
-                canEdit
-                onEdit={r => openEdit(r, false)}
-                onDelete={r => setDeleteRule(r)}
-            />
-
-            {/* Global rules */}
-            <Typography variant="caption" sx={{ fontWeight: 600, color: '#aaa', letterSpacing: 0.5, display: 'block', mt: 3, mb: 1 }}>
-                ALMENNAR REGLUR
-            </Typography>
-            <RulesTable
-                rules={globalRules}
-                isGlobal
-                canEdit={!!user?.is_superadmin}
-                onEdit={r => openEdit(r, true)}
-                onDelete={r => setDeleteRule(r)}
-            />
-
-            {user?.is_superadmin && (
-                <Button variant="outlined" color="secondary" size="small" sx={{ mt: 2 }} onClick={() => openCreate(true)}>
-                    + Almenn regla
-                </Button>
-            )}
-
-            {/* Create/Edit dialog */}
-            <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
-                <DialogTitle>{editRule ? 'Breyta reglu' : 'Ný regla'}</DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-                    <TextField
-                        label="Lykilorð" value={keyword} size="small" fullWidth autoFocus
-                        onChange={e => setKeyword(e.target.value)}
+                    <RulesTable
+                        rules={assocRules}
+                        isGlobal={false}
+                        canEdit
+                        onEdit={r => openEdit(r, false)}
+                        onDelete={r => setDeleteRule(r)}
                     />
-                    <FormControl size="small" fullWidth>
-                        <InputLabel>Flokkur</InputLabel>
-                        <Select value={categoryId} label="Flokkur" onChange={e => setCategoryId(e.target.value)}>
-                            {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
-                        </Select>
-                    </FormControl>
-                    {saveError && <Alert severity="error">{saveError}</Alert>}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button onClick={() => setDialogOpen(false)}>Hætta við</Button>
-                    <Button variant="contained" color="secondary" sx={{ color: '#fff' }} onClick={handleSave} disabled={saving}>
-                        {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+
+                    {/* Global rules */}
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#aaa', letterSpacing: 0.5, display: 'block', mt: 3, mb: 1 }}>
+                        ALMENNAR REGLUR
+                    </Typography>
+                    <RulesTable
+                        rules={globalRules}
+                        isGlobal
+                        canEdit={!!user?.is_superadmin}
+                        onEdit={r => openEdit(r, true)}
+                        onDelete={r => setDeleteRule(r)}
+                    />
+
+                    {/* Create/Edit dialog */}
+                    <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+                        <DialogTitle>{editRule ? 'Breyta reglu' : 'Ný regla'}</DialogTitle>
+                        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                            <TextField
+                                label="Lykilorð" value={keyword} size="small" fullWidth autoFocus
+                                onChange={e => setKeyword(e.target.value)}
+                            />
+                            <FormControl size="small" fullWidth>
+                                <InputLabel>Flokkur</InputLabel>
+                                <Select value={categoryId} label="Flokkur" onChange={e => setCategoryId(e.target.value)}>
+                                    {categories.map(c => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                                </Select>
+                            </FormControl>
+                            {saveError && <Alert severity="error">{saveError}</Alert>}
+                        </DialogContent>
+                        <DialogActions sx={{ px: 3, pb: 2 }}>
+                            <Button sx={ghostButtonSx} onClick={() => setDialogOpen(false)}>Hætta við</Button>
+                            <Button variant="contained" sx={primaryButtonSx} onClick={handleSave} disabled={saving}>
+                                {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista'}
+                            </Button>
+                        </DialogActions>
+                    </Dialog>
 
                     {/* Delete confirm dialog */}
                     <Dialog open={!!deleteRule} onClose={() => { setDeleteRule(null); setDeleteError(''); }} maxWidth="xs" fullWidth>
@@ -228,8 +229,8 @@ export default function CategorisationRulesPage() {
                             {deleteError && <Alert severity="error" sx={{ mt: 1 }}>{deleteError}</Alert>}
                         </DialogContent>
                         <DialogActions sx={{ px: 3, pb: 2 }}>
-                            <Button onClick={() => { setDeleteRule(null); setDeleteError(''); }}>Hætta við</Button>
-                            <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+                            <Button sx={ghostButtonSx} onClick={() => { setDeleteRule(null); setDeleteError(''); }}>Hætta við</Button>
+                            <Button variant="text" sx={destructiveButtonSx} onClick={handleDelete} disabled={deleting}>
                                 {deleting ? <CircularProgress size={18} color="inherit" /> : 'Eyða'}
                             </Button>
                         </DialogActions>
@@ -251,17 +252,17 @@ function RulesTable({ rules, isGlobal, canEdit, onEdit, onDelete }) {
 
     return (
         <Table size="small" sx={{ mb: 1 }}>
-            <TableHead>
-                <TableRow sx={{ '& th': { color: '#555', fontWeight: 500, borderBottom: '2px solid #eee' } }}>
-                    <TableCell>Lykilorð</TableCell>
-                    <TableCell>Flokkur</TableCell>
+            <TableHead sx={HEAD_SX}>
+                <TableRow>
+                    <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
+                    <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
                     <TableCell />
                 </TableRow>
             </TableHead>
             <TableBody>
                 {rules.map(rule => (
                     <TableRow key={rule.id} sx={{ '& td': { borderBottom: '1px solid #f0f0f0' } }}>
-                        <TableCell sx={{ fontFamily: 'monospace', color: isGlobal ? '#888' : '#333' }}>
+                        <TableCell sx={{ color: isGlobal ? '#888' : '#333' }}>
                             {rule.keyword}
                         </TableCell>
                         <TableCell>
@@ -276,20 +277,22 @@ function RulesTable({ rules, isGlobal, canEdit, onEdit, onDelete }) {
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                             {canEdit && (
                                 <>
-                                    <Typography
-                                        component="span"
-                                        sx={{ color: '#aaa', cursor: 'pointer', fontSize: 12, mr: 1, '&:hover': { color: '#555' } }}
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        sx={{ ...ghostButtonSx, fontSize: 12, mr: 0.5 }}
                                         onClick={() => onEdit(rule)}
                                     >
                                         Breyta
-                                    </Typography>
-                                    <Typography
-                                        component="span"
-                                        sx={{ color: '#e57373', cursor: 'pointer', fontSize: 12, '&:hover': { color: '#c62828' } }}
+                                    </Button>
+                                    <Button
+                                        variant="text"
+                                        size="small"
+                                        sx={{ ...destructiveButtonSx, fontSize: 12 }}
                                         onClick={() => onDelete(rule)}
                                     >
                                         Eyða
-                                    </Typography>
+                                    </Button>
                                 </>
                             )}
                         </TableCell>

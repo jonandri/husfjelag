@@ -12,6 +12,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -67,89 +68,91 @@ function CategoriesPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Flokkar</Typography>
-                    <Button
-                        variant="contained" color="secondary" sx={{ color: '#fff' }}
-                        onClick={() => setShowForm(v => !v)}
-                    >
-                        {showForm ? 'Loka skráningarformi' : '+ Bæta við flokk'}
+                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                        + Bæta við flokk
                     </Button>
                 </Box>
-
-                <Collapse in={showForm}>
-                    <AddCategoryForm
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+                    <AddCategoryDialog
+                        open={showForm}
+                        onClose={() => setShowForm(false)}
                         userId={user.id}
                         assocParam={assocParam}
                         onCreated={() => { setShowForm(false); loadCategories(); }}
                     />
-                </Collapse>
 
-                {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                {active.length === 0 ? (
-                    <Typography color="text.secondary" sx={{ mt: 4 }}>
-                        Enginn flokkur skráður. Smelltu á „+ Bæta við flokk" til að hefja skráningu.
-                    </Typography>
-                ) : (
-                    <Paper variant="outlined" sx={{ mt: 2 }}>
-                        <Table size="small">
-                            <TableHead sx={HEAD_SX}>
-                                <TableRow>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
-                                    <TableCell sx={HEAD_CELL_SX}>{lbl('type', 'Tegund')}</TableCell>
-                                    <TableCell />
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sort(active).map(c => (
-                                    <CategoryRow key={c.id} category={c} onSaved={loadCategories} />
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Paper>
-                )}
+                    {active.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ mt: 4 }}>
+                            Enginn flokkur skráður. Smelltu á „+ Bæta við flokk" til að hefja skráningu.
+                        </Typography>
+                    ) : (
+                        <Paper variant="outlined">
+                            <Table size="small">
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
+                                        <TableCell sx={HEAD_CELL_SX}>{lbl('type', 'Tegund')}</TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {sort(active).map(c => (
+                                        <CategoryRow key={c.id} category={c} onSaved={loadCategories} />
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    )}
 
-                {disabled.length > 0 && (
-                    <Box sx={{ mt: 3 }}>
-                        <Button
-                            size="small" variant="text" color="inherit"
-                            sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
-                            onClick={() => setShowDisabled(v => !v)}
-                        >
-                            {showDisabled ? '▲' : '▼'} Óvirkir flokkar ({disabled.length})
-                        </Button>
-                        <Collapse in={showDisabled}>
-                            <Paper variant="outlined" sx={{ mt: 1 }}>
-                                <Table size="small">
-                                    <TableHead sx={HEAD_SX}>
-                                        <TableRow>
-                                            <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
-                                            <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
-                                            <TableCell />
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {sort(disabled).map(c => (
-                                            <CategoryRow key={c.id} category={c} onSaved={loadCategories} isDisabled />
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </Paper>
-                        </Collapse>
-                    </Box>
-                )}
+                    {disabled.length > 0 && (
+                        <Box sx={{ mt: 3 }}>
+                            <Button size="small" sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
+                                onClick={() => setShowDisabled(v => !v)}
+                            >
+                                {showDisabled ? '▲' : '▼'} Óvirkir flokkar ({disabled.length})
+                            </Button>
+                            <Collapse in={showDisabled}>
+                                <Paper variant="outlined" sx={{ mt: 1 }}>
+                                    <Table size="small">
+                                        <TableHead sx={HEAD_SX}>
+                                            <TableRow>
+                                                <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
+                                                <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {sort(disabled).map(c => (
+                                                <CategoryRow key={c.id} category={c} onSaved={loadCategories} isDisabled />
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </Paper>
+                            </Collapse>
+                        </Box>
+                    )}
+                </Box>
             </Box>
         </div>
     );
 }
 
-function AddCategoryForm({ userId, assocParam, onCreated }) {
+function AddCategoryDialog({ open, onClose, userId, assocParam, onCreated }) {
     const [name, setName] = useState('');
     const [type, setType] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    React.useEffect(() => {
+        if (!open) { setName(''); setType(''); setError(''); }
+    }, [open]);
 
     const isValid = name.trim() && type;
 
@@ -162,46 +165,40 @@ function AddCategoryForm({ userId, assocParam, onCreated }) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, name: name.trim(), type }),
             });
-            if (resp.ok) {
-                setName(''); setType('');
-                onCreated();
-            } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við skráningu.');
-            }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-        } finally {
-            setSaving(false);
-        }
+            if (resp.ok) { onCreated(); }
+            else { const data = await resp.json(); setError(data.detail || 'Villa við skráningu.'); }
+        } catch { setError('Tenging við þjón mistókst.'); }
+        finally { setSaving(false); }
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mb: 3, display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 480 }}>
-            <Typography variant="subtitle1">Skrá nýjan flokk</Typography>
-            <TextField
-                label="Nafn flokks"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                size="small"
-                fullWidth
-            />
-            <FormControl size="small" fullWidth>
-                <InputLabel>Tegund</InputLabel>
-                <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
-                    {CATEGORY_TYPES.map(t => (
-                        <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            {error && <Alert severity="error">{error}</Alert>}
-            <Button
-                variant="contained" color="secondary" sx={{ color: '#fff', alignSelf: 'flex-start' }}
-                disabled={!isValid || saving} onClick={handleSubmit}
-            >
-                {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista flokk'}
-            </Button>
-        </Paper>
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+            <DialogTitle sx={{ pb: 0.5 }}>
+                Nýr flokkur
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 400, mt: 0.5 }}>
+                    Flokkar eru notaðir til að flokkja útgjöld og tekjur
+                </Typography>
+            </DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '16px !important' }}>
+                <TextField label="Nafn flokks" value={name} size="small" fullWidth autoFocus
+                    onChange={e => setName(e.target.value)} />
+                <FormControl size="small" fullWidth>
+                    <InputLabel>Tegund</InputLabel>
+                    <Select value={type} label="Tegund" onChange={e => setType(e.target.value)}>
+                        {CATEGORY_TYPES.map(t => (
+                            <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                {error && <Alert severity="error">{error}</Alert>}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5, justifyContent: 'flex-end' }}>
+                <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
+                <Button variant="contained" sx={primaryButtonSx} disabled={!isValid || saving} onClick={handleSubmit}>
+                    {saving ? <CircularProgress size={18} color="inherit" /> : 'Vista flokk'}
+                </Button>
+            </DialogActions>
+        </Dialog>
     );
 }
 
@@ -387,9 +384,9 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button onClick={onClose}>Hætta við</Button>
+                        <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                         <Button
-                            variant="contained" color="secondary" sx={{ color: '#fff' }}
+                            variant="contained" sx={primaryButtonSx}
                             disabled={!isValid || saving}
                             onClick={isDisabled ? handleEnable : handleSave}
                         >
@@ -409,8 +406,8 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setConfirmDisable(false)}>Hætta við</Button>
-                    <Button color="error" variant="contained" disabled={disabling} onClick={handleDisable}>
+                    <Button sx={ghostButtonSx} onClick={() => setConfirmDisable(false)}>Hætta við</Button>
+                    <Button sx={destructiveButtonSx} disabled={disabling} onClick={handleDisable}>
                         {disabling ? <CircularProgress size={18} color="inherit" /> : 'Já, óvirkja'}
                     </Button>
                 </DialogActions>

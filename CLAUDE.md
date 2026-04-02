@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## UI Style Guide
+
+**All frontend work must follow `docs/style.md`.** It covers page anatomy (three-zone layout), tables, buttons, dialogs, amount display, status chips, label chips, navigation order, and typography. Read it before touching any React file.
+
 ## Project Overview
 
 **Húsfélag** is an Icelandic SaaS platform for Building Associations (Húsfélag). Users authenticate via Kennitala (10-digit Icelandic national ID) or phone number. The system manages house associations, apartments, ownership percentages, fee collection, invoices, budgets, and role-based access.

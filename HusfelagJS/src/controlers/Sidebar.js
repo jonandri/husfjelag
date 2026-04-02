@@ -31,13 +31,13 @@ const W_OPEN      = 220;
 const W_CLOSED    = 64;
 
 const NAV = [
+    { path: '/yfirlit',   label: 'Yfirlit',   icon: <BarChartOutlinedIcon              sx={{ fontSize: 20 }} /> },
     { path: '/husfelag',  label: 'Húsfélag',  icon: <BusinessOutlinedIcon              sx={{ fontSize: 20 }} /> },
     { path: '/ibudir',    label: 'Íbúðir',    icon: <HomeOutlinedIcon                  sx={{ fontSize: 20 }} /> },
     { path: '/eigendur',  label: 'Eigendur',  icon: <GroupOutlinedIcon                 sx={{ fontSize: 20 }} /> },
     { path: '/aaetlun',   label: 'Áætlun',    icon: <AssessmentOutlinedIcon            sx={{ fontSize: 20 }} /> },
-    { path: '/innheimta',        label: 'Innheimta',        icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },    
-    { path: '/faerslur',         label: 'Færslur',          icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
-    { path: '/skyrslur',         label: 'Skýrslur',         icon: <BarChartOutlinedIcon              sx={{ fontSize: 20 }} /> },
+    { path: '/innheimta', label: 'Innheimta', icon: <AccountBalanceWalletOutlinedIcon  sx={{ fontSize: 20 }} /> },
+    { path: '/faerslur',  label: 'Færslur',   icon: <ReceiptLongOutlinedIcon           sx={{ fontSize: 20 }} /> },
 ];
 
 function NavItem({ path, label, icon, collapsed, active, onClick }) {
