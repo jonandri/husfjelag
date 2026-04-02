@@ -171,7 +171,7 @@ function CollectionPage() {
                                                 sx={row.status === 'PENDING' ? { bgcolor: '#fffde7' } : undefined}>
                                                 <TableCell>{row.anr}</TableCell>
                                                 <TableCell>{row.payer_name ?? <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
-                                                <TableCell sx={{ color: '#888', fontSize: 12 }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                                <TableCell sx={{ color: '#888' }}>{row.payer_kennitala ? fmtKennitala(row.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                                 <AmountCell value={row.amount_total} />
                                                 <TableCell align="center">
                                                     <StatusChip status={row.status === 'PAID' ? 'PAID' : 'UNPAID'} />
@@ -243,7 +243,7 @@ function CollectionPage() {
                                             <TableRow key={tx.transaction_id} hover>
                                                 <TableCell sx={{ color: '#888' }}>{tx.date}</TableCell>
                                                 <TableCell>{tx.description}</TableCell>
-                                                <TableCell sx={{ color: '#888', fontSize: 12 }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
+                                                <TableCell sx={{ color: '#888' }}>{tx.payer_kennitala ? fmtKennitala(tx.payer_kennitala) : <Typography variant="caption" color="text.disabled">—</Typography>}</TableCell>
                                                 <AmountCell value={tx.amount} />
                                                 <TableCell>
                                                     <Select

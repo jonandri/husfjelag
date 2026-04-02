@@ -262,7 +262,7 @@ function RulesTable({ rules, isGlobal, canEdit, onEdit, onDelete }) {
             <TableBody>
                 {rules.map(rule => (
                     <TableRow key={rule.id} sx={{ '& td': { borderBottom: '1px solid #f0f0f0' } }}>
-                        <TableCell sx={{ fontFamily: 'monospace', color: isGlobal ? '#888' : '#333' }}>
+                        <TableCell sx={{ color: isGlobal ? '#888' : '#333' }}>
                             {rule.keyword}
                         </TableCell>
                         <TableCell>
