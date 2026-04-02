@@ -48,8 +48,8 @@ const theme = createTheme({
     h2: { fontWeight: 200 },
     h3: { fontWeight: 200 },
     h4: { fontWeight: 200 },
-    h5: { fontWeight: 200 },
-    h6: { fontWeight: 200 },
+    h5: { fontWeight: 600 },
+    h6: { fontWeight: 400 },
   },
 });
 
