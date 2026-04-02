@@ -714,7 +714,7 @@ function AssociationRulesPanel({ user, assocParam }) {
                                 <TableBody>
                                     {rules.map(rule => (
                                         <TableRow key={rule.id} hover>
-                                            <TableCell sx={{ fontFamily: 'monospace' }}>{rule.keyword}</TableCell>
+                                            <TableCell>{rule.keyword}</TableCell>
                                             <TableCell>
                                                 <Box component="span" sx={{ background: '#e8f5e9', color: '#2e7d32', px: 1, py: 0.25, borderRadius: 3, fontSize: 12 }}>
                                                     {rule.category.name}
