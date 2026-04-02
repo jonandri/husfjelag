@@ -11,14 +11,13 @@ import {
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
+import { ghostButtonSx } from '../ui/buttons';
+import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'Maí', 'Jún', 'Júl', 'Ágú', 'Sep', 'Okt', 'Nóv', 'Des'];
 const MONTH_NAMES_FULL = ['Janúar', 'Febrúar', 'Mars', 'Apríl', 'Maí', 'Júní', 'Júlí', 'Ágúst', 'September', 'Október', 'Nóvember', 'Desember'];
-
-const HEAD_SX = { backgroundColor: '#f5f5f5' };
-const HEAD_CELL_SX = { fontWeight: 600, fontSize: '0.78rem', color: '#555', whiteSpace: 'nowrap' };
 
 const VARIANCE_COLOR = (budgeted, actual) => {
     const diff = parseFloat(budgeted) - parseFloat(actual);
@@ -147,22 +146,20 @@ function ReportPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-
-                {/* Header */}
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Skýrslur</Typography>
-                    <Select
-                        size="small"
-                        value={year}
-                        onChange={e => setYear(e.target.value)}
-                        sx={{ minWidth: 90 }}
-                    >
-                        {yearOptions.map(y => (
-                            <MenuItem key={y} value={y}>{y}</MenuItem>
-                        ))}
+                    {/* no primary action button */}
+                </Box>
+                {/* Zone 2: Toolbar — year selector */}
+                <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                    <Select size="small" value={year} onChange={e => setYear(e.target.value)} sx={{ minWidth: 90 }}>
+                        {yearOptions.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
                     </Select>
                 </Box>
+                {/* Zone 3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -222,25 +219,19 @@ function ReportPage() {
                                 <TableRow key={row.category_id} hover sx={{ cursor: 'pointer' }}
                                     onClick={() => openCatDrill(row.category_id, row.category_name)}>
                                     <TableCell>{row.category_name}</TableCell>
-                                    <TableCell align="right" sx={{ color: '#2e7d32' }}>
-                                        {fmtAmount(row.actual)}
-                                    </TableCell>
+                                    <AmountCell value={row.actual} />
                                 </TableRow>
                             ))}
                             {incomeUncat > 0 && (
                                 <TableRow hover>
                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
-                                    <TableCell align="right" sx={{ color: '#aaa' }}>
-                                        {fmtAmount(incomeUncat)}
-                                    </TableCell>
+                                    <AmountCell value={incomeUncat} />
                                 </TableRow>
                             )}
                         </TableBody>
                         <TotalsRow cells={[
                             <TableCell key="lbl">Samtals tekjur</TableCell>,
-                            <TableCell key="val" align="right" sx={{ color: '#2e7d32' }}>
-                                {fmtAmount(totalIncome)}
-                            </TableCell>,
+                            <AmountCell key="val" value={totalIncome} />,
                         ]} />
                     </Table>
                 </Paper>
@@ -272,13 +263,11 @@ function ReportPage() {
                                         <TableCell align="right" sx={{ color: '#888' }}>
                                             {budgeted > 0 ? fmtAmount(budgeted) : <span style={{ color: '#ccc' }}>—</span>}
                                         </TableCell>
-                                        <TableCell align="right">{fmtAmount(actual)}</TableCell>
-                                        <TableCell align="right" sx={{ color }}>
-                                            {budgeted > 0
-                                                ? fmtAmount(variance)
-                                                : <span style={{ color: '#ccc' }}>—</span>
-                                            }
-                                        </TableCell>
+                                        <AmountCell value={actual} />
+                                        {budgeted > 0
+                                            ? <AmountCell value={variance} />
+                                            : <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
+                                        }
                                         <TableCell align="right" sx={{ color }}>
                                             {pct !== null ? `${Math.round(pct)}%` : <span style={{ color: '#ccc' }}>—</span>}
                                         </TableCell>
@@ -289,7 +278,7 @@ function ReportPage() {
                                 <TableRow hover>
                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
-                                    <TableCell align="right" sx={{ color: '#aaa' }}>{fmtAmount(expenseUncat)}</TableCell>
+                                    <AmountCell value={expenseUncat} />
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
                                     <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
                                 </TableRow>
@@ -300,15 +289,8 @@ function ReportPage() {
                             <TableCell key="bud" align="right" sx={{ color: '#888' }}>
                                 {fmtAmount(totalExpenseBudgeted)}
                             </TableCell>,
-                            <TableCell key="act" align="right">{fmtAmount(totalExpenseActual)}</TableCell>,
-                            <TableCell key="var" align="right"
-                                sx={{ color: VARIANCE_COLOR(totalExpenseBudgeted, totalExpenseActual) }}
-                            >
-                                {(() => {
-                                    const v = totalExpenseBudgeted - totalExpenseActual;
-                                    return fmtAmount(v);
-                                })()}
-                            </TableCell>,
+                            <AmountCell key="act" value={totalExpenseActual} />,
+                            <AmountCell key="var" value={totalExpenseBudgeted - totalExpenseActual} />,
                             <TableCell key="pct" align="right"
                                 sx={{ color: VARIANCE_COLOR(totalExpenseBudgeted, totalExpenseActual) }}
                             >
@@ -329,9 +311,7 @@ function ReportPage() {
                                 <TableCell sx={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem' }}>
                                     Niðurstaða (Tekjur − Gjöld)
                                 </TableCell>
-                                <TableCell align="right"
-                                    sx={{ color: net >= 0 ? '#80cbc4' : '#ef9a9a', fontWeight: 600, fontSize: '0.9rem' }}
-                                >
+                                <TableCell align="right" sx={{ fontFamily: 'monospace', color: net >= 0 ? '#a5d6a7' : '#ef9a9a', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                     {fmtAmount(net)}
                                 </TableCell>
                             </TableRow>
@@ -375,9 +355,7 @@ function ReportPage() {
                                                 <TableRow key={tx.id}>
                                                     <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>{dateStr}</TableCell>
                                                     <TableCell>{tx.description}</TableCell>
-                                                    <TableCell align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: amt >= 0 ? 'success.main' : 'error.main' }}>
-                                                        {fmtAmount(amt)}
-                                                    </TableCell>
+                                                    <AmountCell value={amt} />
                                                 </TableRow>
                                             );
                                         })}
@@ -393,7 +371,7 @@ function ReportPage() {
                         })()}
                     </DialogContent>
                     <DialogActions sx={{ px: 2 }}>
-                        <Button onClick={closeCatDrill}>Loka</Button>
+                        <Button sx={ghostButtonSx} onClick={closeCatDrill}>Loka</Button>
                     </DialogActions>
                 </Dialog>
 
@@ -427,24 +405,18 @@ function ReportPage() {
                                             {dIncome.map(r => (
                                                 <TableRow key={r.category_id}>
                                                     <TableCell>{r.category_name}</TableCell>
-                                                    <TableCell align="right" sx={{ color: '#2e7d32' }}>
-                                                        {fmtAmount(r.actual)}
-                                                    </TableCell>
+                                                    <AmountCell value={r.actual} />
                                                 </TableRow>
                                             ))}
                                             {dIncUncat > 0 && (
                                                 <TableRow>
                                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
-                                                    <TableCell align="right" sx={{ color: '#aaa' }}>
-                                                        {fmtAmount(dIncUncat)}
-                                                    </TableCell>
+                                                    <AmountCell value={dIncUncat} />
                                                 </TableRow>
                                             )}
                                             <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '1px solid rgba(0,0,0,0.12)' } }}>
                                                 <TableCell>Samtals</TableCell>
-                                                <TableCell align="right" sx={{ color: '#2e7d32' }}>
-                                                    {fmtAmount(dTotalInc)}
-                                                </TableCell>
+                                                <AmountCell value={dTotalInc} />
                                             </TableRow>
                                         </TableBody>
                                     </Table>
@@ -455,20 +427,18 @@ function ReportPage() {
                                             {dExpenses.map(r => (
                                                 <TableRow key={r.category_id}>
                                                     <TableCell>{r.category_name}</TableCell>
-                                                    <TableCell align="right">{fmtAmount(r.actual)}</TableCell>
+                                                    <AmountCell value={r.actual} />
                                                 </TableRow>
                                             ))}
                                             {dExpUncat > 0 && (
                                                 <TableRow>
                                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
-                                                    <TableCell align="right" sx={{ color: '#aaa' }}>
-                                                        {fmtAmount(dExpUncat)}
-                                                    </TableCell>
+                                                    <AmountCell value={dExpUncat} />
                                                 </TableRow>
                                             )}
                                             <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '1px solid rgba(0,0,0,0.12)' } }}>
                                                 <TableCell>Samtals</TableCell>
-                                                <TableCell align="right">{fmtAmount(dTotalExp)}</TableCell>
+                                                <AmountCell value={dTotalExp} />
                                             </TableRow>
                                         </TableBody>
                                     </Table>
@@ -492,11 +462,12 @@ function ReportPage() {
                         })()}
                     </DialogContent>
                     <DialogActions sx={{ px: 2 }}>
-                        <Button onClick={closeDrill}>Loka</Button>
+                        <Button sx={ghostButtonSx} onClick={closeDrill}>Loka</Button>
                     </DialogActions>
                 </Dialog>
 
-            </Box>
+                </Box>{/* Zone 3 end */}
+            </Box>{/* flex column end */}
         </div>
     );
 }
