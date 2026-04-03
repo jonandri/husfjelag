@@ -1,3 +1,4 @@
+// src/ui/HelpContext.js
 import React, { createContext, useContext, useState } from 'react';
 
 const HelpContext = createContext(null);
