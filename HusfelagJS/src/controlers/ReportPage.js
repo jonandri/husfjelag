@@ -4,7 +4,10 @@ import {
     Box, Typography, CircularProgress, Paper, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
+    IconButton, Tooltip as MuiTooltip,
 } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -50,6 +53,7 @@ function TotalsRow({ cells }) {
 function ReportPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [data, setData] = useState(undefined);
@@ -150,7 +154,13 @@ function ReportPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Yfirlit</Typography>
-                    {/* no primary action button */}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <MuiTooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('yfirlit')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </MuiTooltip>
+                    </Box>
                 </Box>
                 {/* Zone 2: Toolbar — year selector */}
                 <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>

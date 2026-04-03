@@ -8,6 +8,8 @@ import {
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { ghostButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
@@ -26,6 +28,7 @@ const MONTH_NAMES = [
 function CollectionPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
 
     const today = new Date();
     const [month, setMonth] = useState(today.getMonth() + 1);
@@ -123,14 +126,21 @@ function CollectionPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Innheimta</Typography>
-                    <Button
-                        variant="contained"
-                        sx={primaryButtonSx}
-                        onClick={handleGenerate}
-                        disabled={generating || hasItems}
-                    >
-                        {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button
+                            variant="contained"
+                            sx={primaryButtonSx}
+                            onClick={handleGenerate}
+                            disabled={generating || hasItems}
+                        >
+                            {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
+                        </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('innheimta')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
                 {/* Zone 2: Toolbar — month navigation / filters */}
                 <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>

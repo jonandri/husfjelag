@@ -8,6 +8,8 @@ import {
     Alert,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell } from './tableUtils';
@@ -26,6 +28,7 @@ const TYPE_LABELS = {
 function BudgetPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [budget, setBudget] = useState(undefined);  // undefined = loading, null = none
     const [error, setError] = useState('');
     const year = new Date().getFullYear();
@@ -83,9 +86,16 @@ function BudgetPage() {
                             </Typography>
                         )}
                     </Box>
-                    <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
-                        + Ný áætlun
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
+                            + Ný áætlun
+                        </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('aaetlun')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
 
                 {/* Zone 3: Content */}

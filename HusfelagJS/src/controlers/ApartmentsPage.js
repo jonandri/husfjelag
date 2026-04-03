@@ -9,6 +9,8 @@ import {
     FormControlLabel, Checkbox,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala } from '../format';
@@ -20,6 +22,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function ApartmentsPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [apartments, setApartments] = useState(undefined);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -64,7 +67,7 @@ function ApartmentsPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Íbúðir</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <Button
                             variant="outlined"
                             sx={secondaryButtonSx}
@@ -79,6 +82,11 @@ function ApartmentsPage() {
                         >
                             + Bæta við íbúð
                         </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('ibudir')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Box>
 

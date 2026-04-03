@@ -8,6 +8,8 @@ import {
     InputLabel, TextField, IconButton, Tooltip,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
@@ -21,6 +23,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function TransactionsPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [transactions, setTransactions] = useState(undefined);
     const [bankAccounts, setBankAccounts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -135,6 +138,11 @@ function TransactionsPage() {
                         <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
                             + Ný færsla
                         </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('faerslur')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Box>
 

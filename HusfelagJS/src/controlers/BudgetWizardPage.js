@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Button, Paper,
     Table, TableHead, TableRow, TableCell, TableBody,
-    TextField, Alert,
+    TextField, Alert, IconButton, Tooltip,
 } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
@@ -21,6 +23,7 @@ const TYPE_META = {
 function BudgetWizardPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -122,16 +125,28 @@ function BudgetWizardPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ mb: 3 }}>
-                    <Button
-                        size="small" variant="text" color="inherit"
-                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
-                        onClick={() => navigate('/aaetlun')}
-                    >
-                        ← Áætlun
-                    </Button>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Button
+                            size="small" variant="text" color="inherit"
+                            sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0, mb: 0.5 }}
+                            onClick={() => navigate('/aaetlun')}
+                        >
+                            ← Áætlun
+                        </Button>
+                        <Typography variant="h5">Ný áætlun</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('aaetlun-wizard')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
+            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -169,6 +184,7 @@ function BudgetWizardPage() {
                         onConfirm={handleConfirm}
                     />
                 )}
+            </Box>
             </Box>
         </div>
     );

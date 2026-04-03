@@ -9,6 +9,8 @@ import {
     MenuItem, Select, FormControl, InputLabel, FormHelperText,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala, fmtPhone } from '../format';
@@ -21,6 +23,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function OwnersPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [ownerships, setOwnerships] = useState(undefined);
     const [apartments, setApartments] = useState([]);
     const [error, setError] = useState('');
@@ -74,9 +77,16 @@ function OwnersPage() {
                     <Box>
                         <Typography variant="h5">Eigendur</Typography>
                     </Box>
-                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
-                        + Bæta við eiganda
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                            + Bæta við eiganda
+                        </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('eigendur')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
                 {/* Zone 3: Content (no toolbar needed — no filters) */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>

@@ -16,12 +16,15 @@ import { fmtAmount, fmtKennitala } from '../format';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function AssociationPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
     const [budgetTotal, setBudgetTotal] = useState(null);
@@ -107,9 +110,18 @@ function AssociationPage() {
             <SideBar />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
                 {/* Header zone */}
-                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
-                    <Typography variant="h5">{association.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="h5">{association.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('husfelag')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
 
                 {/* Scrollable content zone */}
