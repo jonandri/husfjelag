@@ -20,6 +20,7 @@ import SuperAdminPage from './controlers/SuperAdminPage';
 import TransactionsPage from './controlers/TransactionsPage';
 import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
+import { HelpProvider } from './ui/HelpContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -62,7 +63,7 @@ function ProtectedRoute({ children }) {
     </Box>
   );
   if (!user) return <Navigate to="/login" replace />;
-  return children;
+  return <HelpProvider>{children}</HelpProvider>;
 }
 
 // App component and navigation

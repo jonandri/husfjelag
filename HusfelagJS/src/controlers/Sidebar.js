@@ -20,6 +20,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
 import { fmtKennitala, fmtPhone } from '../format';
+import HelpDrawer from '../ui/HelpDrawer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -308,6 +309,8 @@ function SideBar() {
                     <Button onClick={() => { setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }}>Loka</Button>
                 </DialogActions>
             </Dialog>
+
+            <HelpDrawer />
         </Box>
     );
 }
