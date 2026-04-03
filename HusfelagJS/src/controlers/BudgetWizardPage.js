@@ -146,7 +146,7 @@ function BudgetWizardPage() {
                         </Tooltip>
                     </Box>
                 </Box>
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
+                <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -184,7 +184,7 @@ function BudgetWizardPage() {
                         onConfirm={handleConfirm}
                     />
                 )}
-            </Box>
+                </Box>
             </Box>
         </div>
     );

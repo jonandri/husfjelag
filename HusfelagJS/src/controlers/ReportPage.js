@@ -154,13 +154,11 @@ function ReportPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Yfirlit</Typography>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <MuiTooltip title="Hjálp">
-                            <IconButton size="small" onClick={() => openHelp('yfirlit')}>
-                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                            </IconButton>
-                        </MuiTooltip>
-                    </Box>
+                    <MuiTooltip title="Hjálp">
+                        <IconButton size="small" onClick={() => openHelp('yfirlit')}>
+                            <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                        </IconButton>
+                    </MuiTooltip>
                 </Box>
                 {/* Zone 2: Toolbar — year selector */}
                 <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>

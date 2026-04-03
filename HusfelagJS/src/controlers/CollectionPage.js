@@ -10,11 +10,10 @@ import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
-import { ghostButtonSx } from '../ui/buttons';
+import { ghostButtonSx, primaryButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
-import { primaryButtonSx } from '../ui/buttons';
 import { StatusChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
