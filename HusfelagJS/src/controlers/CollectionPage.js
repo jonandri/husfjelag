@@ -4,12 +4,13 @@ import {
     Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Chip, Tooltip, IconButton,
-    Dialog, DialogTitle, DialogContent, DialogActions,
+    Dialog, DialogContent, DialogActions,
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
+import HelpDialogTitle from '../ui/HelpDialogTitle';
 import { ghostButtonSx, primaryButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
@@ -337,7 +338,9 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Tengja greiðslu við {row.payer_name ?? 'greiðanda'}</DialogTitle>
+            <HelpDialogTitle helpSection="innheimta-tengja" onClose={onClose}>
+                Tengja greiðslu við {row.payer_name ?? 'greiðanda'}
+            </HelpDialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 {loading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
