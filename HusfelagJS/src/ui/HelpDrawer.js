@@ -16,7 +16,8 @@ export default function HelpDrawer() {
             onClose={closeHelp}
             variant="temporary"
             ModalProps={{ keepMounted: false }}
-            PaperProps={{ sx: { width: 380, zIndex: 1400 } }}
+            sx={{ zIndex: 1400 }}
+            PaperProps={{ sx: { width: 380 } }}
         >
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Header */}
