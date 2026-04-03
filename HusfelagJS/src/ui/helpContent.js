@@ -159,11 +159,11 @@ export const HELP = {
         items: [
             {
                 heading: 'KPI spjöldin',
-                body: 'Efst á síðunni eru þrjár tölur: heildar tekjur, heildar gjöld og ógreidd húsgjöld (PENDING innheimtufærslur). Þær gefa skjóta mynd af stöðu félagsins.',
+                body: 'Efst á síðunni eru þrjár tölur: heildar tekjur, heildar gjöld og ógreidd húsgjöld (PENDING innheimtufærslur). Þær gefa skjótta mynd af stöðu félagsins.',
             },
             {
                 heading: 'Áætlun vs. raunveruleg gjöld',
-                body: 'Töfluan sýnir hvern útgjaldaflokk með áætlaðri og raunverulegri upphæð. Rauður litur þýðir að raunveruleg gjöld fara yfir áætlun, grænn þýðir undir áætlun.',
+                body: 'Töfluna sýnir hvern útgjaldaflokk með áætlaðri og raunverulegri upphæð. Rauður litur þýðir að raunveruleg gjöld fara yfir áætlun, grænn þýðir undir áætlun.',
             },
             {
                 heading: 'Mánaðarlegt yfirlit',
