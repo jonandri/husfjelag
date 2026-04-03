@@ -4,7 +4,7 @@ import {
     Box, Typography, CircularProgress, Paper, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
-    IconButton, Tooltip as MuiTooltip,
+    IconButton, Tooltip as MuiTooltip, Grid,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
@@ -57,6 +57,10 @@ function ReportPage() {
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [data, setData] = useState(undefined);
+    const [budgetTotal, setBudgetTotal] = useState(null);
+    const [budgetName, setBudgetName] = useState(null);
+    const [monthlyTotal, setMonthlyTotal] = useState(null);
+    const [unpaidTotal, setUnpaidTotal] = useState(null);
     const [error, setError] = useState('');
     const [drillMonth, setDrillMonth] = useState(null);
     const [drillData, setDrillData] = useState(null);
@@ -66,6 +70,27 @@ function ReportPage() {
     const [catTxs, setCatTxs] = useState([]);
     const [catLoading, setCatLoading] = useState(false);
     const [catError, setCatError] = useState('');
+
+    useEffect(() => {
+        if (!user) return;
+        Promise.all([
+            fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
+            fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
+        ]).then(async ([budgetResp, collResp]) => {
+            if (budgetResp.ok) {
+                const budget = await budgetResp.json();
+                if (budget?.items) {
+                    setBudgetTotal(budget.items.reduce((s, i) => s + parseFloat(i.amount || 0), 0));
+                    if (budget.name) setBudgetName(budget.name);
+                }
+            }
+            if (collResp.ok) {
+                const col = await collResp.json();
+                if (col?.rows) setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
+                if (col?.pending_total !== undefined) setUnpaidTotal(parseFloat(col.pending_total));
+            }
+        }).catch(() => {});
+    }, [user, assocParam]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -170,6 +195,26 @@ function ReportPage() {
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+                {/* Financial KPIs */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {[
+                        { label: budgetName || `Áætlun ${year}`, value: budgetTotal !== null ? fmtAmount(budgetTotal) : '—', alert: false },
+                        { label: 'Mánaðarleg innheimta', value: monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—', alert: false },
+                        { label: 'Ógreidd innheimta', value: unpaidTotal !== null ? fmtAmount(unpaidTotal) : '—', alert: unpaidTotal > 0 },
+                    ].map(({ label, value, alert }) => (
+                        <Grid item xs={12} sm={4} key={label} sx={{ display: 'flex' }}>
+                            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 100 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 400, lineHeight: 1.2, color: alert ? '#c62828' : 'secondary.main' }}>
+                                    {value}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    {label}
+                                </Typography>
+                            </Paper>
+                        </Grid>
+                    ))}
+                </Grid>
 
                 {/* Monthly bar chart */}
                 <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
