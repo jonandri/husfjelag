@@ -219,6 +219,101 @@ function Stories() {
     );
 }
 
+function FeatureGrid() {
+    const features = [
+        { icon: '🏢', title: 'Húsfélag',         desc: 'Skrá og stjórna upplýsingum um húsfélagið, formann og gjaldkera.' },
+        { icon: '🏠', title: 'Íbúðir',           desc: 'Skrá íbúðir, eignarhlutfall og greiðsluskyldu hverrar einingar.' },
+        { icon: '👤', title: 'Eigendur',          desc: 'Tengja eigendur og greiðendur við íbúðir, með aðgangsstýringu.' },
+        { icon: '📋', title: 'Innheimta',         desc: 'Mánaðarleg innheimta á húsgjöldum með yfirlit yfir stöðu hvers íbúðar.' },
+        { icon: '📊', title: 'Áætlun',            desc: 'Árleg fjárhagsáætlun eftir flokkum með samanburði við raunverulegar tölur.' },
+        { icon: '💳', title: 'Færslur',           desc: 'Flytja inn bankafærslur og flokka þær sjálfvirkt með lykilorðareglum.' },
+        { icon: '📈', title: 'Yfirlit',           desc: 'Mánaðarlegar og árlegar fjárhagsskýrslur — alltaf uppfærðar.' },
+        { icon: '🏦', title: 'Bankareikningar',   desc: 'Tengja bankareikninga við húsfélagið og bókhaldslykla.' },
+        { icon: '🔖', title: 'Flokkunarreglur',  desc: 'Sjálfvirk flokkun færslna með lykilorðareglum — sparar tíma.' },
+    ];
+
+    return (
+        <Box sx={{ background: '#fafafa', borderTop: '1px solid #eee', borderBottom: '1px solid #eee' }}>
+            <Box sx={{ maxWidth: 1060, mx: 'auto', px: { xs: 3, md: 5 }, py: { xs: 5, md: 8 } }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: '#111', mb: 0.75 }}>
+                    Allt sem húsfélag þarfnast
+                </Typography>
+                <Typography sx={{ fontSize: 14, color: '#888', mb: 4.5 }}>
+                    9 einingar — ein lausn
+                </Typography>
+                <Box sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
+                    gap: '1px',
+                    background: '#e8e8e8',
+                    border: '1px solid #e8e8e8',
+                    borderRadius: 2.5,
+                    overflow: 'hidden',
+                }}>
+                    {features.map(f => (
+                        <Box key={f.title} sx={{ background: '#fff', p: { xs: 2.5, md: 3 } }}>
+                            <Typography sx={{ fontSize: 22, mb: 1.25 }}>{f.icon}</Typography>
+                            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#111', mb: 0.625 }}>{f.title}</Typography>
+                            <Typography sx={{ fontSize: 12, color: '#777', lineHeight: 1.55 }}>{f.desc}</Typography>
+                        </Box>
+                    ))}
+                </Box>
+            </Box>
+        </Box>
+    );
+}
+
+function Footer({ onSignup }) {
+    return (
+        <Box sx={{ background: '#1D366F', pt: 6, pb: 0 }}>
+            <Box sx={{
+                maxWidth: 1060, mx: 'auto', px: { xs: 3, md: 5 },
+                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                gap: 4, pb: 4,
+                flexDirection: { xs: 'column', sm: 'row' },
+            }}>
+                <Box>
+                    <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: '0.06em', mb: 0.75 }}>
+                        HÚSFÉLAG
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 12 }}>
+                        Hugbúnaður fyrir íslensk húsfélög
+                    </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Typography
+                        component="a" href="/login"
+                        sx={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textDecoration: 'none', '&:hover': { color: '#fff' } }}
+                    >
+                        Innskráning
+                    </Typography>
+                    <Typography
+                        component="a" href="#stories"
+                        sx={{ color: 'rgba(255,255,255,0.55)', fontSize: 12, textDecoration: 'none', '&:hover': { color: '#fff' } }}
+                    >
+                        Eiginleikar
+                    </Typography>
+                    <Button onClick={onSignup} sx={{
+                        background: '#08C076', color: '#fff', borderRadius: '20px',
+                        px: 2, py: 0.75, fontSize: 12, fontWeight: 600, textTransform: 'none',
+                        '&:hover': { background: '#06a866' },
+                    }}>
+                        Skrá sig →
+                    </Button>
+                </Box>
+            </Box>
+            <Box sx={{
+                maxWidth: 1060, mx: 'auto', px: { xs: 3, md: 5 },
+                borderTop: '1px solid rgba(255,255,255,0.1)', py: 2,
+            }}>
+                <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
+                    © 2025 Húsfélag. Öll réttindi áskilin.
+                </Typography>
+            </Box>
+        </Box>
+    );
+}
+
 export default function HomePage() {
     const navigate = useNavigate();
     const [mini, setMini] = useState(false);
@@ -235,6 +330,8 @@ export default function HomePage() {
             <CtaBar mini={mini} onSignup={onSignup} />
             <Hero onSignup={onSignup} />
             <Stories />
+            <FeatureGrid />
+            <Footer onSignup={onSignup} />
         </Box>
     );
 }
