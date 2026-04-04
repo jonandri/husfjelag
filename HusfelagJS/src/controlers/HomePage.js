@@ -209,7 +209,7 @@ function Stories() {
     ];
 
     return (
-        <Box id="stories" sx={{ background: '#fff' }}>
+        <Box id="stories" sx={{ background: '#fff', scrollMarginTop: '64px' }}>
             {stories.map((s, i) => (
                 <Box key={s.label} sx={{ borderTop: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
                     <StoryRow {...s} />
@@ -307,7 +307,7 @@ function Footer({ onSignup }) {
                 borderTop: '1px solid rgba(255,255,255,0.1)', py: 2,
             }}>
                 <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>
-                    © 2025 Húsfélag. Öll réttindi áskilin.
+                    © {new Date().getFullYear()} Húsfélag. Öll réttindi áskilin.
                 </Typography>
             </Box>
         </Box>
