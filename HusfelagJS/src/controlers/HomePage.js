@@ -144,6 +144,81 @@ function Hero({ onSignup }) {
     );
 }
 
+function StoryRow({ label, title, body, reverse, imgLabel, imgIcon }) {
+    return (
+        <Box sx={{
+            maxWidth: 1060, mx: 'auto', px: { xs: 3, md: 5 }, py: { xs: 5, md: 8 },
+            display: 'flex', alignItems: 'center', gap: { xs: 3.5, md: '60px' },
+            flexDirection: { xs: 'column', md: reverse ? 'row-reverse' : 'row' },
+        }}>
+            {/* text */}
+            <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 500px' }, maxWidth: { md: 500 } }}>
+                <Typography sx={{ color: '#08C076', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', mb: 1.25 }}>
+                    {label}
+                </Typography>
+                <Typography variant="h5" sx={{ color: '#111', fontWeight: 600, lineHeight: 1.3, mb: 1.5 }}>
+                    {title}
+                </Typography>
+                <Typography sx={{ color: '#555', fontSize: 14, lineHeight: 1.75 }}>
+                    {body}
+                </Typography>
+            </Box>
+            {/* image placeholder */}
+            <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 500px' }, maxWidth: { md: 500 }, width: '100%' }}>
+                <Box sx={{
+                    background: '#f5f7fc', borderRadius: 2.5, minHeight: 200,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '1px solid #e8edf5',
+                }}>
+                    <Box sx={{ textAlign: 'center', color: '#b0b8cc', p: 3 }}>
+                        <Typography sx={{ fontSize: 40, mb: 1 }}>{imgIcon}</Typography>
+                        <Typography sx={{ fontSize: 11 }}>{imgLabel}</Typography>
+                    </Box>
+                </Box>
+            </Box>
+        </Box>
+    );
+}
+
+function Stories() {
+    const stories = [
+        {
+            label: 'Innheimta',
+            title: 'Sjálfvirk mánaðarleg innheimta á húsgjöldum',
+            body: 'Stilltu mánaðarlegar greiðslur fyrir hverja íbúð einu sinni — kerfið sér um rest. Sjáðu hverjir hafa greitt og hverjir eru í vanskilum í rauntíma.',
+            imgIcon: '📋',
+            imgLabel: 'Innheimtutafla með stöðu hverrar íbúðar',
+            reverse: false,
+        },
+        {
+            label: 'Áætlun',
+            title: 'Búðu til árlegri fjárhagsáætlun á nokkrum mínútum',
+            body: 'Leiðsagnarforrit hjálpar þér að setja upp áætlun eftir flokkum. Samanburður við raunverulegar tekjur og gjöld sýnir þér hvar þú stendur.',
+            imgIcon: '📊',
+            imgLabel: 'Áætlunarleiðsögn og flokkayfirsýn',
+            reverse: true,
+        },
+        {
+            label: 'Yfirlit',
+            title: 'Fjárhagsleg yfirsýn yfir allt árið',
+            body: 'Sjálfvirkar skýrslur sýna tekjur og gjöld eftir mánuðum og flokkum. Alltaf uppfært. Alltaf aðgengilegt.',
+            imgIcon: '📈',
+            imgLabel: 'Mánaðarlegar og árlegar fjárhagsskýrslur',
+            reverse: false,
+        },
+    ];
+
+    return (
+        <Box id="stories" sx={{ background: '#fff' }}>
+            {stories.map((s, i) => (
+                <Box key={s.label} sx={{ borderTop: i === 0 ? 'none' : '1px solid #f0f0f0' }}>
+                    <StoryRow {...s} />
+                </Box>
+            ))}
+        </Box>
+    );
+}
+
 export default function HomePage() {
     const navigate = useNavigate();
     const [mini, setMini] = useState(false);
@@ -159,6 +234,7 @@ export default function HomePage() {
         <Box sx={{ minHeight: '100vh', background: '#fff' }}>
             <CtaBar mini={mini} onSignup={onSignup} />
             <Hero onSignup={onSignup} />
+            <Stories />
         </Box>
     );
 }
