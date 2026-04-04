@@ -130,7 +130,7 @@ function BudgetPage() {
                                     <TableRow sx={TOTALS_ROW_SX}>
                                         <TableCell>Samtals</TableCell>
                                         <TableCell />
-                                        <AmountCell value={total} />
+                                        <AmountCell value={-total} />
                                         <TableCell />
                                     </TableRow>
                                 </TableFooter>
@@ -150,7 +150,7 @@ function BudgetItemRow({ item, onSaved }) {
             <TableRow hover>
                 <TableCell>{item.category_name}</TableCell>
                 <TableCell><LabelChip label={TYPE_LABELS[item.category_type] || item.category_type} /></TableCell>
-                <AmountCell value={item.amount} />
+                <AmountCell value={-parseFloat(item.amount || 0)} />
                 <TableCell align="right">
                     <Tooltip title="Breyta upphæð">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>

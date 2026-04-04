@@ -96,7 +96,8 @@ function App() {
       .then(r => r.ok ? r.json() : [])
       .then(list => {
         setAssociations(list);
-        const savedRaw = localStorage.getItem('currentAssociation');
+        const storageKey = `currentAssociation_${user.id}`;
+        const savedRaw = localStorage.getItem(storageKey);
         const savedAssoc = savedRaw ? JSON.parse(savedRaw) : null;
         const match = savedAssoc ? list.find(a => a.id === savedAssoc.id) : null;
         // Only fall back to savedAssoc (outside own list) for superadmins (impersonation reload)
@@ -104,7 +105,7 @@ function App() {
         const isOwn = resolved ? list.some(a => a.id === resolved.id) : false;
         setCurrentAssociationState(resolved);
         setImpersonating(!!resolved && !isOwn);
-        if (resolved) localStorage.setItem('currentAssociation', JSON.stringify(resolved));
+        if (resolved) localStorage.setItem(storageKey, JSON.stringify(resolved));
       })
       .catch(() => {})
       .finally(() => setInitializing(false)); // Associations resolved (or failed) — ready to render
@@ -114,16 +115,18 @@ function App() {
     setCurrentAssociationState(assoc);
     const isOwn = associations.some(a => a.id === assoc?.id);
     setImpersonating(!!assoc && !isOwn);
-    if (assoc) localStorage.setItem('currentAssociation', JSON.stringify(assoc));
-    else localStorage.removeItem('currentAssociation');
+    const storageKey = `currentAssociation_${user?.id}`;
+    if (assoc) localStorage.setItem(storageKey, JSON.stringify(assoc));
+    else localStorage.removeItem(storageKey);
   };
 
   const stopImpersonating = () => {
     const first = associations[0] || null;
     setCurrentAssociationState(first);
     setImpersonating(false);
-    if (first) localStorage.setItem('currentAssociation', JSON.stringify(first));
-    else localStorage.removeItem('currentAssociation');
+    const storageKey = `currentAssociation_${user?.id}`;
+    if (first) localStorage.setItem(storageKey, JSON.stringify(first));
+    else localStorage.removeItem(storageKey);
   };
 
   const assocParam = currentAssociation ? `?as=${currentAssociation.id}` : '';

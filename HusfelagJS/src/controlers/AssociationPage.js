@@ -12,7 +12,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
-import { fmtKennitala } from '../format';
+import { fmtKennitala, fmtAmount } from '../format';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
@@ -415,6 +415,7 @@ function BankAccountsPanel({ user, assocParam }) {
                                 <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Reikningsnúmer</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Bókhaldslykill</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Staða</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -447,6 +448,11 @@ function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSav
                 <TableCell>
                     {bankAccount.asset_account
                         ? <LabelChip label={`${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`} />
+                        : <Typography variant="body2" color="text.disabled">—</Typography>}
+                </TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {bankAccount.current_balance != null
+                        ? fmtAmount(bankAccount.current_balance)
                         : <Typography variant="body2" color="text.disabled">—</Typography>}
                 </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
