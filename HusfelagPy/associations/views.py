@@ -663,7 +663,12 @@ class BankAccountView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
-        bank_accounts = association.bank_accounts.filter(deleted=False).select_related("asset_account")
+        bank_accounts = (
+            association.bank_accounts
+            .filter(deleted=False)
+            .select_related("asset_account")
+            .annotate(current_balance=django_models.Sum("transactions__amount"))
+        )
         return Response(BankAccountSerializer(bank_accounts, many=True).data)
 
     def post(self, request):

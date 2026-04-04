@@ -112,6 +112,7 @@ class AccountingKeySerializer(serializers.ModelSerializer):
 
 class BankAccountSerializer(serializers.ModelSerializer):
     asset_account = serializers.SerializerMethodField()
+    current_balance = serializers.SerializerMethodField()
 
     def get_asset_account(self, obj):
         if not obj.asset_account_id:
@@ -122,9 +123,13 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "name": obj.asset_account.name,
         }
 
+    def get_current_balance(self, obj):
+        # Returns the annotated value if present, otherwise None (no transactions imported yet)
+        return getattr(obj, "current_balance", None)
+
     class Meta:
         model = BankAccount
-        fields = ["id", "name", "account_number", "description", "deleted", "asset_account"]
+        fields = ["id", "name", "account_number", "description", "deleted", "asset_account", "current_balance"]
 
 
 class TransactionSerializer(serializers.ModelSerializer):

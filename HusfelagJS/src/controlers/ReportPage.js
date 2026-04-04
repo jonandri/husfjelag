@@ -4,7 +4,7 @@ import {
     Box, Typography, CircularProgress, Paper, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button,
-    IconButton, Tooltip as MuiTooltip,
+    IconButton, Tooltip as MuiTooltip, Grid,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
@@ -57,6 +57,11 @@ function ReportPage() {
     const currentYear = new Date().getFullYear();
     const [year, setYear] = useState(currentYear);
     const [data, setData] = useState(undefined);
+    const [budgetTotal, setBudgetTotal] = useState(null);
+    const [budgetName, setBudgetName] = useState(null);
+    const [monthlyTotal, setMonthlyTotal] = useState(null);
+    const [unpaidTotal, setUnpaidTotal] = useState(null);
+    const [bankBalance, setBankBalance] = useState(null);
     const [error, setError] = useState('');
     const [drillMonth, setDrillMonth] = useState(null);
     const [drillData, setDrillData] = useState(null);
@@ -66,6 +71,35 @@ function ReportPage() {
     const [catTxs, setCatTxs] = useState([]);
     const [catLoading, setCatLoading] = useState(false);
     const [catError, setCatError] = useState('');
+
+    useEffect(() => {
+        if (!user) return;
+        Promise.all([
+            fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
+            fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
+            fetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
+        ]).then(async ([budgetResp, collResp, bankResp]) => {
+            if (budgetResp.ok) {
+                const budget = await budgetResp.json();
+                if (budget?.items) {
+                    setBudgetTotal(budget.items.reduce((s, i) => s + parseFloat(i.amount || 0), 0));
+                    if (budget.name) setBudgetName(budget.name);
+                }
+            }
+            if (collResp.ok) {
+                const col = await collResp.json();
+                if (col?.rows) setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
+                if (col?.pending_total !== undefined) setUnpaidTotal(parseFloat(col.pending_total));
+            }
+            if (bankResp.ok) {
+                const accounts = await bankResp.json();
+                const total = accounts
+                    .filter(a => a.asset_account?.number === 1200 || a.asset_account?.number === '1200')
+                    .reduce((s, a) => s + (a.current_balance != null ? parseFloat(a.current_balance) : 0), 0);
+                setBankBalance(accounts.some(a => a.asset_account?.number === 1200 || a.asset_account?.number === '1200') ? total : null);
+            }
+        }).catch(() => {});
+    }, [user, assocParam]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -171,6 +205,27 @@ function ReportPage() {
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
+                {/* Financial KPIs */}
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {[
+                        { label: 'Innstæður í bönkum', value: bankBalance !== null ? fmtAmount(bankBalance) : '—', alert: false },
+                        { label: 'Ógreidd innheimta', value: unpaidTotal !== null ? fmtAmount(unpaidTotal) : '—', alert: unpaidTotal > 0 },
+                        { label: budgetName || `Áætlun ${year}`, value: budgetTotal !== null ? fmtAmount(budgetTotal) : '—', alert: false },
+                        { label: 'Mánaðarleg innheimta', value: monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—', alert: false },
+                    ].map(({ label, value, alert }) => (
+                        <Grid item xs={12} sm={3} key={label} sx={{ display: 'flex' }}>
+                            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 100 }}>
+                                <Typography variant="h6" sx={{ fontWeight: 400, lineHeight: 1.2, color: alert ? '#c62828' : 'secondary.main' }}>
+                                    {value}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                    {label}
+                                </Typography>
+                            </Paper>
+                        </Grid>
+                    ))}
+                </Grid>
+
                 {/* Monthly bar chart */}
                 <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
                     <Typography sx={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.5px', color: '#888', mb: 1.5 }}>
@@ -251,10 +306,10 @@ function ReportPage() {
                         <TableHead sx={HEAD_SX}>
                             <TableRow>
                                 <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
-                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Áætlun</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right', display: { xs: 'none', sm: 'table-cell' } }}>Áætlun</TableCell>
                                 <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Raun</TableCell>
-                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Frávik</TableCell>
-                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>%</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right', display: { xs: 'none', sm: 'table-cell' } }}>Frávik</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right', display: { xs: 'none', sm: 'table-cell' } }}>%</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -268,15 +323,15 @@ function ReportPage() {
                                     <TableRow key={row.category_id} hover sx={{ cursor: 'pointer' }}
                                         onClick={() => openCatDrill(row.category_id, row.category_name)}>
                                         <TableCell>{row.category_name}</TableCell>
-                                        <TableCell align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888' }}>
+                                        <TableCell align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888', display: { xs: 'none', sm: 'table-cell' } }}>
                                             {budgeted > 0 ? fmtAmount(-budgeted) : <span style={{ color: '#ccc' }}>—</span>}
                                         </TableCell>
                                         <AmountCell value={actual > 0 ? -actual : actual} />
                                         {budgeted > 0
-                                            ? <AmountCell value={variance} />
-                                            : <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
+                                            ? <AmountCell value={variance} sx={{ display: { xs: 'none', sm: 'table-cell' } }} />
+                                            : <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}><span style={{ color: '#ccc' }}>—</span></TableCell>
                                         }
-                                        <TableCell align="right" sx={{ color }}>
+                                        <TableCell align="right" sx={{ color, display: { xs: 'none', sm: 'table-cell' } }}>
                                             {pct !== null ? `${Math.round(pct)}%` : <span style={{ color: '#ccc' }}>—</span>}
                                         </TableCell>
                                     </TableRow>
@@ -285,22 +340,22 @@ function ReportPage() {
                             {expenseUncat > 0 && (
                                 <TableRow hover>
                                     <TableCell sx={{ color: '#aaa', fontStyle: 'italic' }}>Óflokkað</TableCell>
-                                    <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
+                                    <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}><span style={{ color: '#ccc' }}>—</span></TableCell>
                                     <AmountCell value={-expenseUncat} />
-                                    <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
-                                    <TableCell align="right"><span style={{ color: '#ccc' }}>—</span></TableCell>
+                                    <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}><span style={{ color: '#ccc' }}>—</span></TableCell>
+                                    <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}><span style={{ color: '#ccc' }}>—</span></TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                         <TotalsRow cells={[
                             <TableCell key="lbl">Samtals gjöld</TableCell>,
-                            <TableCell key="bud" align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888' }}>
+                            <TableCell key="bud" align="right" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap', color: '#888', display: { xs: 'none', sm: 'table-cell' } }}>
                                 {fmtAmount(-totalExpenseBudgeted)}
                             </TableCell>,
                             <AmountCell key="act" value={-totalExpenseActual} />,
-                            <AmountCell key="var" value={totalExpenseBudgeted - totalExpenseActual} />,
+                            <AmountCell key="var" value={totalExpenseBudgeted - totalExpenseActual} sx={{ display: { xs: 'none', sm: 'table-cell' } }} />,
                             <TableCell key="pct" align="right"
-                                sx={{ color: VARIANCE_COLOR(totalExpenseBudgeted, totalExpenseActual) }}
+                                sx={{ color: VARIANCE_COLOR(totalExpenseBudgeted, totalExpenseActual), display: { xs: 'none', sm: 'table-cell' } }}
                             >
                                 {totalExpenseBudgeted > 0
                                     ? `${Math.round((totalExpenseActual / totalExpenseBudgeted) * 100)}%`

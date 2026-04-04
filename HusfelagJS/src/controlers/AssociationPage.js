@@ -12,7 +12,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
-import { fmtAmount, fmtKennitala } from '../format';
+import { fmtKennitala, fmtAmount } from '../format';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
@@ -27,10 +27,6 @@ function AssociationPage() {
     const { openHelp } = useHelp();
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
-    const [budgetTotal, setBudgetTotal] = useState(null);
-    const [budgetName, setBudgetName] = useState(null);
-    const [monthlyTotal, setMonthlyTotal] = useState(null);
-    const [unpaidTotal, setUnpaidTotal] = useState(null);
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
 
@@ -41,11 +37,9 @@ function AssociationPage() {
 
     const loadAll = async () => {
         try {
-            const [assocResp, ownersResp, budgetResp, collectionResp] = await Promise.all([
+            const [assocResp, ownersResp] = await Promise.all([
                 fetch(`${API_URL}/Association/${user.id}${assocParam}`),
                 fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -55,24 +49,6 @@ function AssociationPage() {
                 const all = await ownersResp.json();
                 const seen = new Set();
                 setOwners(all.filter(o => !o.deleted && !seen.has(o.user_id) && seen.add(o.user_id)));
-            }
-
-            if (budgetResp.ok) {
-                const budget = await budgetResp.json();
-                if (budget?.items) {
-                    setBudgetTotal(budget.items.reduce((s, i) => s + parseFloat(i.amount || 0), 0));
-                    if (budget.name) setBudgetName(budget.name);
-                }
-            }
-
-            if (collectionResp.ok) {
-                const col = await collectionResp.json();
-                if (col?.rows) {
-                    setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
-                }
-                if (col?.pending_total !== undefined) {
-                    setUnpaidTotal(parseFloat(col.pending_total));
-                }
             }
         } catch {
             setError('Tenging við þjón mistókst.');
@@ -127,7 +103,7 @@ function AssociationPage() {
                 {/* Scrollable content zone */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
                     {/* Row 1: association stats */}
-                    <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
+                    <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 3 }}>
                         <KpiCard label="Íbúðir" value={association.apartment_count} />
                         <KpiCard label="Eigendur" value={association.owner_count} />
                         <RoleCard
@@ -139,26 +115,6 @@ function AssociationPage() {
                             label="Gjaldkeri"
                             value={association.cfo || '—'}
                             onEdit={() => setRoleDialog({ role: 'CFO', label: 'Gjaldkeri', currentName: association.cfo })}
-                        />
-                    </Grid>
-
-                    {/* Row 2: financials */}
-                    <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-                        <KpiCard
-                            label={budgetName || `Áætlun ${new Date().getFullYear()}`}
-                            value={budgetTotal !== null ? fmtAmount(budgetTotal) : '—'}
-                            small
-                        />
-                        <KpiCard
-                            label="Mánaðarleg innheimta"
-                            value={monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—'}
-                            small
-                        />
-                        <KpiCard
-                            label="Ógreidd innheimta"
-                            value={unpaidTotal !== null ? fmtAmount(unpaidTotal) : '—'}
-                            small
-                            alert={unpaidTotal > 0}
                         />
                     </Grid>
 
@@ -459,6 +415,7 @@ function BankAccountsPanel({ user, assocParam }) {
                                 <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Reikningsnúmer</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Bókhaldslykill</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Staða</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -491,6 +448,11 @@ function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSav
                 <TableCell>
                     {bankAccount.asset_account
                         ? <LabelChip label={`${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`} />
+                        : <Typography variant="body2" color="text.disabled">—</Typography>}
+                </TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {bankAccount.current_balance != null
+                        ? fmtAmount(bankAccount.current_balance)
                         : <Typography variant="body2" color="text.disabled">—</Typography>}
                 </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>

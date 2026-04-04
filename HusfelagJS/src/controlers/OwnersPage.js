@@ -300,8 +300,16 @@ function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{ownership.name}</TableCell>
                 <TableCell>{fmtKennitala(ownership.kennitala)}</TableCell>
-                <TableCell>{ownership.email || <span style={{ color: '#bbb' }}>—</span>}</TableCell>
-                <TableCell>{ownership.phone ? fmtPhone(ownership.phone) : <span style={{ color: '#bbb' }}>—</span>}</TableCell>
+                <TableCell>
+                    {ownership.email
+                        ? <a href={`mailto:${ownership.email}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{ownership.email}</a>
+                        : <span style={{ color: '#bbb' }}>—</span>}
+                </TableCell>
+                <TableCell>
+                    {ownership.phone
+                        ? <a href={`tel:${ownership.phone.replace(/\s/g, '')}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{fmtPhone(ownership.phone)}</a>
+                        : <span style={{ color: '#bbb' }}>—</span>}
+                </TableCell>
                 <TableCell>{ownership.anr}</TableCell>
                 <TableCell>{ownership.share}%</TableCell>
                 {!isDisabled && (
