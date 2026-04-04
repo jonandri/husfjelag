@@ -2270,3 +2270,116 @@ class ReportView(APIView):
             "expenses_uncategorised": str(abs(expenses_uncategorised)),
             "monthly": monthly,
         })
+
+
+def _build_annual_statement_data(association, year):
+    """Return income/expense/asset data for a given year, grouped by accounting key."""
+    end_of_year = datetime.date(year, 12, 31)
+
+    txn_qs = Transaction.objects.filter(
+        bank_account__association=association,
+        date__year=year,
+    ).select_related("category__income_account", "category__expense_account")
+
+    income_by_key = {}   # (number, name) -> Decimal
+    expense_by_key = {}  # (number, name) -> Decimal (positive)
+    income_uncat = Decimal("0")
+    expense_uncat = Decimal("0")
+
+    for tx in txn_qs:
+        amt = tx.amount
+        cat = tx.category
+        if amt > 0:
+            if cat and cat.income_account:
+                k = (cat.income_account.number, cat.income_account.name)
+                income_by_key[k] = income_by_key.get(k, Decimal("0")) + amt
+            else:
+                income_uncat += amt
+        else:
+            if cat and cat.expense_account:
+                k = (cat.expense_account.number, cat.expense_account.name)
+                expense_by_key[k] = expense_by_key.get(k, Decimal("0")) + abs(amt)
+            else:
+                expense_uncat += abs(amt)
+
+    income = sorted(
+        [{"account_number": k[0], "account_name": k[1], "amount": str(v)} for k, v in income_by_key.items()],
+        key=lambda x: x["account_number"],
+    )
+    expenses = sorted(
+        [{"account_number": k[0], "account_name": k[1], "amount": str(v)} for k, v in expense_by_key.items()],
+        key=lambda x: x["account_number"],
+    )
+
+    total_income = sum(income_by_key.values()) + income_uncat
+    total_expenses = sum(expense_by_key.values()) + expense_uncat
+    net = total_income - total_expenses
+
+    # Bank account balances at year-end (all transactions up to Dec 31)
+    bank_accounts = (
+        association.bank_accounts.filter(deleted=False)
+        .annotate(
+            year_end_balance=django_models.Sum(
+                "transactions__amount",
+                filter=django_models.Q(transactions__date__lte=end_of_year),
+            )
+        )
+        .select_related("asset_account")
+    )
+    assets = []
+    total_assets = Decimal("0")
+    for ba in bank_accounts:
+        balance = ba.year_end_balance or Decimal("0")
+        assets.append({
+            "account_number": ba.asset_account.number if ba.asset_account else None,
+            "account_name": ba.asset_account.name if ba.asset_account else "",
+            "label": ba.name,
+            "amount": str(balance),
+        })
+        total_assets += balance
+
+    has_data = txn_qs.exists() or bool(assets)
+
+    return {
+        "has_data": has_data,
+        "income": income,
+        "income_uncategorised": str(income_uncat),
+        "expenses": expenses,
+        "expenses_uncategorised": str(expense_uncat),
+        "total_income": str(total_income),
+        "total_expenses": str(total_expenses),
+        "net": str(net),
+        "assets": assets,
+        "total_assets": str(total_assets),
+    }
+
+
+class AnnualStatementView(APIView):
+    def get(self, request, user_id):
+        """
+        GET /AnnualStatement/<user_id>?year=YYYY
+        Returns full annual statement data grouped by accounting key,
+        with previous-year comparison and association info.
+        """
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        year_param = request.query_params.get("year")
+        year = int(year_param) if year_param and year_param.isdigit() else datetime.date.today().year
+
+        current_data = _build_annual_statement_data(association, year)
+        prev_data = _build_annual_statement_data(association, year - 1)
+
+        return Response({
+            "association": {
+                "name": association.name,
+                "ssn": association.ssn,
+                "address": association.address,
+                "postal_code": association.postal_code,
+                "city": association.city,
+            },
+            "year": year,
+            **{k: v for k, v in current_data.items() if k != "has_data"},
+            "previous_year": {k: v for k, v in prev_data.items() if k != "has_data"} if prev_data["has_data"] else None,
+        })
