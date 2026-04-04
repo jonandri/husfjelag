@@ -21,6 +21,7 @@ import TransactionsPage from './controlers/TransactionsPage';
 import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
 import { HelpProvider } from './ui/HelpContext';
+import HomePage from './controlers/HomePage';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -132,7 +133,7 @@ function App() {
       <ThemeProvider theme={theme}>
         <Router>
           <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
