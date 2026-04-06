@@ -179,13 +179,15 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
 
                 {/* Step 1 — Association SSN + lookup */}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                    <TextField
-                        label="Kennitala húsfélags"
-                        value={assocSsn}
-                        onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); setPreview(null); }}
-                        size="small" sx={{ flex: 1 }} autoFocus
-                        placeholder="000000-0000"
-                    />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <TextField
+                            label="Kennitala húsfélags"
+                            value={assocSsn}
+                            onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); setPreview(null); }}
+                            size="small" fullWidth autoFocus
+                            placeholder="000000-0000"
+                        />
+                    </Box>
                     <Button
                         variant="outlined"
                         sx={{ whiteSpace: 'nowrap', height: 40, mt: 0.25, flexShrink: 0 }}
