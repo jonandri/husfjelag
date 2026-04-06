@@ -171,7 +171,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     return (
         <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
             <DialogTitle>Stofna húsfélag</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important', overflow: 'visible' }}>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
 
                 <Typography variant="body2" color="text.secondary">
                     Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja (Skattur Cloud).
@@ -219,53 +219,72 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                             )}
                         </Box>
 
-                        {!preview.already_registered && <Divider />}
+                        <Divider />
+
+                        {/* Prókúruhafar — always shown */}
+                        <Box>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                Prókúruhafar
+                            </Typography>
+                            {preview.prokuruhafar?.length > 0 ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                    {preview.prokuruhafar.map(p => (
+                                        <Typography key={p.national_id} variant="body2">
+                                            {p.name} — {fmtKennitala(p.national_id)}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">Engir prókúruhafar skráðir.</Typography>
+                            )}
+                        </Box>
 
                         {/* Chair selection — only when not already registered */}
-                        {!preview.already_registered && <Box>
-                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                                Formaður
-                            </Typography>
-
-                            <RadioGroup
-                                value={chairSelection}
-                                onChange={e => setChairSelection(e.target.value)}
-                            >
-                                {preview.prokuruhafar?.map(p => (
+                        {!preview.already_registered && <>
+                            <Divider />
+                            <Box>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                    Formaður
+                                </Typography>
+                                <RadioGroup
+                                    value={chairSelection}
+                                    onChange={e => setChairSelection(e.target.value)}
+                                >
+                                    {preview.prokuruhafar?.map(p => (
+                                        <FormControlLabel
+                                            key={p.national_id}
+                                            value={p.national_id}
+                                            control={<Radio size="small" />}
+                                            label={
+                                                <Box>
+                                                    <Typography variant="body2">{p.name}</Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {fmtKennitala(p.national_id)}
+                                                    </Typography>
+                                                </Box>
+                                            }
+                                            sx={{ mb: 0.5 }}
+                                        />
+                                    ))}
                                     <FormControlLabel
-                                        key={p.national_id}
-                                        value={p.national_id}
+                                        value={CUSTOM_CHAIR}
                                         control={<Radio size="small" />}
-                                        label={
-                                            <Box>
-                                                <Typography variant="body2">{p.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {fmtKennitala(p.national_id)}
-                                                </Typography>
-                                            </Box>
-                                        }
-                                        sx={{ mb: 0.5 }}
+                                        label="Skrá aðra kennitölu"
                                     />
-                                ))}
-                                <FormControlLabel
-                                    value={CUSTOM_CHAIR}
-                                    control={<Radio size="small" />}
-                                    label="Skrá aðra kennitölu"
-                                />
-                            </RadioGroup>
-
-                            {chairSelection === CUSTOM_CHAIR && (
-                                <TextField
-                                    label="Kennitala formanns"
-                                    value={customChairSsn}
-                                    onChange={e => setCustomChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
-                                    size="small"
-                                    placeholder="000000-0000"
-                                    sx={{ mt: 1, ml: 4, width: 220 }}
-                                    autoFocus
-                                />
-                            )}
-                        </Box>}
+                                </RadioGroup>
+                                {chairSelection === CUSTOM_CHAIR && (
+                                    <TextField
+                                        label="Kennitala formanns"
+                                        value={customChairSsn}
+                                        onChange={e => setCustomChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
+                                        size="small"
+                                        placeholder="000000-0000"
+                                        sx={{ mt: 1, ml: 4, width: 220 }}
+                                        autoFocus
+                                    />
+                                )}
+                            </Box>
+                        </>}
 
                         {saveError && <Alert severity="error">{saveError}</Alert>}
                     </>
