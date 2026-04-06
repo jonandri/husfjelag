@@ -189,8 +189,8 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                         />
                     </Box>
                     <Button
-                        variant="outlined"
-                        sx={{ whiteSpace: 'nowrap', height: 40, mt: 0.25, flexShrink: 0 }}
+                        variant="contained"
+                        sx={{ ...secondaryButtonSx, whiteSpace: 'nowrap', flexShrink: 0, mt: 0.25 }}
                         disabled={assocSsn.replace(/-/g,'').length !== 10 || looking}
                         onClick={handleLookup}
                     >
