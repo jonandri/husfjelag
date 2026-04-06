@@ -14,6 +14,7 @@ class AssociationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Association
         fields = ["id", "ssn", "name", "address", "postal_code", "city",
+                  "date_of_board_change", "registered", "status",
                   "apartment_count", "owner_count", "chair", "cfo"]
 
     def get_apartment_count(self, obj):
@@ -175,7 +176,8 @@ class AssociationAccessSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Association
-        fields = ["id", "ssn", "name", "address", "postal_code", "city", "role"]
+        fields = ["id", "ssn", "name", "address", "postal_code", "city",
+                  "date_of_board_change", "registered", "status", "role"]
 
     ROLE_LABELS = {
         "CHAIR": "Formaður",

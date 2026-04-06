@@ -21,6 +21,7 @@ from .serializers import (
     AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
 from .scraper import lookup_association, scrape_hms_apartments
+from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entity_for_association
 from .importers import BANK_PARSERS, detect_bank, detect_duplicates
 from .categoriser import build_categorisation_context, categorise_row
 from users.models import User
@@ -147,21 +148,61 @@ class AssociationView(APIView):
     @extend_schema(request=AssociationSerializer, responses=AssociationSerializer)
     def post(self, request):
         """
-        POST /Association — Create a new association and link the requesting user as Chair.
-        Body: {ssn, name, address, postal_code, city}
+        POST /Association — Create a new association (self-service).
+        Verifies that the requesting user holds power of attorney (Prókúruhafi)
+        via the Icelandic company registry API before creating.
+        Body: {ssn}
         """
-        serializer = AssociationSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        ssn = str(request.data.get("ssn", "")).strip().replace("-", "")
+        if not ssn.isdigit() or len(ssn) != 10:
+            return Response({"detail": "ssn verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
 
-        association = serializer.save()
-        AssociationAccess.objects.create(
-            user=request.user,
-            association=association,
-            role=AssociationRole.CHAIR,
-            active=True,
-        )
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        user = request.user
+
+        if Association.objects.filter(ssn=ssn).exists():
+            return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+
+        entity = fetch_legal_entity(ssn)
+        if entity is None:
+            return Response(
+                {"detail": "Ekki tókst að ná sambandi við Skattur Cloud. Reyndu aftur síðar."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        prokuruhafar = extract_prokuruhafar(entity)
+        if not any(p["national_id"] == user.kennitala for p in prokuruhafar):
+            return Response(
+                {"detail": "Þú ert ekki prókúruhafi fyrir þetta félag."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        fields = parse_entity_for_association(ssn, entity)
+
+        try:
+            with transaction.atomic():
+                association = Association.objects.create(
+                    ssn=fields["ssn"],
+                    name=fields["name"],
+                    address=fields["address"],
+                    postal_code=fields["postal_code"],
+                    city=fields["city"],
+                    date_of_board_change=fields["date_of_board_change"],
+                    registered=fields["registered"],
+                    status=fields["status"],
+                )
+                AssociationAccess.objects.create(
+                    user=user,
+                    association=association,
+                    role=AssociationRole.CHAIR,
+                    active=True,
+                )
+        except Exception:
+            # Race condition: another request created it between our check and insert
+            if Association.objects.filter(ssn=ssn).exists():
+                return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+            raise
+
+        return Response(AssociationSerializer(association).data, status=status.HTTP_201_CREATED)
 
 
 class AssociationRoleView(APIView):
@@ -239,6 +280,43 @@ class AssociationLookupView(APIView):
             )
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+class AssociationVerifyView(APIView):
+    def get(self, request):
+        """
+        GET /Association/verify?ssn=XXXXXXXXXX
+        Fetches company registry data and checks if the requesting user is a
+        Prókúruhafi (power of attorney holder) for the association.
+        Returns preview data plus authorized: true/false.
+        Always returns 200 so the frontend can show the negative state gracefully.
+        """
+        ssn = request.query_params.get("ssn", "").strip().replace("-", "")
+
+        if not ssn.isdigit() or len(ssn) != 10:
+            return Response({"detail": "ssn verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+
+        if Association.objects.filter(ssn=ssn).exists():
+            return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+
+        entity = fetch_legal_entity(ssn)
+        if entity is None:
+            return Response(
+                {"detail": "Ekki tókst að ná sambandi við Skattur Cloud. Reyndu aftur síðar."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        prokuruhafar = extract_prokuruhafar(entity)
+        authorized = any(p["national_id"] == user.kennitala for p in prokuruhafar)
+        fields = parse_entity_for_association(ssn, entity)
+
+        return Response({
+            **fields,
+            "prokuruhafar": prokuruhafar,
+            "authorized": authorized,
+        })
 
 
 def _set_payer(apartment, ownership_id):

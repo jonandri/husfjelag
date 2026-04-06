@@ -7,6 +7,9 @@ class Association(models.Model):
     address = models.CharField(max_length=500)
     postal_code = models.CharField(max_length=10)
     city = models.CharField(max_length=255)
+    date_of_board_change = models.DateField(null=True, blank=True)
+    registered = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:
         db_table = "associations_association"

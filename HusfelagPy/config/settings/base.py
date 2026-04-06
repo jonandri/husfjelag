@@ -99,3 +99,6 @@ KENNI_REDIRECT_URI = env("KENNI_REDIRECT_URI", default="http://localhost:8003/au
 
 # Frontend URL (used for post-login redirect)
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3003")
+
+# Skattur Cloud — Icelandic company registry API
+SKATTUR_CLOUD_API_KEY = env("SKATTUR_CLOUD_API_KEY", default="")
