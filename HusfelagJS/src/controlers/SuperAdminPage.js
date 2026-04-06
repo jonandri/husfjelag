@@ -120,17 +120,22 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
         setLookupError(''); setPreview(null);
         setLooking(true);
         try {
-            const resp = await apiFetch(`${API_URL}/Association/lookup?ssn=${assocSsn.replace(/-/g, '')}`);
-            const data = await resp.json();
-            if (resp.ok) {
-                setPreview(data);
-                if (data.isat_code && data.isat_code !== HOUSING_ISAT) {
-                    setIsatWarningOpen(true);
-                } else {
-                    setConfirmOpen(true);
-                }
+            const ssn = assocSsn.replace(/-/g, '');
+            const [lookupResp, verifyResp] = await Promise.all([
+                apiFetch(`${API_URL}/Association/lookup?ssn=${ssn}`),
+                apiFetch(`${API_URL}/Association/verify?ssn=${ssn}`),
+            ]);
+            const lookupData = await lookupResp.json();
+            if (!lookupResp.ok) {
+                setLookupError(lookupData.detail || 'Villa við leit.');
+                return;
+            }
+            const verifyData = verifyResp.ok ? await verifyResp.json() : {};
+            setPreview({ ...lookupData, prokuruhafar: verifyData.prokuruhafar || [] });
+            if (lookupData.isat_code && lookupData.isat_code !== HOUSING_ISAT) {
+                setIsatWarningOpen(true);
             } else {
-                setLookupError(data.detail || 'Villa við leit.');
+                setConfirmOpen(true);
             }
         } catch {
             setLookupError('Tenging við þjón mistókst.');
@@ -241,6 +246,20 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                             <InfoRow label="ÍSAT" value={`${preview.isat_code} – ${preview.isat_label}`} />
                         )}
                     </Box>
+                    {preview?.prokuruhafar?.length > 0 && (
+                        <Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                                Prókúruhafar
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                {preview.prokuruhafar.map(p => (
+                                    <Typography key={p.national_id} variant="body2">
+                                        {p.name} — {fmtKennitala(p.national_id)}
+                                    </Typography>
+                                ))}
+                            </Box>
+                        </Box>
+                    )}
                     {saveError && <Alert severity="error">{saveError}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
