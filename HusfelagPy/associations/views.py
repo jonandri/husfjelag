@@ -7,6 +7,7 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models, transaction
+from rest_framework.permissions import IsAuthenticated
 import datetime
 from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
@@ -48,17 +49,66 @@ def _matches(name, q):
     return True
 
 
+def _can_access_assoc(request, association):
+    """True if request.user has active access to this association (or is superadmin)."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superadmin:
+        return True
+    return AssociationAccess.objects.filter(
+        user_id=user.id, association=association, active=True
+    ).exists()
+
+
+def _get_role(request, association):
+    """Return the user's role string for this association, or None if no access."""
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return None
+    if user.is_superadmin:
+        return AssociationRole.CHAIR  # superadmin has full access
+    entry = AssociationAccess.objects.filter(
+        user_id=user.id, association=association, active=True
+    ).first()
+    return entry.role if entry else None
+
+
+def _require_chair_or_cfo(request, association):
+    """Returns a 403 Response if the user is not CHAIR or CFO, else None."""
+    role = _get_role(request, association)
+    if role not in (AssociationRole.CHAIR, AssociationRole.CFO):
+        return Response({"detail": "Aðeins stjórnendur félagsins hafa aðgang að þessari aðgerð."}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
+def _require_chair(request, association):
+    """Returns a 403 Response if the user is not CHAIR, else None."""
+    role = _get_role(request, association)
+    if role != AssociationRole.CHAIR:
+        return Response({"detail": "Aðeins formaður félagsins getur framkvæmt þessa aðgerð."}, status=status.HTTP_403_FORBIDDEN)
+    return None
+
+
 def _resolve_assoc(user_id, request):
     """
     Returns the association for this request.
+    The authenticated user (request.user) is always the authority —
+    user_id in the URL is validated against request.user to prevent
+    horizontal privilege escalation.
+
     If ?as=<id> is in query params:
       - superadmin: returns any association with that id
       - regular user: returns that association only if they have active access
     Otherwise: returns the first association the user has active access to.
     """
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return None
+
+    # Reject if the URL user_id doesn't match the authenticated user
+    # (unless superadmin, who can act on behalf of any user).
+    if not user.is_superadmin and user.id != user_id:
         return None
 
     as_id = request.query_params.get("as")
@@ -71,12 +121,12 @@ def _resolve_assoc(user_id, request):
             return Association.objects.filter(id=as_id).first()
         return Association.objects.filter(
             id=as_id,
-            access_entries__user_id=user_id,
+            access_entries__user_id=user.id,
             access_entries__active=True,
         ).first()
 
     return Association.objects.filter(
-        access_entries__user_id=user_id, access_entries__active=True
+        access_entries__user_id=user.id, access_entries__active=True
     ).first()
 
 
@@ -98,19 +148,15 @@ class AssociationView(APIView):
     def post(self, request):
         """
         POST /Association — Create a new association and link the requesting user as Chair.
-        Body: {ssn, name, address, postal_code, city, user_id}
+        Body: {ssn, name, address, postal_code, city}
         """
-        user_id = request.data.get("user_id")
-        if not user_id:
-            return Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
-
         serializer = AssociationSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         association = serializer.save()
         AssociationAccess.objects.create(
-            user_id=user_id,
+            user=request.user,
             association=association,
             role=AssociationRole.CHAIR,
             active=True,
@@ -138,6 +184,10 @@ class AssociationRoleView(APIView):
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        err = _require_chair(request, association)
+        if err:
+            return err
+
         try:
             new_user = User.objects.get(kennitala=kennitala)
         except User.DoesNotExist:
@@ -161,6 +211,7 @@ class AssociationRoleView(APIView):
 
 
 class AssociationLookupView(APIView):
+
     def get(self, request):
         """
         GET /Association/lookup?ssn=XXXXXXXXXX
@@ -249,6 +300,10 @@ class ApartmentView(APIView):
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
         existing = association.apartments.filter(deleted=False)
         agg = existing.aggregate(
             s=django_models.Sum("share"),
@@ -276,6 +331,10 @@ class ApartmentView(APIView):
             apartment = Apartment.objects.get(id=apartment_id)
         except Apartment.DoesNotExist:
             return Response({"detail": "Apartment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, apartment.association)
+        if err:
+            return err
 
         anr = request.data.get("anr", apartment.anr).strip()
         fnr = request.data.get("fnr", apartment.fnr).strip()
@@ -319,6 +378,10 @@ class ApartmentView(APIView):
         except Apartment.DoesNotExist:
             return Response({"detail": "Apartment not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        err = _require_chair_or_cfo(request, apartment.association)
+        if err:
+            return err
+
         apartment.deleted = True
         apartment.save(update_fields=["deleted"])
         _recalc_share_eq(apartment.association)
@@ -330,6 +393,10 @@ class ApartmentView(APIView):
             apartment = Apartment.objects.get(id=apartment_id, deleted=True)
         except Apartment.DoesNotExist:
             return Response({"detail": "Disabled apartment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, apartment.association)
+        if err:
+            return err
 
         anr = request.data.get("anr", apartment.anr).strip()
         fnr = request.data.get("fnr", apartment.fnr).strip()
@@ -383,6 +450,10 @@ class ApartmentOwnerView(APIView):
         except Apartment.DoesNotExist:
             return Response({"detail": "Apartment not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        err = _require_chair_or_cfo(request, apartment.association)
+        if err:
+            return err
+
         user, _ = User.objects.get_or_create(
             kennitala=kennitala,
             defaults={"name": kennitala},
@@ -400,12 +471,19 @@ class ApartmentOwnerView(APIView):
     def delete(self, request, apartment_id, owner_id):
         """DELETE /Apartment/{apartment_id}/owner/{owner_id} — Soft-disable an owner."""
         try:
-            ownership = ApartmentOwnership.objects.get(id=owner_id, apartment_id=apartment_id, deleted=False)
-            ownership.deleted = True
-            ownership.save(update_fields=["deleted"])
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            ownership = ApartmentOwnership.objects.select_related("apartment__association").get(
+                id=owner_id, apartment_id=apartment_id, deleted=False
+            )
         except ApartmentOwnership.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, ownership.apartment.association)
+        if err:
+            return err
+
+        ownership.deleted = True
+        ownership.save(update_fields=["deleted"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class OwnerView(APIView):
@@ -476,9 +554,15 @@ class OwnerView(APIView):
     def put(self, request, ownership_id):
         """PUT /Owner/update/{ownership_id} — Update share of an active ownership."""
         try:
-            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=False)
+            ownership = ApartmentOwnership.objects.select_related("apartment__association").get(
+                id=ownership_id, deleted=False
+            )
         except ApartmentOwnership.DoesNotExist:
             return Response({"detail": "Eignarhald fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, ownership.apartment.association)
+        if err:
+            return err
 
         share = _parse_share(request.data.get("share", ownership.share))
         if share is None:
@@ -504,9 +588,16 @@ class OwnerView(APIView):
     def delete(self, request, ownership_id):
         """DELETE /Owner/delete/{ownership_id} — Soft-disable an ownership."""
         try:
-            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=False)
+            ownership = ApartmentOwnership.objects.select_related("apartment__association").get(
+                id=ownership_id, deleted=False
+            )
         except ApartmentOwnership.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, ownership.apartment.association)
+        if err:
+            return err
+
         ownership.deleted = True
         ownership.save(update_fields=["deleted"])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -514,9 +605,15 @@ class OwnerView(APIView):
     def patch(self, request, ownership_id):
         """PATCH /Owner/enable/{ownership_id} — Re-enable an ownership with validation."""
         try:
-            ownership = ApartmentOwnership.objects.get(id=ownership_id, deleted=True)
+            ownership = ApartmentOwnership.objects.select_related("apartment__association").get(
+                id=ownership_id, deleted=True
+            )
         except ApartmentOwnership.DoesNotExist:
             return Response({"detail": "Óvirkt eignarhald fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, ownership.apartment.association)
+        if err:
+            return err
 
         share = _parse_share(request.data.get("share", ownership.share))
         if share is None:
@@ -544,6 +641,7 @@ class OwnerView(APIView):
 
 
 class CategoryListView(APIView):
+
     def get(self, request):
         """GET /Category/list — all active global categories, no scoping."""
         categories = Category.objects.filter(deleted=False).order_by("name")
@@ -551,6 +649,7 @@ class CategoryListView(APIView):
 
 
 class AccountingKeyListView(APIView):
+
     def get(self, request):
         """GET /AccountingKey/list — all active keys (no auth required)."""
         keys = AccountingKey.objects.filter(deleted=False)
@@ -558,20 +657,11 @@ class AccountingKeyListView(APIView):
 
 
 class AccountingKeyView(APIView):
-    def _require_superadmin(self, user_id):
-        """Returns (user, error_response). error_response is None if superadmin."""
-        if user_id is None:
-            return None, Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            uid = int(user_id)
-            user = User.objects.get(id=uid)
-        except (TypeError, ValueError):
-            return None, Response({"detail": "user_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
-        except User.DoesNotExist:
-            return None, Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not user.is_superadmin:
-            return None, Response({"detail": "Aðeins kerfisstjórar geta breytt bókhaldslyklum."}, status=status.HTTP_403_FORBIDDEN)
-        return user, None
+    def _require_superadmin(self, request):
+        """Returns None if superadmin, otherwise a 403 Response."""
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar geta breytt bókhaldslyklum."}, status=status.HTTP_403_FORBIDDEN)
+        return None
 
     def get(self, request, user_id):
         """GET /AccountingKey/{user_id} — all keys including deleted (superadmin panel)."""
@@ -580,7 +670,10 @@ class AccountingKeyView(APIView):
 
     def post(self, request):
         """POST /AccountingKey — create a key. Superadmin only."""
-        user_id = request.data.get("user_id")
+        err = self._require_superadmin(request)
+        if err:
+            return err
+
         number = request.data.get("number")
         name = request.data.get("name", "").strip()
         type_ = request.data.get("type", "")
@@ -589,10 +682,6 @@ class AccountingKeyView(APIView):
             return Response({"detail": "number, name og type eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
         if type_ not in AccountingKeyType.values:
             return Response({"detail": "Ógildur lykilflokkur."}, status=status.HTTP_400_BAD_REQUEST)
-
-        _, err = self._require_superadmin(user_id)
-        if err:
-            return err
 
         try:
             number = int(number)
@@ -606,9 +695,8 @@ class AccountingKeyView(APIView):
         return Response(AccountingKeySerializer(key).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, key_id):
-        """PUT /AccountingKey/update/{id}?user_id=X — update name/type. Superadmin only."""
-        user_id = request.query_params.get("user_id") or request.data.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """PUT /AccountingKey/update/{id} — update name/type. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -627,9 +715,8 @@ class AccountingKeyView(APIView):
         return Response(AccountingKeySerializer(key).data)
 
     def delete(self, request, key_id):
-        """DELETE /AccountingKey/delete/{id}?user_id=X — soft-delete. Superadmin only."""
-        user_id = request.query_params.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """DELETE /AccountingKey/delete/{id} — soft-delete. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -642,9 +729,8 @@ class AccountingKeyView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def patch(self, request, key_id):
-        """PATCH /AccountingKey/enable/{id}?user_id=X — re-enable. Superadmin only."""
-        user_id = request.query_params.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """PATCH /AccountingKey/enable/{id} — re-enable. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -663,6 +749,9 @@ class BankAccountView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
         bank_accounts = (
             association.bank_accounts
             .filter(deleted=False)
@@ -677,6 +766,9 @@ class BankAccountView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         name = request.data.get("name", "").strip()
         account_number = request.data.get("account_number", "").strip()
@@ -713,6 +805,9 @@ class BankAccountView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association or association.id != bank_account.association_id:
             return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         bank_account.name = request.data.get("name", bank_account.name).strip()
         bank_account.account_number = request.data.get("account_number", bank_account.account_number).strip()
@@ -742,6 +837,9 @@ class BankAccountView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association or association.id != bank_account.association_id:
             return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         bank_account.deleted = True
         bank_account.save(update_fields=["deleted"])
@@ -754,6 +852,9 @@ class TransactionView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         bank_account_ids = list(
             association.bank_accounts.filter(deleted=False).values_list("id", flat=True)
@@ -788,6 +889,9 @@ class TransactionView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         bank_account_id = request.data.get("bank_account_id")
         date_str = request.data.get("date")
@@ -853,6 +957,9 @@ class TransactionView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association or association.id != tx.bank_account.association_id:
             return Response({"detail": "Aðgangur hafnaður."}, status=status.HTTP_403_FORBIDDEN)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             category = Category.objects.get(id=category_id, deleted=False)
@@ -902,6 +1009,9 @@ class ImportPreviewView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             bank_account = BankAccount.objects.get(
@@ -1049,6 +1159,9 @@ class ImportConfirmView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             bank_account = BankAccount.objects.get(
@@ -1093,20 +1206,13 @@ class ImportRecategoriseView(APIView):
     def post(self, request):
         """POST /Import/recategorise — re-run auto-categorisation on all IMPORTED (uncategorised)
         transactions for the association. Superadmin only.
-        Body: {user_id}. Supports ?as= for superadmin impersonation.
+        Supports ?as= for superadmin impersonation.
         Returns {categorised, total}.
         """
-        user_id = request.data.get("user_id")
-        if not user_id:
-            return Response({"detail": "user_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
-        if not user.is_superadmin:
+        if not request.user.is_superadmin:
             return Response({"detail": "Aðeins superadmin getur keyrt þetta."}, status=status.HTTP_403_FORBIDDEN)
 
-        association = _resolve_assoc(user_id, request)
+        association = _resolve_assoc(request.user.id, request)
         if not association:
             return Response({"detail": "Félag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1174,34 +1280,26 @@ class CategoryRuleView(APIView):
             "global_rules":      [_ser(r, True)  for r in global_rules],
         })
 
-    def _check_rule_access(self, user, rule, request):
-        """Returns a 403 Response if user cannot modify this rule, else None."""
+    def _check_rule_access(self, request, rule):
+        """Returns a 403 Response if request.user cannot modify this rule, else None."""
         if rule.association is not None:
-            assoc = _resolve_assoc(user.id, request)
-            if not assoc or rule.association_id != assoc.id:
-                return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
+            return _require_chair_or_cfo(request, rule.association)
         else:
-            if not user.is_superadmin:
+            if not request.user.is_superadmin:
                 return Response({"detail": "Aðgangi hafnað."}, status=status.HTTP_403_FORBIDDEN)
         return None
 
     def post(self, request):
         """POST /CategoryRule — create a rule."""
-        user_id     = request.data.get("user_id")
         keyword     = request.data.get("keyword", "").strip()
         category_id = request.data.get("category_id")
         is_global   = bool(request.data.get("is_global", False))
 
-        if not user_id or not keyword or not category_id:
+        if not keyword or not category_id:
             return Response(
-                {"detail": "user_id, keyword og category_id eru nauðsynleg."},
+                {"detail": "keyword og category_id eru nauðsynleg."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        try:
-            user = User.objects.get(id=int(user_id))
-        except (User.DoesNotExist, ValueError, TypeError):
-            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
             category = Category.objects.get(id=int(category_id), deleted=False)
@@ -1209,14 +1307,14 @@ class CategoryRuleView(APIView):
             return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_400_BAD_REQUEST)
 
         if is_global:
-            if not user.is_superadmin:
+            if not request.user.is_superadmin:
                 return Response(
                     {"detail": "Aðeins stjórnendur geta búið til almennar reglur."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             assoc = None
         else:
-            assoc = _resolve_assoc(user.id, request)
+            assoc = _resolve_assoc(request.user.id, request)
             if not assoc:
                 return Response({"detail": "Félag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1229,27 +1327,21 @@ class CategoryRuleView(APIView):
 
     def put(self, request, rule_id):
         """PUT /CategoryRule/update/<rule_id> — update keyword and/or category."""
-        user_id     = request.data.get("user_id")
         keyword     = request.data.get("keyword", "").strip()
         category_id = request.data.get("category_id")
 
-        if not user_id or not keyword or not category_id:
+        if not keyword or not category_id:
             return Response(
-                {"detail": "user_id, keyword og category_id eru nauðsynleg."},
+                {"detail": "keyword og category_id eru nauðsynleg."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            user = User.objects.get(id=int(user_id))
-        except (User.DoesNotExist, ValueError, TypeError):
-            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            rule = CategoryRule.objects.get(id=rule_id, deleted=False)
+            rule = CategoryRule.objects.select_related("association").get(id=rule_id, deleted=False)
         except CategoryRule.DoesNotExist:
             return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
-        err = self._check_rule_access(user, rule, request)
+        err = self._check_rule_access(request, rule)
         if err:
             return err
 
@@ -1270,22 +1362,12 @@ class CategoryRuleView(APIView):
 
     def delete(self, request, rule_id):
         """DELETE /CategoryRule/delete/<rule_id> — soft-delete."""
-        user_id = request.data.get("user_id")
-
-        if not user_id:
-            return Response({"detail": "user_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            user = User.objects.get(id=int(user_id))
-        except (User.DoesNotExist, ValueError, TypeError):
-            return Response({"detail": "Notandi fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
-            rule = CategoryRule.objects.get(id=rule_id, deleted=False)
+            rule = CategoryRule.objects.select_related("association").get(id=rule_id, deleted=False)
         except CategoryRule.DoesNotExist:
             return Response({"detail": "Regla fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
 
-        err = self._check_rule_access(user, rule, request)
+        err = self._check_rule_access(request, rule)
         if err:
             return err
 
@@ -1295,20 +1377,10 @@ class CategoryRuleView(APIView):
 
 
 class CategoryView(APIView):
-    def _require_superadmin(self, user_id):
-        """Returns (user, error_response). error_response is None if user is superadmin."""
-        if user_id is None:
-            return None, Response({"detail": "user_id is required."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            uid = int(user_id)
-            user = User.objects.get(id=uid)
-        except (TypeError, ValueError):
-            return None, Response({"detail": "user_id must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
-        except User.DoesNotExist:
-            return None, Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not user.is_superadmin:
-            return None, Response({"detail": "Aðeins kerfisstjórar geta breytt flokkum."}, status=status.HTTP_403_FORBIDDEN)
-        return user, None
+    def _require_superadmin(self, request):
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar geta breytt flokkum."}, status=status.HTTP_403_FORBIDDEN)
+        return None
 
     def get(self, request, user_id):
         """GET /Category/{user_id} — all global categories (active + deleted) for the superadmin panel.
@@ -1320,7 +1392,10 @@ class CategoryView(APIView):
 
     def post(self, request):
         """POST /Category — create a global category. Superadmin only."""
-        user_id = request.data.get("user_id")
+        err = self._require_superadmin(request)
+        if err:
+            return err
+
         name = request.data.get("name", "").strip()
         type_ = request.data.get("type", "")
 
@@ -1329,17 +1404,12 @@ class CategoryView(APIView):
         if type_ not in CategoryType.values:
             return Response({"detail": "Ógildur flokkategund."}, status=status.HTTP_400_BAD_REQUEST)
 
-        _, err = self._require_superadmin(user_id)
-        if err:
-            return err
-
         category = Category.objects.create(name=name, type=type_)
         return Response(CategorySerializer(category).data, status=status.HTTP_201_CREATED)
 
     def put(self, request, category_id):
-        """PUT /Category/update/{id}?user_id=X — update name/type/account FKs. Superadmin only."""
-        user_id = request.query_params.get("user_id") or request.data.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """PUT /Category/update/{id} — update name/type/account FKs. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -1381,9 +1451,8 @@ class CategoryView(APIView):
         return Response(CategorySerializer(category).data)
 
     def delete(self, request, category_id):
-        """DELETE /Category/delete/{id}?user_id=X — soft-delete. Superadmin only."""
-        user_id = request.query_params.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """DELETE /Category/delete/{id} — soft-delete. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -1396,9 +1465,8 @@ class CategoryView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def patch(self, request, category_id):
-        """PATCH /Category/enable/{id}?user_id=X — re-enable. Superadmin only."""
-        user_id = request.query_params.get("user_id")
-        _, err = self._require_superadmin(user_id)
+        """PATCH /Category/enable/{id} — re-enable. Superadmin only."""
+        err = self._require_superadmin(request)
         if err:
             return err
 
@@ -1424,6 +1492,9 @@ class BudgetView(APIView):
         association = self._get_association(user_id, request)
         if not association:
             return Response(None, status=status.HTTP_200_OK)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         year = datetime.date.today().year
         budget = Budget.objects.filter(
@@ -1440,9 +1511,13 @@ class BudgetItemView(APIView):
     def put(self, request, item_id):
         """PUT /BudgetItem/update/{id} — Update the amount of a budget item."""
         try:
-            item = BudgetItem.objects.get(id=item_id)
+            item = BudgetItem.objects.select_related("budget__association").get(id=item_id)
         except BudgetItem.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, item.budget.association)
+        if err:
+            return err
 
         amount = _parse_share(request.data.get("amount", item.amount))
         if amount is None or amount < 0:
@@ -1476,6 +1551,9 @@ class BudgetWizardView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         # Validate all category_ids exist in global active categories
         category_ids = [item.get("category_id") for item in items_data]
@@ -1542,6 +1620,9 @@ class CollectionView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response([], status=status.HTTP_200_OK)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         month_param = request.query_params.get("month")
         year_param = request.query_params.get("year")
@@ -1693,6 +1774,9 @@ class CollectionGenerateView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         budget = Budget.objects.filter(association=association, year=year, is_active=True).first()
         if not budget:
@@ -1755,6 +1839,9 @@ class CollectionMatchView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             col = Collection.objects.get(id=collection_id, budget__association=association)
@@ -1801,6 +1888,9 @@ class CollectionUnmatchView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             col = Collection.objects.get(id=collection_id, budget__association=association)
@@ -1838,6 +1928,9 @@ class CollectionCandidatesView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         try:
             col = Collection.objects.select_related("payer").get(
@@ -1879,21 +1972,17 @@ class AssociationListView(APIView):
         """GET /Association/list/{user_id}[?q=search] — List associations for the user.
         Superadmin gets all; regular users get only their own.
         Optional ?q= filters by name or SSN (case-insensitive substring)."""
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
+        # Validate URL user_id matches the authenticated user (unless superadmin)
+        if not request.user.is_superadmin and request.user.id != user_id:
             return Response([], status=status.HTTP_200_OK)
 
+        user = request.user
         q = request.query_params.get("q", "").strip()
-
-        try:
-            is_superadmin = user.is_superadmin
-        except Exception:
-            is_superadmin = False
+        is_superadmin = user.is_superadmin
 
         # Always start with the user's own associations
         own_qs = list(Association.objects.filter(
-            access_entries__user_id=user_id, access_entries__active=True
+            access_entries__user_id=user.id, access_entries__active=True
         ).order_by("name"))
 
         if q and is_superadmin:
@@ -1909,23 +1998,21 @@ class AssociationListView(APIView):
         else:
             qs = own_qs
 
-        ctx = {"user_id": user_id, "is_superadmin": is_superadmin}
+        ctx = {"user_id": user.id, "is_superadmin": is_superadmin}
         return Response(AssociationAccessSerializer(qs, many=True, context=ctx).data)
 
 
 class AdminAssociationView(APIView):
-    def _check_superadmin(self, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            return user if user.is_superadmin else None
-        except User.DoesNotExist:
-            return None
+    def _require_superadmin(self, request):
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        return None
 
     def get(self, request):
-        """GET /admin/Association?user_id=X&q=search — Search all associations."""
-        user_id = request.query_params.get("user_id")
-        if not self._check_superadmin(user_id):
-            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        """GET /admin/Association?q=search — Search all associations. Superadmin only."""
+        err = self._require_superadmin(request)
+        if err:
+            return err
 
         q = request.query_params.get("q", "").strip()
         qs = list(Association.objects.all().order_by("name"))
@@ -1935,13 +2022,13 @@ class AdminAssociationView(APIView):
 
     def post(self, request):
         """
-        POST /admin/Association — Create an association and assign a chair.
-        Body: { admin_user_id, association_ssn, chair_ssn }
+        POST /admin/Association — Create an association and assign a chair. Superadmin only.
+        Body: { association_ssn, chair_ssn }
         Looks up association info via scraper, finds chair user by kennitala.
         """
-        admin_user_id = request.data.get("admin_user_id")
-        if not self._check_superadmin(admin_user_id):
-            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        err = self._require_superadmin(request)
+        if err:
+            return err
 
         association_ssn = str(request.data.get("association_ssn", "")).strip().replace("-", "")
         chair_ssn = str(request.data.get("chair_ssn", "")).strip().replace("-", "")
@@ -1995,6 +2082,9 @@ class ApartmentImportSourcesView(APIView):
         association = _resolve_assoc(int(user_id), request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
         sources = association.hms_sources.order_by("stadfang_id").values(
             "url", "landeign_id", "stadfang_id", "last_imported_at"
         )
@@ -2020,6 +2110,9 @@ class ApartmentImportPreviewView(APIView):
         association = _resolve_assoc(int(user_id), request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         # Scrape and merge all URLs, deduplicate by fnr
         scraped_by_fnr = {}
@@ -2089,6 +2182,9 @@ class ApartmentImportConfirmView(APIView):
         association = _resolve_assoc(int(user_id), request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         # Re-scrape (don't trust client preview)
         scraped_by_fnr = {}
@@ -2154,6 +2250,9 @@ class ReportView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         year_param = request.query_params.get("year")
         year = int(year_param) if year_param and year_param.isdigit() else datetime.date.today().year
@@ -2364,6 +2463,9 @@ class AnnualStatementView(APIView):
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
 
         year_param = request.query_params.get("year")
         year = int(year_param) if year_param and year_param.isdigit() else datetime.date.today().year

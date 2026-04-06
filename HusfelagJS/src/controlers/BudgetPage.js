@@ -11,6 +11,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx } from '../ui/buttons';
@@ -41,7 +42,7 @@ function BudgetPage() {
 
     const loadBudget = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Budget/${user.id}${assocParam}`);
+            const resp = await apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`);
             if (resp.ok) setBudget(await resp.json());
             else { setError('Villa við að sækja áætlun.'); setBudget(null); }
         } catch {
@@ -184,7 +185,7 @@ function EditAmountDialog({ open, onClose, item, onSaved }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BudgetItem/update/${item.id}`, {
+            const resp = await apiFetch(`${API_URL}/BudgetItem/update/${item.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount: parseFloat(amount) }),

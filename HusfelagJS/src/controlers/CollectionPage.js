@@ -13,6 +13,7 @@ import { useHelp } from '../ui/HelpContext';
 import HelpDialogTitle from '../ui/HelpDialogTitle';
 import { ghostButtonSx, primaryButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 import { StatusChip } from '../ui/chips';
@@ -48,7 +49,7 @@ function CollectionPage() {
         const qs = assocParam
             ? `${assocParam}&month=${month}&year=${year}`
             : `?month=${month}&year=${year}`;
-        fetch(`${API_URL}/Collection/${user.id}${qs}`)
+        apiFetch(`${API_URL}/Collection/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(setData)
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], unmatched: [] }); });
@@ -62,7 +63,7 @@ function CollectionPage() {
     const handleGenerate = () => {
         setGenerating(true);
         setError('');
-        fetch(`${API_URL}/Collection/generate${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/generate${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, month, year }),
@@ -76,7 +77,7 @@ function CollectionPage() {
     const handleUnmatch = (collectionId) => {
         if (!collectionId) return;
         setMatchError('');
-        fetch(`${API_URL}/Collection/unmatch${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/unmatch${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId) }),
@@ -89,7 +90,7 @@ function CollectionPage() {
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
-        fetch(`${API_URL}/Collection/match${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/match${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId), transaction_id: parseInt(transactionId) }),
@@ -323,7 +324,7 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
         const qs = assocParam
             ? `${assocParam}&user_id=${userId}`
             : `?user_id=${userId}`;
-        fetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`, { signal: controller.signal })
+        apiFetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`, { signal: controller.signal })
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(data => { setCandidates(data); setLoading(false); })
             .catch(err => {

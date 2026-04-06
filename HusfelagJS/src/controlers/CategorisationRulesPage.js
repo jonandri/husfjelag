@@ -7,6 +7,7 @@ import {
     TextField, MenuItem, Select, FormControl, InputLabel,
 } from '@mui/material';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
@@ -41,8 +42,8 @@ export default function CategorisationRulesPage() {
         setLoading(true);
         setError('');
         Promise.all([
-            fetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
+            apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
+            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
         ])
             .then(([rules, cats]) => {
                 if (rules) {
@@ -88,13 +89,13 @@ export default function CategorisationRulesPage() {
         try {
             let resp;
             if (editRule) {
-                resp = await fetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
+                resp = await apiFetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
                 });
             } else {
-                resp = await fetch(`${API_URL}/CategoryRule${assocParam}`, {
+                resp = await apiFetch(`${API_URL}/CategoryRule${assocParam}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: editGlobal }),
@@ -118,7 +119,7 @@ export default function CategorisationRulesPage() {
         if (!deleteRule) return;
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),

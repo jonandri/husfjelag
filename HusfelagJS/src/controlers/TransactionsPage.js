@@ -11,6 +11,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
@@ -47,9 +48,9 @@ function TransactionsPage() {
             const params = new URLSearchParams({ year });
             const queryString = assocParam ? `${assocParam}&${params}` : `?${params}`;
             const [txResp, bankResp, catResp] = await Promise.all([
-                fetch(`${API_URL}/Transaction/${user.id}${queryString}`),
-                fetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Category/list`),
+                apiFetch(`${API_URL}/Transaction/${user.id}${queryString}`),
+                apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Category/list`),
             ]);
             if (txResp.ok) setTransactions(await txResp.json());
             else { setError('Villa við að sækja færslur.'); setTransactions([]); }
@@ -65,7 +66,7 @@ function TransactionsPage() {
         try {
             const params = new URLSearchParams({ year });
             const queryString = assocParam ? `${assocParam}&${params}` : `?${params}`;
-            const resp = await fetch(`${API_URL}/Transaction/${user.id}${queryString}`);
+            const resp = await apiFetch(`${API_URL}/Transaction/${user.id}${queryString}`);
             if (resp.ok) setTransactions(await resp.json());
         } catch {}
     };
@@ -111,7 +112,7 @@ function TransactionsPage() {
                                     setRecatResult(null);
                                     try {
                                         const qs = assocParam || '';
-                                        const resp = await fetch(`${API_URL}/Import/recategorise${qs}`, {
+                                        const resp = await apiFetch(`${API_URL}/Import/recategorise${qs}`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ user_id: user.id }),
@@ -311,7 +312,7 @@ function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, 
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Transaction/categorise/${tx.id}`, {
+            const resp = await apiFetch(`${API_URL}/Transaction/categorise/${tx.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, category_id: categoryId }),
@@ -384,7 +385,7 @@ function AddTransactionDialog({ open, onClose, userId, assocParam, bankAccounts,
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Transaction${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Transaction${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, bank_account_id: bankAccountId, date, amount, description: description.trim(), reference: reference.trim(), category_id: categoryId || null }),
@@ -484,7 +485,7 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
         try {
             const fd = new FormData();
             fd.append('file', f);
-            const resp = await fetch(`${API_URL}/Import/detect`, { method: 'POST', body: fd });
+            const resp = await apiFetch(`${API_URL}/Import/detect`, { method: 'POST', body: fd });
             if (resp.ok) {
                 const { bank: detectedBank, file_account_number } = await resp.json();
                 if (detectedBank) setBank(detectedBank);
@@ -506,7 +507,7 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
             formData.append('bank_account_id', bankAccountId);
             formData.append('bank', bank);
             formData.append('file', file);
-            const resp = await fetch(`${API_URL}/Import/preview`, { method: 'POST', body: formData });
+            const resp = await apiFetch(`${API_URL}/Import/preview`, { method: 'POST', body: formData });
             const data = await resp.json();
             if (resp.ok) { setPreview(data); }
             else { setError(data.detail || 'Villa við lestur skráar.'); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }
@@ -520,7 +521,7 @@ function ImportDialog({ open, onClose, userId, assocParam, bankAccounts, onDone 
         setError('');
         setConfirming(true);
         try {
-            const resp = await fetch(`${API_URL}/Import/confirm`, {
+            const resp = await apiFetch(`${API_URL}/Import/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, bank_account_id: bankAccountId, rows: preview.rows }),
