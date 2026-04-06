@@ -265,7 +265,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                                     autoFocus
                                 />
                             )}
-                        </Box>
+                        </Box>}
 
                         {saveError && <Alert severity="error">{saveError}</Alert>}
                     </>
