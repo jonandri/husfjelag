@@ -2102,7 +2102,7 @@ class AdminAssociationView(APIView):
         """
         POST /admin/Association — Create an association and assign a chair. Superadmin only.
         Body: { association_ssn, chair_ssn }
-        Looks up association info via scraper, finds chair user by kennitala.
+        Fetches association info from the Skattur Cloud company registry API.
         """
         err = self._require_superadmin(request)
         if err:
@@ -2119,32 +2119,43 @@ class AdminAssociationView(APIView):
         if Association.objects.filter(ssn=association_ssn).exists():
             return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
 
-        data = lookup_association(association_ssn)
-        if data is None:
-            return Response({"detail": "Ekkert húsfélag fannst með þessa kennitölu á skatturinn.is."}, status=status.HTTP_404_NOT_FOUND)
+        entity = fetch_legal_entity(association_ssn)
+        if entity is None:
+            return Response(
+                {"detail": "Ekki tókst að ná sambandi við Skattur Cloud. Reyndu aftur síðar."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
-        chair_user, created = User.objects.get_or_create(
+        fields = parse_entity_for_association(association_ssn, entity)
+
+        chair_user, _ = User.objects.get_or_create(
             kennitala=chair_ssn,
             defaults={"name": chair_ssn},  # placeholder until Þjóðskrá lookup
         )
 
-        serializer = AssociationSerializer(data={
-            "ssn": data["ssn"],
-            "name": data["name"],
-            "address": data["address"],
-            "postal_code": data["postal_code"],
-            "city": data["city"],
-        })
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with transaction.atomic():
+                association = Association.objects.create(
+                    ssn=fields["ssn"],
+                    name=fields["name"],
+                    address=fields["address"],
+                    postal_code=fields["postal_code"],
+                    city=fields["city"],
+                    date_of_board_change=fields["date_of_board_change"],
+                    registered=fields["registered"],
+                    status=fields["status"],
+                )
+                AssociationAccess.objects.create(
+                    user=chair_user,
+                    association=association,
+                    role=AssociationRole.CHAIR,
+                    active=True,
+                )
+        except Exception:
+            if Association.objects.filter(ssn=association_ssn).exists():
+                return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+            raise
 
-        association = serializer.save()
-        AssociationAccess.objects.create(
-            user=chair_user,
-            association=association,
-            role=AssociationRole.CHAIR,
-            active=True,
-        )
         return Response(AssociationAccessSerializer(association, context={"user_id": None}).data, status=status.HTTP_201_CREATED)
 
 
