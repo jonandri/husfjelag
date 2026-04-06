@@ -10,7 +10,6 @@ import {
     DialogContentText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
@@ -95,23 +94,19 @@ function SuperAdminPage() {
     );
 }
 
-const HOUSING_ISAT = '94.99.1';
-
 function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     const [assocSsn, setAssocSsn] = useState('');
     const [chairSsn, setChairSsn] = useState('');
     const [looking, setLooking] = useState(false);
     const [lookupError, setLookupError] = useState('');
     const [preview, setPreview] = useState(null);
-    const [isatWarningOpen, setIsatWarningOpen] = useState(false);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
 
     const reset = () => {
         setAssocSsn(''); setChairSsn(''); setPreview(null);
-        setLookupError(''); setSaveError('');
-        setIsatWarningOpen(false); setConfirmOpen(false);
+        setLookupError(''); setSaveError(''); setConfirmOpen(false);
     };
 
     const handleClose = () => { reset(); onClose(); };
@@ -121,22 +116,14 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
         setLooking(true);
         try {
             const ssn = assocSsn.replace(/-/g, '');
-            const [lookupResp, verifyResp] = await Promise.all([
-                apiFetch(`${API_URL}/Association/lookup?ssn=${ssn}`),
-                apiFetch(`${API_URL}/Association/verify?ssn=${ssn}`),
-            ]);
-            const lookupData = await lookupResp.json();
-            if (!lookupResp.ok) {
-                setLookupError(lookupData.detail || 'Villa við leit.');
+            const resp = await apiFetch(`${API_URL}/Association/verify?ssn=${ssn}`);
+            const data = await resp.json();
+            if (!resp.ok) {
+                setLookupError(data.detail || 'Villa við leit.');
                 return;
             }
-            const verifyData = verifyResp.ok ? await verifyResp.json() : {};
-            setPreview({ ...lookupData, prokuruhafar: verifyData.prokuruhafar || [] });
-            if (lookupData.isat_code && lookupData.isat_code !== HOUSING_ISAT) {
-                setIsatWarningOpen(true);
-            } else {
-                setConfirmOpen(true);
-            }
+            setPreview(data);
+            setConfirmOpen(true);
         } catch {
             setLookupError('Tenging við þjón mistókst.');
         } finally {
@@ -171,11 +158,11 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     return (
         <>
             {/* Entry dialog — SSN inputs */}
-            <Dialog open={open && !confirmOpen && !isatWarningOpen} onClose={handleClose} maxWidth="xs" fullWidth>
+            <Dialog open={open && !confirmOpen} onClose={handleClose} maxWidth="xs" fullWidth>
                 <DialogTitle>Stofna húsfélag</DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                        Upplýsingar húsfélags eru sóttar sjálfkrafa á skatturinn.is.
+                        Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja.
                     </Typography>
                     <TextField
                         label="Kennitala húsfélags"
@@ -205,33 +192,6 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                 </DialogActions>
             </Dialog>
 
-            {/* ÍSAT warning */}
-            <Dialog open={isatWarningOpen} onClose={handleClose} maxWidth="xs" fullWidth>
-                <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WarningAmberIcon color="warning" /> ÍSAT flokkur er ekki rétt
-                </DialogTitle>
-                <DialogContent sx={{ pt: 1 }}>
-                    <Typography variant="body2" gutterBottom>
-                        Skráður ÍSAT flokkur er <strong>{preview?.isat_code}</strong>, ekki <strong>94.99.1</strong> (Starfsemi húsfélaga íbúðareigenda).
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {preview?.isat_label}
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 2 }}>
-                        Ertu viss um að þetta sé húsfélag sem á að skrá?
-                    </Typography>
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
-                    <Button
-                        variant="contained" color="warning"
-                        onClick={() => { setIsatWarningOpen(false); setConfirmOpen(true); }}
-                    >
-                        Já, halda áfram
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
             {/* Confirmation dialog */}
             <Dialog open={confirmOpen} onClose={handleClose} maxWidth="sm" fullWidth>
                 <DialogTitle>Staðfesta stofnun húsfélags</DialogTitle>
@@ -240,11 +200,10 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                         <InfoRow label="Nafn" value={preview?.name} />
                         <InfoRow label="Kennitala" value={fmtKennitala(preview?.ssn)} />
                         <InfoRow label="Heimilisfang" value={preview?.address} />
-                        <InfoRow label="Póstnúmer" value={preview?.postal_code} />
-                        <InfoRow label="Staður" value={preview?.city} />
-                        {preview?.isat_code && (
-                            <InfoRow label="ÍSAT" value={`${preview.isat_code} – ${preview.isat_label}`} />
-                        )}
+                        <InfoRow label="Póstnúmer / Staður" value={preview ? `${preview.postal_code} ${preview.city}` : ''} />
+                        {preview?.status && <InfoRow label="Staða" value={preview.status} />}
+                        {preview?.registered && <InfoRow label="Skráð" value={preview.registered} />}
+                        {preview?.date_of_board_change && <InfoRow label="Stjórnarbreyting" value={preview.date_of_board_change} />}
                     </Box>
                     {preview?.prokuruhafar?.length > 0 && (
                         <Box>
