@@ -15,6 +15,7 @@ import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 import { ghostButtonSx } from '../ui/buttons';
@@ -80,7 +81,7 @@ function AnnualStatementDialog({ open, onClose, year, userId, assocParam }) {
         setData(null);
         setError('');
         const qs = assocParam ? `${assocParam}&year=${year}` : `?year=${year}`;
-        fetch(`${API_URL}/AnnualStatement/${userId}${qs}`)
+        apiFetch(`${API_URL}/AnnualStatement/${userId}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(d => { setData(d); setLoading(false); })
             .catch(() => { setError('Villa við að sækja ársskýrslu.'); setLoading(false); });
@@ -461,9 +462,9 @@ function ReportPage() {
     useEffect(() => {
         if (!user) return;
         Promise.all([
-            fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
-            fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
-            fetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
+            apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`),
+            apiFetch(`${API_URL}/Collection/${user.id}${assocParam}`),
+            apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
         ]).then(async ([budgetResp, collResp, bankResp]) => {
             if (budgetResp.ok) {
                 const budget = await budgetResp.json();
@@ -492,7 +493,7 @@ function ReportPage() {
         setData(undefined);
         setError('');
         const qs = assocParam ? `${assocParam}&year=${year}` : `?year=${year}`;
-        fetch(`${API_URL}/Report/${user.id}${qs}`)
+        apiFetch(`${API_URL}/Report/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(setData)
             .catch(() => {
@@ -510,7 +511,7 @@ function ReportPage() {
         const qs = assocParam
             ? `${assocParam}&year=${year}&month=${month}`
             : `?year=${year}&month=${month}`;
-        fetch(`${API_URL}/Report/${user.id}${qs}`)
+        apiFetch(`${API_URL}/Report/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(d => { setDrillData(d); setDrillLoading(false); })
             .catch(() => { setDrillLoading(false); setDrillError('Villa við að sækja mánaðargögn.'); });
@@ -525,7 +526,7 @@ function ReportPage() {
         setCatError('');
         const params = new URLSearchParams({ year });
         const qs = assocParam ? `${assocParam}&${params}` : `?${params}`;
-        fetch(`${API_URL}/Transaction/${user.id}${qs}`)
+        apiFetch(`${API_URL}/Transaction/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(txs => {
                 setCatTxs(txs.filter(tx => tx.category?.id === categoryId));

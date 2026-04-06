@@ -8,6 +8,7 @@ import {
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 
@@ -39,8 +40,8 @@ function BudgetWizardPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         Promise.all([
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : Promise.reject('categories')),
-            fetch(`${API_URL}/Budget/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null).catch(() => null),
+            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : Promise.reject('categories')),
+            apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null).catch(() => null),
         ]).then(([cats, budget]) => {
             setCategories(cats);
             if (budget && budget.items && budget.items.length > 0) {
@@ -93,7 +94,7 @@ function BudgetWizardPage() {
             .map(c => ({ category_id: c.id, amount: parseInt(amounts[c.id]) || 0 }))
             .filter(i => i.amount > 0);
         try {
-            const resp = await fetch(`${API_URL}/Budget/wizard${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Budget/wizard${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, items }),

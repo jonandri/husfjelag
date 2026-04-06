@@ -10,6 +10,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
 import { fmtKennitala, fmtAmount } from '../format';
@@ -38,8 +39,8 @@ function AssociationPage() {
     const loadAll = async () => {
         try {
             const [assocResp, ownersResp] = await Promise.all([
-                fetch(`${API_URL}/Association/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Association/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Owner/${user.id}${assocParam}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -196,7 +197,7 @@ function RoleDialog({ open, role, label, currentName, owners, userId, assocParam
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Association/roles/${userId}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Association/roles/${userId}${assocParam}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, kennitala: selected.kennitala }),
@@ -277,7 +278,7 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -355,7 +356,7 @@ function BankAccountsPanel({ user, assocParam }) {
 
     React.useEffect(() => {
         loadBankAccounts();
-        fetch(`${API_URL}/AccountingKey/list`)
+        apiFetch(`${API_URL}/AccountingKey/list`)
             .then(r => r.ok ? r.json() : [])
             .then(data => setAccountingKeys(data.filter(k => k.type === 'ASSET')))
             .catch(() => {});
@@ -363,7 +364,7 @@ function BankAccountsPanel({ user, assocParam }) {
 
     const loadBankAccounts = async () => {
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/${user.id}${assocParam}`);
+            const resp = await apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`);
             if (resp.ok) setBankAccounts(await resp.json());
             else { setError('Villa við að sækja bankareikninga.'); setBankAccounts([]); }
         } catch {
@@ -502,7 +503,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/update/${bankAccount.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount/update/${bankAccount.id}${assocParam}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -525,7 +526,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
     const handleDelete = async () => {
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/delete/${bankAccount.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount/delete/${bankAccount.id}${assocParam}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId }),
@@ -624,8 +625,8 @@ function AssociationRulesPanel({ user, assocParam }) {
         if (!user?.id) return;
         setLoading(true);
         Promise.all([
-            fetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
+            apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
+            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
         ]).then(([rulesData, cats]) => {
             if (rulesData) setRules(rulesData.association_rules || []);
             setCategories(cats || []);
@@ -641,11 +642,11 @@ function AssociationRulesPanel({ user, assocParam }) {
         setSaving(true); setSaveError('');
         try {
             const resp = editRule
-                ? await fetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
+                ? await apiFetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
                 })
-                : await fetch(`${API_URL}/CategoryRule${assocParam}`, {
+                : await apiFetch(`${API_URL}/CategoryRule${assocParam}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: false }),
                 });
@@ -659,7 +660,7 @@ function AssociationRulesPanel({ user, assocParam }) {
         if (!deleteRule) return;
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
                 method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),
             });

@@ -8,6 +8,10 @@ class User(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True, default=None)
     is_superadmin = models.BooleanField(default=False)
 
+    # Required by DRF's IsAuthenticated permission check.
+    # Always True because unauthenticated requests get AnonymousUser, not a User instance.
+    is_authenticated = True
+
     class Meta:
         db_table = "users_user"
 

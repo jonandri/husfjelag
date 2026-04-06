@@ -19,6 +19,7 @@ import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettin
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import { fmtKennitala, fmtPhone } from '../format';
 import HelpDrawer from '../ui/HelpDrawer';
 
@@ -133,7 +134,7 @@ function SideBar() {
     React.useEffect(() => {
         if (!switcherOpen || !user?.id) return;
         setSwitcherSearching(true);
-        fetch(`${API_URL}/Association/list/${user.id}${switcherQ ? `?q=${encodeURIComponent(switcherQ)}` : ''}`)
+        apiFetch(`${API_URL}/Association/list/${user.id}${switcherQ ? `?q=${encodeURIComponent(switcherQ)}` : ''}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => { setSwitcherResults(data); setSwitcherSearching(false); })
             .catch(() => setSwitcherSearching(false));
@@ -332,7 +333,7 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
             setPhone(user.phone || '');
         } else {
             setLoading(true);
-            fetch(`${API_URL}/User/${user.id}`)
+            apiFetch(`${API_URL}/User/${user.id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     if (data) {
@@ -356,7 +357,7 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/User/${user.id}`, {
+            const resp = await apiFetch(`${API_URL}/User/${user.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),

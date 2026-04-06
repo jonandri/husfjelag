@@ -40,7 +40,7 @@ function CtaBar({ mini, onSignup }) {
                 textTransform: 'none', whiteSpace: 'nowrap',
                 '&:hover': { background: '#06a866' }, transition: 'all 0.2s ease',
             }}>
-                Skrá sig →
+                Innskráning →
             </Button>
         </Box>
     );
@@ -195,19 +195,19 @@ function StoryRow({ label, title, body, reverse, img, imgAlt }) {
 function Stories() {
     const stories = [
         {
-            label: 'Innheimta',
-            title: 'Sjálfvirk mánaðarleg innheimta á húsgjöldum',
-            body: 'Stilltu mánaðarlegar greiðslur fyrir hverja íbúð einu sinni — kerfið sér um rest. Sjáðu hverjir hafa greitt og hverjir eru í vanskilum í rauntíma.',
-            img: '/images/collection.png',
-            imgAlt: 'Innheimtutafla með stöðu hverrar íbúðar',
-            reverse: false,
-        },
-        {
             label: 'Áætlun',
             title: 'Búðu til árlegri fjárhagsáætlun á nokkrum mínútum',
             body: 'Leiðsagnarforrit hjálpar þér að setja upp áætlun eftir flokkum. Samanburður við raunverulegar tekjur og gjöld sýnir þér hvar þú stendur.',
             img: '/images/budget.png',
             imgAlt: 'Áætlunarleiðsögn og flokkayfirsýn',
+            reverse: false,
+        },        
+        {
+            label: 'Innheimta',
+            title: 'Sjálfvirk mánaðarleg innheimta á húsgjöldum',
+            body: 'Stilltu mánaðarlegar greiðslur fyrir hverja íbúð einu sinni — kerfið sér um rest. Sjáðu hverjir hafa greitt og hverjir eru í vanskilum í rauntíma.',
+            img: '/images/collection.png',
+            imgAlt: 'Innheimtutafla með stöðu hverrar íbúðar',
             reverse: true,
         },
         {
@@ -465,7 +465,7 @@ function Footer({ onSignup }) {
                         px: 2, py: 0.75, fontSize: 12, fontWeight: 600, textTransform: 'none',
                         '&:hover': { background: '#06a866' },
                     }}>
-                        Skrá sig →
+                        Innskráning →
                     </Button>
                 </Box>
             </Box>
@@ -496,9 +496,9 @@ export default function HomePage() {
         <Box sx={{ minHeight: '100vh', background: '#fff' }}>
             <CtaBar mini={mini} onSignup={onSignup} />
             <Hero onSignup={onSignup} />
+            <Pitch />            
             <Stories />
             <FeatureGrid />
-            <Pitch />
             <Faq />
             <Footer onSignup={onSignup} />
         </Box>

@@ -22,6 +22,7 @@ import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
 import { HelpProvider } from './ui/HelpContext';
 import HomePage from './controlers/HomePage';
+import { apiFetch } from './api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -92,7 +93,7 @@ function App() {
       setImpersonating(false);
       return;
     }
-    fetch(`${API_URL}/Association/list/${user.id}`)
+    apiFetch(`${API_URL}/Association/list/${user.id}`)
       .then(r => r.ok ? r.json() : [])
       .then(list => {
         setAssociations(list);

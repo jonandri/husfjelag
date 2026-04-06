@@ -13,6 +13,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
@@ -100,7 +101,7 @@ function CreateAssociationPanel({ user, onCreated }) {
         setLookupError(''); setPreview(null);
         setLooking(true);
         try {
-            const resp = await fetch(`${API_URL}/Association/lookup?ssn=${assocSsn.replace(/-/g, '')}`);
+            const resp = await apiFetch(`${API_URL}/Association/lookup?ssn=${assocSsn.replace(/-/g, '')}`);
             const data = await resp.json();
             if (resp.ok) {
                 setPreview(data);
@@ -122,7 +123,7 @@ function CreateAssociationPanel({ user, onCreated }) {
     const handleCreate = async () => {
         setSaveError(''); setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/admin/Association`, {
+            const resp = await apiFetch(`${API_URL}/admin/Association`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -261,7 +262,7 @@ function ImpersonatePanel({ user, onSelect }) {
     React.useEffect(() => {
         if (q.length < 2) { setResults([]); return; }
         setSearching(true);
-        fetch(`${API_URL}/admin/Association?user_id=${user.id}&q=${encodeURIComponent(q)}`)
+        apiFetch(`${API_URL}/admin/Association?user_id=${user.id}&q=${encodeURIComponent(q)}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => { setResults(data); setSearching(false); })
             .catch(() => setSearching(false));
@@ -319,7 +320,7 @@ function GlobalCategoriesPanel({ user }) {
 
     const loadCategories = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Category/${user.id}`);
+            const resp = await apiFetch(`${API_URL}/Category/${user.id}`);
             if (resp.ok) setCategories(await resp.json());
             else { setError('Villa við að sækja flokka.'); setCategories([]); }
         } catch {
@@ -437,7 +438,7 @@ function GlobalCreateCategoryDialog({ open, onClose, userId, onCreated }) {
     React.useEffect(() => {
         if (open) {
             setName(''); setType(''); setExpenseAccountId(''); setIncomeAccountId(''); setError('');
-            fetch(`${API_URL}/AccountingKey/list`)
+            apiFetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
                 .catch(() => {});
@@ -450,7 +451,7 @@ function GlobalCreateCategoryDialog({ open, onClose, userId, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Category`, {
+            const resp = await apiFetch(`${API_URL}/Category`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
@@ -558,7 +559,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             setError('');
             setExpenseAccountId(category.expense_account_id || '');
             setIncomeAccountId(category.income_account_id || '');
-            fetch(`${API_URL}/AccountingKey/list`)
+            apiFetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
                 .catch(() => {});
@@ -571,7 +572,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
+            const resp = await apiFetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
@@ -579,7 +580,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
             if (resp.ok) {
                 const updated = await resp.json();
                 if (isDisabled) {
-                    await fetch(`${API_URL}/Category/enable/${category.id}?user_id=${userId}`, { method: 'PATCH' });
+                    await apiFetch(`${API_URL}/Category/enable/${category.id}?user_id=${userId}`, { method: 'PATCH' });
                 }
                 onSaved(updated);
             } else {
@@ -596,7 +597,7 @@ function GlobalEditCategoryDialog({ open, onClose, category, userId, isDisabled,
     const handleDisable = async () => {
         setDisabling(true);
         try {
-            const resp = await fetch(`${API_URL}/Category/delete/${category.id}?user_id=${userId}`, { method: 'DELETE' });
+            const resp = await apiFetch(`${API_URL}/Category/delete/${category.id}?user_id=${userId}`, { method: 'DELETE' });
             if (resp.ok) { setConfirmDisable(false); onSaved(); }
             else { const data = await resp.json(); setError(data.detail || 'Villa.'); setConfirmDisable(false); }
         } catch {
@@ -710,7 +711,7 @@ function GlobalAccountingKeysPanel({ user }) {
 
     const loadKeys = async () => {
         try {
-            const resp = await fetch(`${API_URL}/AccountingKey/${user.id}`);
+            const resp = await apiFetch(`${API_URL}/AccountingKey/${user.id}`);
             if (resp.ok) setKeys(await resp.json());
             else { setError('Villa við að sækja bókhaldslykla.'); setKeys([]); }
         } catch {
@@ -827,7 +828,7 @@ function GlobalAddAccountingKeyForm({ userId, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/AccountingKey`, {
+            const resp = await apiFetch(`${API_URL}/AccountingKey`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, number: parseInt(number, 10), name: name.trim(), type }),
@@ -926,14 +927,14 @@ function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, i
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/AccountingKey/update/${accountingKey.id}?user_id=${userId}`, {
+            const resp = await apiFetch(`${API_URL}/AccountingKey/update/${accountingKey.id}?user_id=${userId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: name.trim(), type }),
             });
             if (resp.ok) {
                 if (isDisabled) {
-                    await fetch(`${API_URL}/AccountingKey/enable/${accountingKey.id}?user_id=${userId}`, { method: 'PATCH' });
+                    await apiFetch(`${API_URL}/AccountingKey/enable/${accountingKey.id}?user_id=${userId}`, { method: 'PATCH' });
                 }
                 onSaved();
             } else {
@@ -950,7 +951,7 @@ function GlobalEditAccountingKeyDialog({ open, onClose, accountingKey, userId, i
     const handleDisable = async () => {
         setDisabling(true);
         try {
-            const resp = await fetch(`${API_URL}/AccountingKey/delete/${accountingKey.id}?user_id=${userId}`, { method: 'DELETE' });
+            const resp = await apiFetch(`${API_URL}/AccountingKey/delete/${accountingKey.id}?user_id=${userId}`, { method: 'DELETE' });
             if (resp.ok) { setConfirmDisable(false); onSaved(); }
             else { const data = await resp.json(); setError(data.detail || 'Villa.'); setConfirmDisable(false); }
         } catch {
@@ -1044,8 +1045,8 @@ function GlobalCategoryRulesPanel({ user }) {
         if (!user?.id) return;
         setLoading(true);
         Promise.all([
-            fetch(`${API_URL}/CategoryRule/${user.id}`).then(r => r.ok ? r.json() : null),
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
+            apiFetch(`${API_URL}/CategoryRule/${user.id}`).then(r => r.ok ? r.json() : null),
+            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
         ]).then(([rulesData, cats]) => {
             if (rulesData) setRules(rulesData.global_rules || []);
             setCategories(cats || []);
@@ -1061,11 +1062,11 @@ function GlobalCategoryRulesPanel({ user }) {
         setSaving(true); setSaveError('');
         try {
             const resp = editRule
-                ? await fetch(`${API_URL}/CategoryRule/update/${editRule.id}`, {
+                ? await apiFetch(`${API_URL}/CategoryRule/update/${editRule.id}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
                 })
-                : await fetch(`${API_URL}/CategoryRule`, {
+                : await apiFetch(`${API_URL}/CategoryRule`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: true }),
                 });
@@ -1079,7 +1080,7 @@ function GlobalCategoryRulesPanel({ user }) {
         if (!deleteRule) return;
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}`, {
+            const resp = await apiFetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}`, {
                 method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),
             });
