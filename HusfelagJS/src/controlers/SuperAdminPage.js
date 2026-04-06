@@ -127,8 +127,8 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                 return;
             }
             setPreview(data);
-            // Pre-select the first prokuruhafi if there is exactly one
-            if (data.prokuruhafar?.length === 1) {
+            // Pre-select the first prokuruhafi if exactly one and not already registered
+            if (!data.already_registered && data.prokuruhafar?.length === 1) {
                 setChairSelection(data.prokuruhafar[0].national_id);
             }
         } catch {
@@ -142,7 +142,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
         ? customChairSsn.replace(/-/g, '')
         : chairSelection;
 
-    const canCreate = !!preview && !!effectiveChairSsn && effectiveChairSsn.length === 10 && !saving;
+    const canCreate = !!preview && !preview.already_registered && !!effectiveChairSsn && effectiveChairSsn.length === 10 && !saving;
 
     const handleCreate = async () => {
         setSaveError(''); setSaving(true);
@@ -171,7 +171,11 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     return (
         <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
             <DialogTitle>Stofna húsfélag</DialogTitle>
-            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important', overflow: 'visible' }}>
+
+                <Typography variant="body2" color="text.secondary">
+                    Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja (Skattur Cloud).
+                </Typography>
 
                 {/* Step 1 — Association SSN + lookup */}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
@@ -179,12 +183,12 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                         label="Kennitala húsfélags"
                         value={assocSsn}
                         onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); setPreview(null); }}
-                        size="small" fullWidth autoFocus
+                        size="small" sx={{ flex: 1 }} autoFocus
                         placeholder="000000-0000"
                     />
                     <Button
                         variant="outlined"
-                        sx={{ whiteSpace: 'nowrap', height: 40, mt: 0.25 }}
+                        sx={{ whiteSpace: 'nowrap', height: 40, mt: 0.25, flexShrink: 0 }}
                         disabled={assocSsn.replace(/-/g,'').length !== 10 || looking}
                         onClick={handleLookup}
                     >
@@ -199,6 +203,11 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                     <>
                         <Divider />
 
+                        {/* Already registered warning */}
+                        {preview.already_registered && (
+                            <Alert severity="warning">Þetta húsfélag er þegar skráð í kerfið.</Alert>
+                        )}
+
                         {/* Association details */}
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                             <Typography variant="subtitle2" fontWeight={600}>{preview.name}</Typography>
@@ -210,10 +219,10 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                             )}
                         </Box>
 
-                        <Divider />
+                        {!preview.already_registered && <Divider />}
 
-                        {/* Chair selection */}
-                        <Box>
+                        {/* Chair selection — only when not already registered */}
+                        {!preview.already_registered && <Box>
                             <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                 Formaður
                             </Typography>

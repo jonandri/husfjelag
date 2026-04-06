@@ -298,8 +298,7 @@ class AssociationVerifyView(APIView):
 
         user = request.user
 
-        if Association.objects.filter(ssn=ssn).exists():
-            return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+        already_registered = Association.objects.filter(ssn=ssn).exists()
 
         entity = fetch_legal_entity(ssn)
         if entity is None:
@@ -316,6 +315,7 @@ class AssociationVerifyView(APIView):
             **fields,
             "prokuruhafar": prokuruhafar,
             "authorized": authorized,
+            "already_registered": already_registered,
         })
 
 
