@@ -9,6 +9,7 @@ import {
     MenuItem, Select, FormControl, InputLabel,
     DialogContentText,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -43,6 +44,7 @@ const keyTypeLabel = (type) => ACCOUNTING_KEY_TYPES.find(t => t.value === type)?
 function SuperAdminPage() {
     const navigate = useNavigate();
     const { user, setCurrentAssociation } = React.useContext(UserContext);
+    const [createOpen, setCreateOpen] = useState(false);
 
     React.useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -55,15 +57,20 @@ function SuperAdminPage() {
         <div className="dashboard">
             <SideBar />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="h5">Kerfisstjóri</Typography>
+                    <Button
+                        variant="contained"
+                        sx={primaryButtonSx}
+                        startIcon={<AddIcon />}
+                        onClick={() => setCreateOpen(true)}
+                    >
+                        Stofna húsfélag
+                    </Button>
                 </Box>
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
                     <Grid container spacing={4}>
-                        <Grid item xs={12} md={6}>
-                            <CreateAssociationPanel user={user} onCreated={(assoc) => setCurrentAssociation(assoc)} />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid item xs={12}>
                             <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
                         </Grid>
                         <Grid item xs={12}>
@@ -78,14 +85,19 @@ function SuperAdminPage() {
                     </Grid>
                 </Box>
             </Box>
+            <CreateAssociationDialog
+                open={createOpen}
+                onClose={() => setCreateOpen(false)}
+                user={user}
+                onCreated={(assoc) => { setCurrentAssociation(assoc); setCreateOpen(false); navigate('/husfelag'); }}
+            />
         </div>
     );
 }
 
 const HOUSING_ISAT = '94.99.1';
 
-function CreateAssociationPanel({ user, onCreated }) {
-    const navigate = useNavigate();
+function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     const [assocSsn, setAssocSsn] = useState('');
     const [chairSsn, setChairSsn] = useState('');
     const [looking, setLooking] = useState(false);
@@ -95,7 +107,14 @@ function CreateAssociationPanel({ user, onCreated }) {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
-    const [success, setSuccess] = useState(null);
+
+    const reset = () => {
+        setAssocSsn(''); setChairSsn(''); setPreview(null);
+        setLookupError(''); setSaveError('');
+        setIsatWarningOpen(false); setConfirmOpen(false);
+    };
+
+    const handleClose = () => { reset(); onClose(); };
 
     const handleLookup = async () => {
         setLookupError(''); setPreview(null);
@@ -125,18 +144,15 @@ function CreateAssociationPanel({ user, onCreated }) {
         try {
             const resp = await apiFetch(`${API_URL}/admin/Association`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    admin_user_id: user.id,
                     association_ssn: assocSsn.replace(/-/g, ''),
                     chair_ssn: chairSsn.replace(/-/g, ''),
                 }),
             });
             const data = await resp.json();
             if (resp.ok) {
-                setConfirmOpen(false);
-                setSuccess(data);
-                setAssocSsn(''); setChairSsn(''); setPreview(null);
+                reset();
+                onCreated(data);
             } else {
                 setSaveError(data.detail || 'Villa við stofnun.');
             }
@@ -148,47 +164,44 @@ function CreateAssociationPanel({ user, onCreated }) {
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>Stofna húsfélag</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Upplýsingar húsfélags eru sóttar sjálfkrafa á skatturinn.is.
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <TextField
-                    label="Kennitala húsfélags"
-                    value={assocSsn}
-                    onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); }}
-                    size="small" fullWidth
-                    placeholder="000000-0000"
-                />
-                <TextField
-                    label="Kennitala formanns"
-                    value={chairSsn}
-                    onChange={e => setChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
-                    size="small" fullWidth
-                    placeholder="000000-0000"
-                />
-                {lookupError && <Alert severity="error">{lookupError}</Alert>}
-                {success && (
-                    <Alert severity="success" action={
-                        <Button size="small" onClick={() => { onCreated(success); navigate('/husfelag'); }}>
-                            Fara á síðu
-                        </Button>
-                    }>
-                        {success.name} stofnað.
-                    </Alert>
-                )}
-                <Button
-                    variant="contained" sx={primaryButtonSx}
-                    disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || looking}
-                    onClick={handleLookup}
-                >
-                    {looking ? <CircularProgress size={18} color="inherit" /> : 'Fletta upp og stofna'}
-                </Button>
-            </Box>
+        <>
+            {/* Entry dialog — SSN inputs */}
+            <Dialog open={open && !confirmOpen && !isatWarningOpen} onClose={handleClose} maxWidth="xs" fullWidth>
+                <DialogTitle>Stofna húsfélag</DialogTitle>
+                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                        Upplýsingar húsfélags eru sóttar sjálfkrafa á skatturinn.is.
+                    </Typography>
+                    <TextField
+                        label="Kennitala húsfélags"
+                        value={assocSsn}
+                        onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); }}
+                        size="small" fullWidth autoFocus
+                        placeholder="000000-0000"
+                    />
+                    <TextField
+                        label="Kennitala formanns"
+                        value={chairSsn}
+                        onChange={e => setChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
+                        size="small" fullWidth
+                        placeholder="000000-0000"
+                    />
+                    {lookupError && <Alert severity="error">{lookupError}</Alert>}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, pb: 2 }}>
+                    <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
+                    <Button
+                        variant="contained" sx={primaryButtonSx}
+                        disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || looking}
+                        onClick={handleLookup}
+                    >
+                        {looking ? <CircularProgress size={18} color="inherit" /> : 'Fletta upp'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
-            {/* ÍSAT warning — shown before confirmation if code is unexpected */}
-            <Dialog open={isatWarningOpen} onClose={() => setIsatWarningOpen(false)} maxWidth="xs" fullWidth>
+            {/* ÍSAT warning */}
+            <Dialog open={isatWarningOpen} onClose={handleClose} maxWidth="xs" fullWidth>
                 <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <WarningAmberIcon color="warning" /> ÍSAT flokkur er ekki rétt
                 </DialogTitle>
@@ -204,7 +217,7 @@ function CreateAssociationPanel({ user, onCreated }) {
                     </Typography>
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button sx={ghostButtonSx} onClick={() => setIsatWarningOpen(false)}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
                     <Button
                         variant="contained" color="warning"
                         onClick={() => { setIsatWarningOpen(false); setConfirmOpen(true); }}
@@ -214,7 +227,8 @@ function CreateAssociationPanel({ user, onCreated }) {
                 </DialogActions>
             </Dialog>
 
-            <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="sm" fullWidth>
+            {/* Confirmation dialog */}
+            <Dialog open={confirmOpen} onClose={handleClose} maxWidth="sm" fullWidth>
                 <DialogTitle>Staðfesta stofnun húsfélags</DialogTitle>
                 <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -230,7 +244,7 @@ function CreateAssociationPanel({ user, onCreated }) {
                     {saveError && <Alert severity="error">{saveError}</Alert>}
                 </DialogContent>
                 <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button sx={ghostButtonSx} onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Hætta við</Button>
+                    <Button sx={ghostButtonSx} onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Til baka</Button>
                     <Button
                         variant="contained" sx={primaryButtonSx}
                         onClick={handleCreate}
@@ -240,7 +254,7 @@ function CreateAssociationPanel({ user, onCreated }) {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Paper>
+        </>
     );
 }
 
