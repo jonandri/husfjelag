@@ -44,6 +44,7 @@ function BudgetPage() {
         try {
             const resp = await apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`);
             if (resp.ok) setBudget(await resp.json());
+            else if (resp.status === 404) setBudget(null);  // no budget yet — show empty state
             else { setError('Villa við að sækja áætlun.'); setBudget(null); }
         } catch {
             setError('Tenging við þjón mistókst.');
@@ -103,7 +104,16 @@ function BudgetPage() {
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    {!budget ? null : budget.items.length === 0 ? (
+                    {budget === null && !error && (
+                        <Box sx={{ mt: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <Typography color="text.secondary">Engin áætlun hefur verið stofnuð.</Typography>
+                            <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
+                                Stofna áætlun
+                            </Button>
+                        </Box>
+                    )}
+
+                    {budget && (budget.items.length === 0 ? (
                         <Typography color="text.secondary" sx={{ mt: 4 }}>
                             Áætlun er til en engir flokkar eru skráðir.
                         </Typography>
@@ -137,7 +147,7 @@ function BudgetPage() {
                                 </TableFooter>
                             </Table>
                         </Paper>
-                    )}
+                    ))}
                 </Box>
             </Box>
         </div>
