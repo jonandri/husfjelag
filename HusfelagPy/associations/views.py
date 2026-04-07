@@ -1569,7 +1569,7 @@ class BudgetView(APIView):
         """GET /Budget/{user_id} — Return the active budget for the current year, or null if none."""
         association = self._get_association(user_id, request)
         if not association:
-            return Response(None, status=status.HTTP_200_OK)
+            return Response({"detail": "Húsfélag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
         err = _require_chair_or_cfo(request, association)
         if err:
             return err
@@ -1580,7 +1580,7 @@ class BudgetView(APIView):
         ).prefetch_related("items__category").first()
 
         if not budget:
-            return Response(None, status=status.HTTP_200_OK)
+            return Response({"detail": "Engin áætlun fyrir þetta ár."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(BudgetSerializer(budget).data)
 
