@@ -93,6 +93,13 @@ function AssociationPage() {
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button
+                            variant="contained"
+                            sx={primaryButtonSx}
+                            onClick={() => navigate('/ibudir/innflutningur')}
+                        >
+                            + Bæta við íbúðum
+                        </Button>
                         <Tooltip title="Hjálp">
                             <IconButton size="small" onClick={() => openHelp('husfelag')}>
                                 <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
