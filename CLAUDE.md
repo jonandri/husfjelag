@@ -73,7 +73,14 @@ HusfelagPy/
 - `User` — Kennitala (unique, 10 digits), Name, Email, Phone, is_superadmin. Has `is_authenticated = True` property (required by DRF).
 - `AssociationAccess` — links User ↔ Association with Role (CHAIR/CFO/MEMBER) and Active flag
 - `Association` — SSN, Name, Address, PostalCode, City
-- `Apartment` — belongs to Association; tracks share percentages (share, share_2, share_3, share_eq)
+- `Apartment` — belongs to Association; tracks share percentages:
+  - `share` → SHARED budget type (Sameiginlegt — general shared costs)
+  - `share_2` → SHARE2 budget type (Hiti — heating)
+  - `share_3` → SHARE3 budget type (Lóð — lot/ground)
+  - `share_eq` → EQUAL budget type (Jafnskipt — equal split, auto-recalculated by `_recalc_share_eq()`)
+  - All shares must sum to 100% per type across all active apartments before a Collection can be generated
+  - HMS import sets `anr`, `fnr`, `size` only — `share`, `share_2`, `share_3` must be entered manually; `share_eq` is auto-set after import
+- `Association` — SSN, Name, Address, PostalCode, City, date_of_board_change, registered, status (last three from Skattur Cloud)
 - `ApartmentOwnership` — links User ↔ Apartment with share and is_payer flag
 
 ### Authentication & Security
@@ -144,6 +151,19 @@ Note: components live in `src/controlers/` (intentional misspelling).
 - **Frontend** → Vercel (set `REACT_APP_API_URL` to production API URL)
 - **Backend** → Digital Ocean or GCP (set `DJANGO_ENV=production` + all env vars from `.env.example`)
 - **Database** → PostgreSQL (managed DB on Digital Ocean or Cloud SQL on GCP)
+
+## Key Backend Patterns
+
+**Never use `Response(None)`** — DRF renders it as an empty byte string `b''`, not JSON `null`. `resp.json()` on the frontend then throws `SyntaxError`. Use `Response({"detail": "..."}, status=HTTP_404_NOT_FOUND)` instead.
+
+**Skattur Cloud API** (`associations/skattur_cloud.py`) — Icelandic company registry. Key functions:
+- `fetch_legal_entity(kennitala)` → raw entity dict or None
+- `extract_prokuruhafar(entity)` → list of `{"national_id", "name"}` for Prókúruhafi relationships
+- `parse_entity_for_association(ssn, entity)` → dict ready to create/update an Association (prefers Póstfang address, falls back to Lögheimilisfang)
+- Requires `SKATTUR_CLOUD_API_KEY` in `.env`
+
+**Management commands:**
+- `poetry run python3 manage.py delete_association <id>` — cascading delete of an association and all related data (prompts for name confirmation)
 
 ## Icelandic Domain Notes
 
