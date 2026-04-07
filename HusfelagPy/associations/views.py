@@ -1569,7 +1569,7 @@ class BudgetView(APIView):
         """GET /Budget/{user_id} — Return the active budget for the current year, or null if none."""
         association = self._get_association(user_id, request)
         if not association:
-            return Response({"detail": "Húsfélag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Húsfélag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
         err = _require_chair_or_cfo(request, association)
         if err:
             return err
@@ -2322,6 +2322,9 @@ class ApartmentImportConfirmView(APIView):
                     stadfang_id=stadfang_id,
                     defaults={"url": url, "landeign_id": landeign_id},
                 )
+
+        # Recalculate equal share for all active apartments
+        _recalc_share_eq(association)
 
         # Return updated apartment list
         apartments = association.apartments.filter(deleted=False)
