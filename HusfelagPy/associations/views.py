@@ -298,8 +298,7 @@ class AssociationVerifyView(APIView):
 
         user = request.user
 
-        if Association.objects.filter(ssn=ssn).exists():
-            return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
+        already_registered = Association.objects.filter(ssn=ssn).exists()
 
         entity = fetch_legal_entity(ssn)
         if entity is None:
@@ -316,6 +315,7 @@ class AssociationVerifyView(APIView):
             **fields,
             "prokuruhafar": prokuruhafar,
             "authorized": authorized,
+            "already_registered": already_registered,
         })
 
 
@@ -1569,7 +1569,7 @@ class BudgetView(APIView):
         """GET /Budget/{user_id} — Return the active budget for the current year, or null if none."""
         association = self._get_association(user_id, request)
         if not association:
-            return Response(None, status=status.HTTP_200_OK)
+            return Response({"detail": "Húsfélag fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
         err = _require_chair_or_cfo(request, association)
         if err:
             return err
@@ -1580,7 +1580,7 @@ class BudgetView(APIView):
         ).prefetch_related("items__category").first()
 
         if not budget:
-            return Response(None, status=status.HTTP_200_OK)
+            return Response({"detail": "Engin áætlun fyrir þetta ár."}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(BudgetSerializer(budget).data)
 
@@ -1870,6 +1870,40 @@ class CollectionGenerateView(APIView):
         apartments = association.apartments.filter(deleted=False).prefetch_related(
             "ownerships__user"
         ).order_by("anr")
+
+        # Validate share totals — only check types that have a non-zero budget amount
+        TYPE_SHARE_FIELD = {
+            "SHARED": ("share",    "Sameiginlegt"),
+            "SHARE2": ("share_2",  "Hiti"),
+            "SHARE3": ("share_3",  "Lóð"),
+            "EQUAL":  ("share_eq", "Jafnskipt"),
+        }
+        agg = apartments.aggregate(
+            s=django_models.Sum("share"),
+            s2=django_models.Sum("share_2"),
+            s3=django_models.Sum("share_3"),
+            seq=django_models.Sum("share_eq"),
+        )
+        share_sums = {
+            "SHARED": agg["s"]   or Decimal("0"),
+            "SHARE2": agg["s2"]  or Decimal("0"),
+            "SHARE3": agg["s3"]  or Decimal("0"),
+            "EQUAL":  agg["seq"] or Decimal("0"),
+        }
+        errors = []
+        for type_key, (_, label) in TYPE_SHARE_FIELD.items():
+            if totals[type_key] > 0:
+                total_share = share_sums[type_key].quantize(Decimal("0.01"))
+                if abs(total_share - Decimal("100")) > Decimal("0.5"):
+                    errors.append(
+                        f"{label}: hlutfallssamtala er {total_share}% (ætti að vera 100%)"
+                    )
+        if errors:
+            return Response(
+                {"detail": "Hlutföll íbúða eru ekki rétt stillt — leiðrétta þarf áður en innheimta er búin til.",
+                 "errors": errors},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         created = 0
         skipped = 0
@@ -2322,6 +2356,9 @@ class ApartmentImportConfirmView(APIView):
                     stadfang_id=stadfang_id,
                     defaults={"url": url, "landeign_id": landeign_id},
                 )
+
+        # Recalculate equal share for all active apartments
+        _recalc_share_eq(association)
 
         # Return updated apartment list
         apartments = association.apartments.filter(deleted=False)

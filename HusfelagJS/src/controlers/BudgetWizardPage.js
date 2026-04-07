@@ -269,7 +269,7 @@ function Step2({ hasPrevious, categories, amounts, setAmounts, totals, grandTota
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {categories.map(c => (
+                                {categories.filter(c => c.type !== 'INCOME').map(c => (
                                     <TableRow key={c.id}>
                                         <TableCell>{c.name}</TableCell>
                                         <TableCell sx={{ color: TYPE_META[c.type]?.color || 'text.secondary' }}>

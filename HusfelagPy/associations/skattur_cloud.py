@@ -79,9 +79,13 @@ def parse_entity_for_association(ssn: str, entity: dict) -> dict:
         ssn, name, address, postal_code, city,
         date_of_board_change, registered, status
     """
-    # Postal address (Póstfang)
+    # Postal address — prefer Póstfang, fall back to Lögheimilisfang
+    addresses = entity.get("Addresses", [])
     address_entry = next(
-        (a for a in entity.get("Addresses", []) if a.get("Type") == "Póstfang"),
+        (a for a in addresses if a.get("Type") == "Póstfang"),
+        None,
+    ) or next(
+        (a for a in addresses if a.get("Type") == "Lögheimilisfang"),
         {},
     )
     address = address_entry.get("AddressName", "")

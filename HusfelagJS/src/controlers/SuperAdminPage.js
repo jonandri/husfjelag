@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, Paper, TextField, Button,
+    Box, Typography, Paper, TextField, Button, Divider,
     CircularProgress, Alert, Grid,
     Dialog, DialogTitle, DialogContent, DialogActions,
     Table, TableHead, TableRow, TableCell, TableBody,
     Collapse, IconButton, Tooltip,
     MenuItem, Select, FormControl, InputLabel,
+    RadioGroup, FormControlLabel, Radio,
     DialogContentText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -94,25 +95,28 @@ function SuperAdminPage() {
     );
 }
 
+// 'custom' means the user typed a different kennitala manually
+const CUSTOM_CHAIR = '__custom__';
+
 function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     const [assocSsn, setAssocSsn] = useState('');
-    const [chairSsn, setChairSsn] = useState('');
     const [looking, setLooking] = useState(false);
     const [lookupError, setLookupError] = useState('');
-    const [preview, setPreview] = useState(null);
-    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [preview, setPreview] = useState(null);       // verify response
+    const [chairSelection, setChairSelection] = useState(''); // national_id of selected prokuruhafi, or CUSTOM_CHAIR
+    const [customChairSsn, setCustomChairSsn] = useState('');
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
 
     const reset = () => {
-        setAssocSsn(''); setChairSsn(''); setPreview(null);
-        setLookupError(''); setSaveError(''); setConfirmOpen(false);
+        setAssocSsn(''); setPreview(null); setLookupError('');
+        setChairSelection(''); setCustomChairSsn(''); setSaveError('');
     };
 
     const handleClose = () => { reset(); onClose(); };
 
     const handleLookup = async () => {
-        setLookupError(''); setPreview(null);
+        setLookupError(''); setPreview(null); setChairSelection(''); setCustomChairSsn('');
         setLooking(true);
         try {
             const ssn = assocSsn.replace(/-/g, '');
@@ -123,13 +127,22 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                 return;
             }
             setPreview(data);
-            setConfirmOpen(true);
+            // Pre-select the first prokuruhafi if exactly one and not already registered
+            if (!data.already_registered && data.prokuruhafar?.length === 1) {
+                setChairSelection(data.prokuruhafar[0].national_id);
+            }
         } catch {
             setLookupError('Tenging við þjón mistókst.');
         } finally {
             setLooking(false);
         }
     };
+
+    const effectiveChairSsn = chairSelection === CUSTOM_CHAIR
+        ? customChairSsn.replace(/-/g, '')
+        : chairSelection;
+
+    const canCreate = !!preview && !preview.already_registered && !!effectiveChairSsn && effectiveChairSsn.length === 10 && !saving;
 
     const handleCreate = async () => {
         setSaveError(''); setSaving(true);
@@ -138,7 +151,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                 method: 'POST',
                 body: JSON.stringify({
                     association_ssn: assocSsn.replace(/-/g, ''),
-                    chair_ssn: chairSsn.replace(/-/g, ''),
+                    chair_ssn: effectiveChairSsn,
                 }),
             });
             const data = await resp.json();
@@ -156,83 +169,142 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
     };
 
     return (
-        <>
-            {/* Entry dialog — SSN inputs */}
-            <Dialog open={open && !confirmOpen} onClose={handleClose} maxWidth="xs" fullWidth>
-                <DialogTitle>Stofna húsfélag</DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                        Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja.
-                    </Typography>
-                    <TextField
-                        label="Kennitala húsfélags"
-                        value={assocSsn}
-                        onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); }}
-                        size="small" fullWidth autoFocus
-                        placeholder="000000-0000"
-                    />
-                    <TextField
-                        label="Kennitala formanns"
-                        value={chairSsn}
-                        onChange={e => setChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
-                        size="small" fullWidth
-                        placeholder="000000-0000"
-                    />
-                    {lookupError && <Alert severity="error">{lookupError}</Alert>}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
+        <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+            <DialogTitle>Stofna húsfélag</DialogTitle>
+            <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
+
+                <Typography variant="body2" color="text.secondary">
+                    Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja (Skattur Cloud).
+                </Typography>
+
+                {/* Step 1 — Association SSN + lookup */}
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <TextField
+                            label="Kennitala húsfélags"
+                            value={assocSsn}
+                            onChange={e => { setAssocSsn(e.target.value.replace(/[^0-9-]/g, '')); setLookupError(''); setPreview(null); }}
+                            size="small" fullWidth autoFocus
+                            placeholder="000000-0000"
+                        />
+                    </Box>
                     <Button
-                        variant="contained" sx={primaryButtonSx}
-                        disabled={assocSsn.replace(/-/g,'').length !== 10 || chairSsn.replace(/-/g,'').length !== 10 || looking}
+                        variant="contained"
+                        sx={{ ...secondaryButtonSx, whiteSpace: 'nowrap', flexShrink: 0, mt: 0.25 }}
+                        disabled={assocSsn.replace(/-/g,'').length !== 10 || looking}
                         onClick={handleLookup}
                     >
-                        {looking ? <CircularProgress size={18} color="inherit" /> : 'Fletta upp'}
+                        {looking ? <CircularProgress size={16} color="inherit" /> : 'Fletta upp'}
                     </Button>
-                </DialogActions>
-            </Dialog>
+                </Box>
 
-            {/* Confirmation dialog */}
-            <Dialog open={confirmOpen} onClose={handleClose} maxWidth="sm" fullWidth>
-                <DialogTitle>Staðfesta stofnun húsfélags</DialogTitle>
-                <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <InfoRow label="Nafn" value={preview?.name} />
-                        <InfoRow label="Kennitala" value={fmtKennitala(preview?.ssn)} />
-                        <InfoRow label="Heimilisfang" value={preview?.address} />
-                        <InfoRow label="Póstnúmer / Staður" value={preview ? `${preview.postal_code} ${preview.city}` : ''} />
-                        {preview?.status && <InfoRow label="Staða" value={preview.status} />}
-                        {preview?.registered && <InfoRow label="Skráð" value={preview.registered} />}
-                        {preview?.date_of_board_change && <InfoRow label="Stjórnarbreyting" value={preview.date_of_board_change} />}
-                    </Box>
-                    {preview?.prokuruhafar?.length > 0 && (
+                {lookupError && <Alert severity="error">{lookupError}</Alert>}
+
+                {/* Step 2 — Association info + chair selection */}
+                {preview && (
+                    <>
+                        <Divider />
+
+                        {/* Already registered warning */}
+                        {preview.already_registered && (
+                            <Alert severity="warning">Þetta húsfélag er þegar skráð í kerfið.</Alert>
+                        )}
+
+                        {/* Association details */}
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Typography variant="subtitle2" fontWeight={600}>{preview.name}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {preview.address}, {preview.postal_code} {preview.city}
+                            </Typography>
+                            {preview.status && (
+                                <Typography variant="body2" color="text.secondary">Staða: {preview.status}</Typography>
+                            )}
+                        </Box>
+
+                        <Divider />
+
+                        {/* Prókúruhafar — always shown */}
                         <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                                 Prókúruhafar
                             </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                                {preview.prokuruhafar.map(p => (
-                                    <Typography key={p.national_id} variant="body2">
-                                        {p.name} — {fmtKennitala(p.national_id)}
-                                    </Typography>
-                                ))}
-                            </Box>
+                            {preview.prokuruhafar?.length > 0 ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                                    {preview.prokuruhafar.map(p => (
+                                        <Typography key={p.national_id} variant="body2">
+                                            {p.name} — {fmtKennitala(p.national_id)}
+                                        </Typography>
+                                    ))}
+                                </Box>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary">Engir prókúruhafar skráðir.</Typography>
+                            )}
                         </Box>
-                    )}
-                    {saveError && <Alert severity="error">{saveError}</Alert>}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, pb: 2 }}>
-                    <Button sx={ghostButtonSx} onClick={() => { setConfirmOpen(false); setSaveError(''); }}>Til baka</Button>
+
+                        {/* Chair selection — only when not already registered */}
+                        {!preview.already_registered && <>
+                            <Divider />
+                            <Box>
+                                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+                                    Formaður
+                                </Typography>
+                                <RadioGroup
+                                    value={chairSelection}
+                                    onChange={e => setChairSelection(e.target.value)}
+                                >
+                                    {preview.prokuruhafar?.map(p => (
+                                        <FormControlLabel
+                                            key={p.national_id}
+                                            value={p.national_id}
+                                            control={<Radio size="small" />}
+                                            label={
+                                                <Box>
+                                                    <Typography variant="body2">{p.name}</Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {fmtKennitala(p.national_id)}
+                                                    </Typography>
+                                                </Box>
+                                            }
+                                            sx={{ mb: 0.5 }}
+                                        />
+                                    ))}
+                                    <FormControlLabel
+                                        value={CUSTOM_CHAIR}
+                                        control={<Radio size="small" />}
+                                        label="Skrá aðra kennitölu"
+                                    />
+                                </RadioGroup>
+                                {chairSelection === CUSTOM_CHAIR && (
+                                    <TextField
+                                        label="Kennitala formanns"
+                                        value={customChairSsn}
+                                        onChange={e => setCustomChairSsn(e.target.value.replace(/[^0-9-]/g, ''))}
+                                        size="small"
+                                        placeholder="000000-0000"
+                                        sx={{ mt: 1, ml: 4, width: 220 }}
+                                        autoFocus
+                                    />
+                                )}
+                            </Box>
+                        </>}
+
+                        {saveError && <Alert severity="error">{saveError}</Alert>}
+                    </>
+                )}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
+                {preview && (
                     <Button
                         variant="contained" sx={primaryButtonSx}
                         onClick={handleCreate}
-                        disabled={saving}
+                        disabled={!canCreate}
                     >
                         {saving ? <CircularProgress size={18} color="inherit" /> : 'Stofna'}
                     </Button>
-                </DialogActions>
-            </Dialog>
-        </>
+                )}
+            </DialogActions>
+        </Dialog>
     );
 }
 
