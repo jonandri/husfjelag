@@ -1871,6 +1871,40 @@ class CollectionGenerateView(APIView):
             "ownerships__user"
         ).order_by("anr")
 
+        # Validate share totals — only check types that have a non-zero budget amount
+        TYPE_SHARE_FIELD = {
+            "SHARED": ("share",    "Sameiginlegt"),
+            "SHARE2": ("share_2",  "Hiti"),
+            "SHARE3": ("share_3",  "Lóð"),
+            "EQUAL":  ("share_eq", "Jafnskipt"),
+        }
+        agg = apartments.aggregate(
+            s=django_models.Sum("share"),
+            s2=django_models.Sum("share_2"),
+            s3=django_models.Sum("share_3"),
+            seq=django_models.Sum("share_eq"),
+        )
+        share_sums = {
+            "SHARED": agg["s"]   or Decimal("0"),
+            "SHARE2": agg["s2"]  or Decimal("0"),
+            "SHARE3": agg["s3"]  or Decimal("0"),
+            "EQUAL":  agg["seq"] or Decimal("0"),
+        }
+        errors = []
+        for type_key, (_, label) in TYPE_SHARE_FIELD.items():
+            if totals[type_key] > 0:
+                total_share = share_sums[type_key].quantize(Decimal("0.01"))
+                if abs(total_share - Decimal("100")) > Decimal("0.5"):
+                    errors.append(
+                        f"{label}: hlutfallssamtala er {total_share}% (ætti að vera 100%)"
+                    )
+        if errors:
+            return Response(
+                {"detail": "Hlutföll íbúða eru ekki rétt stillt — leiðrétta þarf áður en innheimta er búin til.",
+                 "errors": errors},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         created = 0
         skipped = 0
         for apt in apartments:
