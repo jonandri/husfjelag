@@ -68,7 +68,11 @@ function CollectionPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, month, year }),
         })
-            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(r => r.ok ? r.json() : r.json().then(d => {
+                const msg = d.detail || 'Villa';
+                const details = d.errors?.length ? '\n' + d.errors.join('\n') : '';
+                return Promise.reject(msg + details);
+            }))
             .then(() => load())
             .catch(err => setError(typeof err === 'string' ? err : 'Villa við að búa til innheimtu.'))
             .finally(() => setGenerating(false));
@@ -170,7 +174,7 @@ function CollectionPage() {
                         }}
                     />
 
-                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{error}</Alert>}
                     {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
 
                     {/* Collection items table */}
