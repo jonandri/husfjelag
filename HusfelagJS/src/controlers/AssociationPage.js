@@ -96,10 +96,19 @@ function AssociationPage() {
                         <Button
                             variant="contained"
                             sx={primaryButtonSx}
-                            onClick={() => navigate('/ibudir/innflutningur')}
+                            onClick={() => navigate('/eigendur')}
                         >
-                            + Bæta við íbúðum
+                            + Bæta við eiganda
                         </Button>
+                        {association.apartment_count === 0 && (
+                            <Button
+                                variant="contained"
+                                sx={primaryButtonSx}
+                                onClick={() => navigate('/ibudir/innflutningur')}
+                            >
+                                + Bæta við íbúðum
+                            </Button>
+                        )}
                         <Tooltip title="Hjálp">
                             <IconButton size="small" onClick={() => openHelp('husfelag')}>
                                 <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
