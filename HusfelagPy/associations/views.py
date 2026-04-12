@@ -2193,6 +2193,33 @@ class AdminAssociationView(APIView):
         return Response(AssociationAccessSerializer(association, context={"user_id": None}).data, status=status.HTTP_201_CREATED)
 
 
+class AdminStatsView(APIView):
+    def get(self, request):
+        """GET /admin/stats?days=N — System-wide KPIs. Superadmin only.
+        days: window for active users (default 365). 0 = all registered users."""
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            days = int(request.query_params.get("days", 365))
+        except ValueError:
+            days = 365
+
+        if days > 0:
+            cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=days)
+            active_users = User.objects.filter(last_login__gte=cutoff).count()
+        else:
+            active_users = User.objects.count()
+
+        return Response({
+            "active_associations": Association.objects.count(),
+            "active_apartments": Apartment.objects.filter(deleted=False).count(),
+            "active_owners": ApartmentOwnership.objects.filter(deleted=False).values("user").distinct().count(),
+            "active_users": active_users,
+            "days": days,
+        })
+
+
 HMS_URL_RE = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
 
 

@@ -25,6 +25,8 @@ import HomePage from './controlers/HomePage';
 import BankAuthCallback from './controlers/BankAuthCallback';
 import BankSettingsPage from './controlers/BankSettingsPage';
 import BankHealthPage from './controlers/BankHealthPage';
+import AdminCategoriesPage from './controlers/AdminCategoriesPage';
+import AdminAccountingKeysPage from './controlers/AdminAccountingKeysPage';
 import { apiFetch } from './api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -161,6 +163,8 @@ function App() {
             <Route path="/bank/callback" element={<BankAuthCallback />} />
             <Route path="/bank-settings" element={<ProtectedRoute><BankSettingsPage /></ProtectedRoute>} />
             <Route path="/admin/bank-health" element={<ProtectedRoute><BankHealthPage /></ProtectedRoute>} />
+            <Route path="/admin/categories" element={<ProtectedRoute><AdminCategoriesPage /></ProtectedRoute>} />
+            <Route path="/admin/accounting-keys" element={<ProtectedRoute><AdminAccountingKeysPage /></ProtectedRoute>} />
           </Routes>
         </Router> 
       </ThemeProvider>

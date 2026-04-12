@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     AssociationView, AssociationVerifyView, AssociationLookupView, AssociationRoleView, AssociationListView,
-    AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
+    AdminAssociationView, AdminStatsView, ApartmentView, ApartmentOwnerView, OwnerView,
     CategoryView, CategoryListView,
     AccountingKeyListView, AccountingKeyView,
     BankAccountView, TransactionView,
@@ -28,6 +28,7 @@ urlpatterns = [
     path("Association", AssociationView.as_view(), name="association-create"),
     path("Association/roles/<int:user_id>", AssociationRoleView.as_view(), name="association-roles"),
     path("admin/Association", AdminAssociationView.as_view(), name="admin-association"),
+    path("admin/stats", AdminStatsView.as_view(), name="admin-stats"),
     path("Apartment/<int:user_id>", ApartmentView.as_view(), name="apartment-list"),
     path("Apartment", ApartmentView.as_view(), name="apartment-create"),
     path("Apartment/update/<int:apartment_id>", ApartmentView.as_view(), name="apartment-update"),

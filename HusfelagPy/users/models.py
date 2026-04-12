@@ -7,6 +7,7 @@ class User(models.Model):
     email = models.EmailField(blank=True, null=True, default=None)
     phone = models.CharField(max_length=20, blank=True, null=True, default=None)
     is_superadmin = models.BooleanField(default=False)
+    last_login = models.DateTimeField(null=True, blank=True)
 
     # Required by DRF's IsAuthenticated permission check.
     # Always True because unauthenticated requests get AnonymousUser, not a User instance.
