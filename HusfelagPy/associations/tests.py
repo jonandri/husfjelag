@@ -2425,3 +2425,45 @@ class BankOAuthClientTest(TestCase):
             result = pop_oauth_state("state-abc")
         self.assertEqual(result["association_id"], 1)
         self.assertEqual(result["bank"], "LANDSBANKINN")
+
+
+class LandsbankinnClientTest(TestCase):
+    def _settings(self):
+        return dict(
+            BANK_LANDSBANKINN_CLIENT_ID="test-client",
+            BANK_LANDSBANKINN_CLIENT_SECRET="test-secret",
+            BANK_LANDSBANKINN_REDIRECT_URI="http://localhost/bank/callback/landsbankinn",
+            BANK_LANDSBANKINN_AUTH_URL="https://psd2.landsbanki.is/sandbox/oauth2/auth",
+            BANK_LANDSBANKINN_TOKEN_URL="https://psd2.landsbanki.is/sandbox/oauth2/token",
+            BANK_LANDSBANKINN_API_BASE="https://psd2.landsbanki.is/sandbox/v1",
+        )
+
+    def test_get_authorization_url_contains_required_params(self):
+        from django.test.utils import override_settings
+        with override_settings(**self._settings()):
+            from associations.banks.landsbankinn import LandsbankinnProvider
+            provider = LandsbankinnProvider()
+            url = provider.get_authorization_url(state="test-state", code_challenge="test-challenge")
+        self.assertIn("state=test-state", url)
+        self.assertIn("code_challenge=test-challenge", url)
+        self.assertIn("code_challenge_method=S256", url)
+        self.assertIn("client_id=test-client", url)
+        self.assertIn("response_type=code", url)
+
+    @patch("associations.banks.landsbankinn.requests.post")
+    def test_exchange_code_returns_token_dict(self, mock_post):
+        from django.test.utils import override_settings
+        mock_post.return_value.json.return_value = {
+            "access_token": "at-123",
+            "refresh_token": "rt-456",
+            "expires_in": 3600,
+        }
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        with override_settings(**self._settings()):
+            from associations.banks.landsbankinn import LandsbankinnProvider
+            provider = LandsbankinnProvider()
+            result = provider.exchange_code(code="code-xyz", code_verifier="verifier-abc")
+        self.assertEqual(result["access_token"], "at-123")
+        self.assertEqual(result["refresh_token"], "rt-456")
+        self.assertIn("expires_in", result)
