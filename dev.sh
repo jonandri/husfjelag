@@ -3,6 +3,9 @@
 
 trap 'kill 0' EXIT
 
+echo "Running migrations..."
+(cd HusfelagPy && poetry run python manage.py migrate)
+
 echo "Starting backend on http://localhost:8010 ..."
 (cd HusfelagPy && poetry run python manage.py runserver 8010) &
 
