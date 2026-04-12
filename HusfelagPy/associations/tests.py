@@ -2321,3 +2321,51 @@ class CollectionCandidatesViewTest(TestCase):
         )
         resp = self._get(collection_id=no_payer_col.id)
         self.assertEqual(resp.status_code, 400)
+
+
+class BankConsentModelTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567891", name="Banka Húsfélag",
+            address="Bankagata 1", postal_code="101", city="Reykjavík"
+        )
+
+    def test_one_consent_per_association(self):
+        from .models import BankConsent
+        import datetime
+        BankConsent.objects.create(
+            association=self.association,
+            bank="LANDSBANKINN",
+            consent_id="c-001",
+            access_token="tok",
+            token_expires_at=datetime.datetime(2026, 7, 1, tzinfo=datetime.timezone.utc),
+            consent_expires_at=datetime.date(2026, 7, 11),
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            BankConsent.objects.create(
+                association=self.association,
+                bank="ARION",
+                consent_id="c-002",
+                access_token="tok2",
+                token_expires_at=datetime.datetime(2026, 7, 1, tzinfo=datetime.timezone.utc),
+                consent_expires_at=datetime.date(2026, 7, 11),
+            )
+
+    def test_transaction_source_field(self):
+        from .models import TransactionSource, BankAccount
+        from decimal import Decimal
+        import datetime
+        bank_account = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-123456"
+        )
+        tx = Transaction.objects.create(
+            bank_account=bank_account,
+            date=datetime.date(2026, 4, 1),
+            amount=Decimal("1000.00"),
+            description="Test",
+            source=TransactionSource.BANK_SYNC,
+            external_id="ext-001",
+        )
+        self.assertEqual(tx.source, TransactionSource.BANK_SYNC)
+        self.assertEqual(tx.external_id, "ext-001")
