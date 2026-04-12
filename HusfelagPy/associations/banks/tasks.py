@@ -2,6 +2,7 @@ import logging
 from datetime import date, timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.core.mail import send_mail
 from django.utils.timezone import now
 
@@ -32,6 +33,10 @@ def sync_transactions(association_id: int) -> dict:
     except BankConsent.DoesNotExist:
         logger.warning("sync_transactions: no active consent for association %s", association_id)
         return {"skipped": True, "reason": "no_active_consent"}
+
+    if not getattr(settings, f"BANK_{consent.bank}_ENABLED", False):
+        logger.info("sync_transactions: %s integration disabled, skipping", consent.bank)
+        return {"skipped": True, "reason": "bank_disabled"}
 
     provider = _get_provider(consent.bank)
     to_date = date.today()

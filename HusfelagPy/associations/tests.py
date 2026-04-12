@@ -2489,7 +2489,7 @@ class BankTasksTest(TestCase):
         from django.test.utils import override_settings
         from associations.models import BankConsent, TransactionSource
         key = Fernet.generate_key().decode()
-        with override_settings(BANK_FERNET_KEY=key):
+        with override_settings(BANK_FERNET_KEY=key, BANK_LANDSBANKINN_ENABLED=True):
             from associations.banks.consent_store import encrypt_token
             consent = BankConsent.objects.create(
                 association=self.association,
@@ -2527,7 +2527,7 @@ class BankTasksTest(TestCase):
         from django.test.utils import override_settings
         from associations.models import BankConsent, TransactionSource
         key = Fernet.generate_key().decode()
-        with override_settings(BANK_FERNET_KEY=key):
+        with override_settings(BANK_FERNET_KEY=key, BANK_LANDSBANKINN_ENABLED=True):
             from associations.banks.consent_store import encrypt_token
             BankConsent.objects.create(
                 association=self.association,
