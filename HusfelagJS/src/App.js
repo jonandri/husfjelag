@@ -22,6 +22,9 @@ import ReportPage from './controlers/ReportPage';
 import { UserContext } from './controlers/UserContext';
 import { HelpProvider } from './ui/HelpContext';
 import HomePage from './controlers/HomePage';
+import BankAuthCallback from './controlers/BankAuthCallback';
+import BankSettingsPage from './controlers/BankSettingsPage';
+import BankHealthPage from './controlers/BankHealthPage';
 import { apiFetch } from './api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -155,6 +158,9 @@ function App() {
             <Route path="/yfirlit" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
             <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
             <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
+            <Route path="/bank/callback" element={<BankAuthCallback />} />
+            <Route path="/bank-settings" element={<ProtectedRoute><BankSettingsPage /></ProtectedRoute>} />
+            <Route path="/admin/bank-health" element={<ProtectedRoute><BankHealthPage /></ProtectedRoute>} />
           </Routes>
         </Router> 
       </ThemeProvider>
