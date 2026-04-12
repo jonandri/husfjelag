@@ -72,7 +72,7 @@ class BankConnectView(APIView):
 
         provider = _get_provider(bank)
         url = provider.get_authorization_url(state=state, code_challenge=challenge)
-        return HttpResponseRedirect(url)
+        return Response({"redirect_url": url})
 
 
 class BankCallbackView(APIView):

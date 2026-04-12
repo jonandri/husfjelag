@@ -56,7 +56,17 @@ export default function BankSettingsPage() {
   }
 
   async function handleConnect() {
-    window.location.href = `${API_URL}/associations/${assocId}/bank/connect?bank=${selectedBank}`;
+    try {
+      const resp = await apiFetch(`${API_URL}/associations/${assocId}/bank/connect?bank=${selectedBank}`);
+      const data = await resp.json();
+      if (resp.ok && data.redirect_url) {
+        window.location.href = data.redirect_url;
+      } else {
+        setMessage({ type: 'error', text: data.detail || 'Villa við tengingu við banka.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Tenging við þjón mistókst.' });
+    }
   }
 
   async function handleDisconnect() {
