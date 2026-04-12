@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
+    "django_celery_beat",
     "users",
     "associations",
 ]
@@ -97,8 +98,47 @@ KENNI_TOKEN_ENDPOINT = "https://idp.kenni.is/digit.is/oidc/token"
 KENNI_JWKS_URI = "https://idp.kenni.is/digit.is/oidc/jwks"
 KENNI_REDIRECT_URI = env("KENNI_REDIRECT_URI", default="http://localhost:8003/auth/callback")
 
-# Frontend URL (used for post-login redirect)
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3003")
-
 # Skattur Cloud — Icelandic company registry API
 SKATTUR_CLOUD_API_KEY = env("SKATTUR_CLOUD_API_KEY", default="")
+
+# ── Bank integration ──────────────────────────────────────────────────────────
+BANK_FERNET_KEY = env("BANK_FERNET_KEY", default="")
+
+# Feature flags — set to True per bank once sandbox credentials are in place
+BANK_LANDSBANKINN_ENABLED = env.bool("BANK_LANDSBANKINN_ENABLED", default=False)
+BANK_ARION_ENABLED = env.bool("BANK_ARION_ENABLED", default=False)
+BANK_ISLANDSBANKI_ENABLED = env.bool("BANK_ISLANDSBANKI_ENABLED", default=False)
+
+BANK_LANDSBANKINN_CLIENT_ID = env("BANK_LANDSBANKINN_CLIENT_ID", default="")
+BANK_LANDSBANKINN_CLIENT_SECRET = env("BANK_LANDSBANKINN_CLIENT_SECRET", default="")
+BANK_LANDSBANKINN_REDIRECT_URI = env(
+    "BANK_LANDSBANKINN_REDIRECT_URI",
+    default="http://localhost:8000/bank/callback/landsbankinn",
+)
+BANK_LANDSBANKINN_API_BASE = env(
+    "BANK_LANDSBANKINN_API_BASE",
+    default="https://psd2.landsbanki.is/sandbox/v1",
+)
+BANK_LANDSBANKINN_AUTH_URL = env(
+    "BANK_LANDSBANKINN_AUTH_URL",
+    default="https://psd2.landsbanki.is/sandbox/oauth2/auth",
+)
+BANK_LANDSBANKINN_TOKEN_URL = env(
+    "BANK_LANDSBANKINN_TOKEN_URL",
+    default="https://psd2.landsbanki.is/sandbox/oauth2/token",
+)
+
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3010")
+
+# Celery beat — periodic tasks
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    "sync-all-bank-transactions": {
+        "task": "associations.banks.tasks.sync_all_associations",
+        "schedule": crontab(hour=3, minute=0),
+    },
+    "check-consent-expiry": {
+        "task": "associations.banks.tasks.check_consent_expiry",
+        "schedule": crontab(hour=4, minute=0),
+    },
+}

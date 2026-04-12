@@ -130,6 +130,7 @@ function SideBar() {
     const [switcherQ, setSwitcherQ] = useState('');
     const [switcherResults, setSwitcherResults] = useState([]);
     const [switcherSearching, setSwitcherSearching] = useState(false);
+    const [adminOpen, setAdminOpen] = useState(false);
 
     React.useEffect(() => {
         if (!switcherOpen || !user?.id) return;
@@ -234,12 +235,53 @@ function SideBar() {
             {/* Bottom: superadmin + settings + logout */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, pb: 2, pt: 1 }}>
                 {user?.is_superadmin && (
-                    <BottomItem
-                        label="Kerfisstjóri"
-                        icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />}
-                        collapsed={collapsed}
-                        onClick={() => navigate('/superadmin')}
-                    />
+                    <>
+                        <Box
+                            onClick={() => setAdminOpen((v) => !v)}
+                            sx={{
+                                display: 'flex', alignItems: 'center', gap: 1.5,
+                                px: 1.5, py: 0.85, mx: 1, borderRadius: 2, cursor: 'pointer',
+                                backgroundColor: location.pathname.startsWith('/superadmin') || location.pathname.startsWith('/admin')
+                                    ? ACTIVE_BG : 'transparent',
+                                '&:hover': { backgroundColor: HOVER_BG },
+                                transition: 'background-color 0.15s',
+                                justifyContent: collapsed ? 'center' : 'flex-start',
+                                minHeight: 40,
+                            }}
+                        >
+                            <Box sx={{ color: TEXT, display: 'flex', flexShrink: 0 }}>
+                                <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />
+                            </Box>
+                            {!collapsed && (
+                                <Typography sx={{ color: TEXT, fontFamily: '"Inter", sans-serif', fontWeight: 400, fontSize: '0.9rem', flex: 1 }}>
+                                    Kerfisstjórn
+                                </Typography>
+                            )}
+                            {!collapsed && (
+                                <Box sx={{ color: TEXT, fontSize: 16 }}>{adminOpen ? '▲' : '▼'}</Box>
+                            )}
+                        </Box>
+                        {adminOpen && !collapsed && (
+                            <Box sx={{ pl: 2 }}>
+                                <NavItem
+                                    path="/superadmin"
+                                    label="Félög"
+                                    icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/superadmin'}
+                                    onClick={() => navigate('/superadmin')}
+                                />
+                                <NavItem
+                                    path="/admin/bank-health"
+                                    label="Bankaheilsa"
+                                    icon={<AccountBalanceWalletOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/bank-health'}
+                                    onClick={() => navigate('/admin/bank-health')}
+                                />
+                            </Box>
+                        )}
+                    </>
                 )}
                 <BottomItem
                     label="Stillingar"
