@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
+from decimal import Decimal
 from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, BudgetItem, ApartmentOwnership, Collection, CollectionStatus
 from .scraper import scrape_hms_apartments
 import json
@@ -2467,3 +2468,97 @@ class LandsbankinnClientTest(TestCase):
         self.assertEqual(result["access_token"], "at-123")
         self.assertEqual(result["refresh_token"], "rt-456")
         self.assertIn("expires_in", result)
+
+
+class BankTasksTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567892", name="Task Húsfélag",
+            address="Taskgata 1", postal_code="101", city="Reykjavík"
+        )
+        self.bank_account = BankAccount.objects.create(
+            association=self.association,
+            name="Aðalreikningur",
+            account_number="0101-26-999999",
+        )
+
+    @patch("associations.banks.tasks.LandsbankinnProvider")
+    def test_sync_transactions_creates_new_transaction(self, MockProvider):
+        import datetime as dt
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        from associations.models import BankConsent, TransactionSource
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token
+            consent = BankConsent.objects.create(
+                association=self.association,
+                bank="LANDSBANKINN",
+                consent_id="c-tasks-001",
+                access_token=encrypt_token("fake-token"),
+                token_expires_at=dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc),
+                consent_expires_at=dt.date(2026, 7, 11),
+                is_active=True,
+            )
+            mock_instance = MockProvider.return_value
+            mock_instance.get_transactions.return_value = [{
+                "account_id": "0101-26-999999",
+                "external_id": "ext-tx-001",
+                "date": dt.date(2026, 4, 10),
+                "amount": Decimal("5000.00"),
+                "description": "Húsaleiga",
+                "reference": "ref-001",
+            }]
+            mock_instance.get_accounts.return_value = [
+                {"account_id": "0101-26-999999", "iban": "", "name": "Aðalreikningur"}
+            ]
+            from associations.banks.tasks import sync_transactions
+            sync_transactions(self.association.id)
+
+        tx = Transaction.objects.filter(external_id="ext-tx-001").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.source, TransactionSource.BANK_SYNC)
+        self.assertEqual(tx.amount, Decimal("5000.00"))
+
+    @patch("associations.banks.tasks.LandsbankinnProvider")
+    def test_sync_transactions_skips_duplicate(self, MockProvider):
+        import datetime as dt
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        from associations.models import BankConsent, TransactionSource
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token
+            BankConsent.objects.create(
+                association=self.association,
+                bank="LANDSBANKINN",
+                consent_id="c-tasks-002",
+                access_token=encrypt_token("fake-token"),
+                token_expires_at=dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc),
+                consent_expires_at=dt.date(2026, 7, 11),
+                is_active=True,
+            )
+            Transaction.objects.create(
+                bank_account=self.bank_account,
+                date=dt.date(2026, 4, 10),
+                amount=Decimal("5000.00"),
+                description="Already imported",
+                external_id="ext-dup-001",
+                source=TransactionSource.BANK_SYNC,
+            )
+            mock_instance = MockProvider.return_value
+            mock_instance.get_transactions.return_value = [{
+                "account_id": "0101-26-999999",
+                "external_id": "ext-dup-001",
+                "date": dt.date(2026, 4, 10),
+                "amount": Decimal("5000.00"),
+                "description": "Húsaleiga",
+                "reference": "ref-001",
+            }]
+            mock_instance.get_accounts.return_value = [
+                {"account_id": "0101-26-999999", "iban": "", "name": "Aðalreikningur"}
+            ]
+            from associations.banks.tasks import sync_transactions
+            sync_transactions(self.association.id)
+
+        self.assertEqual(Transaction.objects.filter(external_id="ext-dup-001").count(), 1)
