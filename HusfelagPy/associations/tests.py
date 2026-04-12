@@ -2392,3 +2392,36 @@ class BankConsentStoreTest(TestCase):
             enc1 = encrypt_token("token")
             enc2 = encrypt_token("token")
             self.assertNotEqual(enc1, enc2)
+
+
+class BankOAuthClientTest(TestCase):
+    def test_pkce_pair_lengths(self):
+        from associations.banks.oauth_client import generate_pkce_pair
+        verifier, challenge = generate_pkce_pair()
+        self.assertGreaterEqual(len(verifier), 43)
+        self.assertLessEqual(len(verifier), 128)
+        self.assertNotIn("=", challenge)
+        self.assertNotIn("+", challenge)
+        self.assertNotIn("/", challenge)
+
+    def test_pkce_challenge_is_sha256_of_verifier(self):
+        import hashlib, base64
+        from associations.banks.oauth_client import generate_pkce_pair
+        verifier, challenge = generate_pkce_pair()
+        expected = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode()).digest()
+        ).rstrip(b"=").decode()
+        self.assertEqual(challenge, expected)
+
+    def test_store_and_pop_state(self):
+        from unittest.mock import patch
+        from associations.banks.oauth_client import store_oauth_state, pop_oauth_state
+        fake_cache = {}
+        with patch("associations.banks.oauth_client.cache") as mock_cache:
+            mock_cache.set = lambda k, v, timeout: fake_cache.update({k: v})
+            mock_cache.get = lambda k: fake_cache.get(k)
+            mock_cache.delete = lambda k: fake_cache.pop(k, None)
+            store_oauth_state("state-abc", {"association_id": 1, "bank": "LANDSBANKINN", "user_id": 5})
+            result = pop_oauth_state("state-abc")
+        self.assertEqual(result["association_id"], 1)
+        self.assertEqual(result["bank"], "LANDSBANKINN")
