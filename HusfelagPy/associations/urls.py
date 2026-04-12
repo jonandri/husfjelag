@@ -12,6 +12,10 @@ from .views import (
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
     ReportView, AnnualStatementView,
 )
+from .banks.views import (
+    BankConnectView, BankCallbackView, BankStatusView,
+    BankDisconnectView, AdminBankSyncView, AdminBankHealthView,
+)
 
 urlpatterns = [
     path("Apartment/import/sources", ApartmentImportSourcesView.as_view(), name="apartment-import-sources"),
@@ -73,4 +77,11 @@ urlpatterns = [
     path("Collection/<int:user_id>", CollectionView.as_view(), name="collection-list"),
     path("Report/<int:user_id>", ReportView.as_view(), name="report"),
     path("AnnualStatement/<int:user_id>", AnnualStatementView.as_view(), name="annual-statement"),
+    # Bank integration
+    path("associations/<int:association_id>/bank/connect", BankConnectView.as_view(), name="bank-connect"),
+    path("associations/<int:association_id>/bank/status", BankStatusView.as_view(), name="bank-status"),
+    path("associations/<int:association_id>/bank/disconnect", BankDisconnectView.as_view(), name="bank-disconnect"),
+    path("bank/callback/<str:bank>", BankCallbackView.as_view(), name="bank-callback"),
+    path("admin/associations/<int:association_id>/bank/sync", AdminBankSyncView.as_view(), name="admin-bank-sync"),
+    path("admin/bank/health", AdminBankHealthView.as_view(), name="admin-bank-health"),
 ]

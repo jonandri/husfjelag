@@ -2562,3 +2562,43 @@ class BankTasksTest(TestCase):
             sync_transactions(self.association.id)
 
         self.assertEqual(Transaction.objects.filter(external_id="ext-dup-001").count(), 1)
+
+
+class BankViewsTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(
+            kennitala="1234567893", name="Stjórnandi",
+            email="stjorn@test.is", is_superadmin=False
+        )
+        self.association = Association.objects.create(
+            ssn="1234567894", name="View Húsfélag",
+            address="Viewgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role="CHAIR", active=True
+        )
+        from users.oidc import create_access_token
+        self.token = create_access_token(self.user.id)
+
+    def test_bank_status_no_consent_returns_404(self):
+        resp = self.client.get(
+            f"/associations/{self.association.id}/bank/status",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_bank_disconnect_no_consent_returns_404(self):
+        resp = self.client.delete(
+            f"/associations/{self.association.id}/bank/disconnect",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_bank_callback_invalid_state_returns_redirect_with_error(self):
+        resp = self.client.get(
+            "/bank/callback/landsbankinn?code=abc&state=nonexistent-state"
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("status=error", resp["Location"])
