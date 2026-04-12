@@ -14,7 +14,10 @@ export default function BankAuthCallback() {
 
     if (bankStatus === 'ok') {
       setTimeout(() => {
-        navigate(`/bank-settings${assocId ? `?assoc=${assocId}` : ''}?connected=1`);
+        navigate(assocId
+          ? `/bank-settings?assoc=${assocId}&connected=1`
+          : `/bank-settings?connected=1`
+        );
       }, 1200);
     } else {
       setError(reason || 'unknown_error');

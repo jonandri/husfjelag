@@ -184,8 +184,8 @@ class BankDisconnectView(APIView):
             return Response({"detail": "Engin virk bankatengind."}, status=status.HTTP_404_NOT_FOUND)
 
         consent.is_active = False
-        consent.access_token = ""
-        consent.refresh_token = ""
+        consent.access_token = "CLEARED"
+        consent.refresh_token = "CLEARED"
         consent.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
         return Response({"detail": "Bankatengind aftengt."})
 
