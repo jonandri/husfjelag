@@ -2369,3 +2369,26 @@ class BankConsentModelTest(TestCase):
         )
         self.assertEqual(tx.source, TransactionSource.BANK_SYNC)
         self.assertEqual(tx.external_id, "ext-001")
+
+
+class BankConsentStoreTest(TestCase):
+    def test_encrypt_decrypt_round_trip(self):
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token, decrypt_token
+            original = "super-secret-access-token"
+            encrypted = encrypt_token(original)
+            self.assertNotEqual(encrypted, original)
+            self.assertEqual(decrypt_token(encrypted), original)
+
+    def test_encrypt_produces_different_ciphertext_each_time(self):
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token
+            enc1 = encrypt_token("token")
+            enc2 = encrypt_token("token")
+            self.assertNotEqual(enc1, enc2)
