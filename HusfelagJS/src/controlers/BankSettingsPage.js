@@ -9,6 +9,7 @@ import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SyncIcon from '@mui/icons-material/Sync';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
+import SideBar from './Sidebar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -77,13 +78,23 @@ export default function BankSettingsPage() {
     }
   }
 
-  if (loading) return <Box sx={{ p: 3 }}><CircularProgress /></Box>;
+  if (loading) return (
+    <div className="dashboard">
+      <SideBar />
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    </div>
+  );
 
   return (
-    <Box sx={{ p: 3, maxWidth: 600 }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        Bankastillingar
-      </Typography>
+    <div className="dashboard">
+      <SideBar />
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+          <Typography variant="h5">Bankastillingar</Typography>
+        </Box>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
 
       {message && (
         <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
@@ -184,6 +195,8 @@ export default function BankSettingsPage() {
           )}
         </CardContent>
       </Card>
-    </Box>
+        </Box>
+      </Box>
+    </div>
   );
 }
