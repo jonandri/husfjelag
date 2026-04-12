@@ -5,16 +5,14 @@ import {
     CircularProgress, Alert, Grid,
     Dialog, DialogTitle, DialogContent, DialogActions,
     RadioGroup, FormControlLabel, Radio,
-    MenuItem, Select, FormControl, InputLabel,
+    MenuItem, Select, FormControl,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
-import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
-import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
-import { LabelChip } from '../ui/chips';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -26,7 +24,7 @@ function SuperAdminPage() {
     React.useEffect(() => {
         if (!user) { navigate('/login'); return; }
         if (!user.is_superadmin) { navigate('/husfelag'); }
-    }, [user]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!user?.is_superadmin) return null;
 
@@ -337,15 +335,6 @@ function KpiPanel({ user }) {
     );
 }
 
-function InfoRow({ label, value }) {
-    return (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ minWidth: 110 }}>{label}:</Typography>
-            <Typography variant="body2">{value || '—'}</Typography>
-        </Box>
-    );
-}
-
 function ImpersonatePanel({ user, onSelect }) {
     const navigate = useNavigate();
     const [q, setQ] = useState('');
@@ -359,7 +348,7 @@ function ImpersonatePanel({ user, onSelect }) {
             .then(r => r.ok ? r.json() : [])
             .then(data => { setResults(data); setSearching(false); })
             .catch(() => setSearching(false));
-    }, [q]);
+    }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <Paper variant="outlined" sx={{ p: 3 }}>
