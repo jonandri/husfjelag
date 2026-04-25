@@ -1721,8 +1721,7 @@ class CollectionView(APIView):
         collections = (
             Collection.objects
             .filter(budget__association=association, budget__year=year, budget__is_active=True, month=month)
-            .select_related("apartment", "payer", "paid_transaction")
-            .prefetch_related("bank_claim")
+            .select_related("apartment", "payer", "paid_transaction", "bank_claim")
             .order_by("apartment__anr")
         )
 
@@ -1731,7 +1730,7 @@ class CollectionView(APIView):
             try:
                 claim_status = col.bank_claim.status
                 claim_id = col.bank_claim.claim_id
-            except Exception:
+            except Collection.bank_claim.RelatedObjectDoesNotExist:
                 claim_status = None
                 claim_id = None
             rows.append({

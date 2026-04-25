@@ -298,6 +298,7 @@ class SendAllClaimsView(APIView):
             .filter(
                 budget__association=association,
                 budget__year=year,
+                budget__is_active=True,
                 month=month,
             )
             .exclude(bank_claim__isnull=False)
