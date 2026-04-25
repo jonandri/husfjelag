@@ -17,6 +17,9 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import RuleIcon from '@mui/icons-material/Rule';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -126,79 +129,135 @@ function AssociationPage() {
         />;
     }
 
-    const subtitle = [
-        `Kennitala: ${fmtKennitala(association.ssn)}`,
-        `${association.address}, ${association.postal_code} ${association.city}`,
-    ].join('  ·  ');
-
     return (
         <div className="dashboard">
             <SideBar />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-                {/* Header zone */}
-                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: `1px solid ${BORDER}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>Húsfélag</Typography>
                         <Typography variant="h5">{association.name}</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            Kennitala {fmtKennitala(association.ssn)}{association.address ? ` · ${association.address}` : ''}
+                        </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Button
-                            variant="contained"
-                            sx={primaryButtonSx}
+                        <Button sx={ghostButtonSx} startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                            onClick={() => navigate('/husfelag')}
+                        >
+                            Breyta upplýsingum
+                        </Button>
+                        <Button variant="contained" sx={primaryButtonSx}
+                            startIcon={<PersonAddIcon sx={{ fontSize: 17 }} />}
                             onClick={() => navigate('/eigendur')}
                         >
-                            + Bæta við eiganda
+                            Skrá nýjan eiganda
                         </Button>
-                        {association.apartment_count === 0 && (
-                            <Button
-                                variant="contained"
-                                sx={primaryButtonSx}
-                                onClick={() => navigate('/ibudir/innflutningur')}
-                            >
-                                + Bæta við íbúðum
-                            </Button>
-                        )}
-                        <Tooltip title="Hjálp">
-                            <IconButton size="small" onClick={() => openHelp('husfelag')}>
-                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                            </IconButton>
-                        </Tooltip>
                     </Box>
                 </Box>
 
-                {/* Scrollable content zone */}
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                    {/* Row 1: association stats */}
-                    <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 3 }}>
-                        <KpiCard label="Íbúðir" value={association.apartment_count} />
-                        <KpiCard label="Eigendur" value={association.owner_count} />
-                        <RoleCard
-                            label="Formaður"
-                            value={association.chair || '—'}
-                            onEdit={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
-                        />
-                        <RoleCard
-                            label="Gjaldkeri"
-                            value={association.cfo || '—'}
-                            onEdit={() => setRoleDialog({ role: 'CFO', label: 'Gjaldkeri', currentName: association.cfo })}
-                        />
-                    </Grid>
+                {/* Zone 3: Content grid (1fr + 320px) */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '24px 32px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: '28px', alignItems: 'start' }}>
 
-                    {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
+                    {/* LEFT column */}
+                    <Box>
+                        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    <BankAccountsPanel
-                        user={user}
-                        assocParam={assocParam}
-                        currentAssociation={currentAssociation}
-                        bankAccounts={bankAccounts}
-                        onReload={loadAll}
-                    />
-                    <AssociationRulesPanel
-                        user={user}
-                        assocParam={assocParam}
-                        rules={rules}
-                        onReload={loadAll}
-                    />
+                        {/* Identity strip: Stjórn + Eignarhald */}
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2 }}>
+                            {/* Stjórn card */}
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                    <Eyebrow variant="navy">STJÓRN</Eyebrow>
+                                    <Button sx={{ ...ghostButtonSx, minHeight: 0, p: '4px 8px', fontSize: 12 }}
+                                        startIcon={<SwapHorizIcon sx={{ fontSize: 15 }} />}
+                                        onClick={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
+                                    >
+                                        Breyta stjórn
+                                    </Button>
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                    {[
+                                        { name: association.chair, role: 'Formaður', initBg: '#e8f5e9', initColor: '#2e7d32' },
+                                        { name: association.cfo,   role: 'Gjaldkeri', initBg: '#eef1f8', initColor: NAVY },
+                                    ].map(({ name, role, initBg, initColor }) => (
+                                        <Box key={role} sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Box sx={{ width: 42, height: 42, borderRadius: '50%', background: initBg, color: initColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 14, flexShrink: 0 }}>
+                                                {name ? name.split(' ').map(w => w[0]).slice(0, 2).join('') : '—'}
+                                            </Box>
+                                            <Box>
+                                                <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{name || '—'}</Typography>
+                                                <Typography sx={{ fontSize: 11.5, color: '#555' }}>{role}</Typography>
+                                            </Box>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
+
+                            {/* Eignarhald card */}
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                                <Eyebrow variant="navy">EIGNARHALD</Eyebrow>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1.25 }}>
+                                    {[
+                                        { value: association.apartment_count, label: 'Íbúðir' },
+                                        { value: association.owner_count != null ? association.owner_count : owners.length, label: 'Eigendur' },
+                                    ].map(({ value, label }) => (
+                                        <Box key={label}>
+                                            <Typography sx={{ fontSize: 24, fontWeight: 300 }}>{value}</Typography>
+                                            <Typography sx={{ fontSize: 11.5, color: '#555' }}>{label}</Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
+                        </Box>
+
+                        {/* Aðgerðir — 4 primary action cards */}
+                        <Box sx={{ mt: 3 }}>
+                            <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1.5 }}>Aðgerðir</Typography>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.5 }}>
+                                {[
+                                    { icon: <SwapHorizIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Breyta stjórn', sub: 'Skipta um formann eða gjaldkera', onClick: () => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair }) },
+                                    { icon: <PersonAddIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Skrá nýjan eiganda', sub: 'Tekur yfir fyrir fyrri eiganda íbúðar', onClick: () => navigate('/eigendur') },
+                                    { icon: <AssessmentIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Uppfæra áætlun', sub: `Tekjur og gjöld ${new Date().getFullYear()}`, onClick: () => navigate('/aaetlun') },
+                                    { icon: <EventRepeatIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Búa til innheimtu', sub: 'Mánaðargreiðslur eigenda', onClick: () => navigate('/innheimta') },
+                                ].map((action, i) => (
+                                    <Box key={i} onClick={action.onClick} sx={{
+                                        border: `1px solid ${BORDER}`, borderRadius: '6px', p: '14px 16px',
+                                        cursor: 'pointer', transition: '150ms ease',
+                                        '&:hover': { borderColor: NAVY },
+                                    }}>
+                                        <Box sx={{ width: 36, height: 36, borderRadius: '8px', background: '#eef1f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {action.icon}
+                                        </Box>
+                                        <Typography sx={{ fontSize: 13.5, fontWeight: 500, mt: 1.5 }}>{action.title}</Typography>
+                                        <Typography sx={{ fontSize: 11.5, color: '#555', mt: 0.25, lineHeight: 1.4 }}>{action.sub}</Typography>
+                                    </Box>
+                                ))}
+                            </Box>
+                        </Box>
+
+                        {/* Bank accounts panel — redesigned in Task 8 */}
+                        <BankAccountsPanel
+                            user={user}
+                            assocParam={assocParam}
+                            currentAssociation={currentAssociation}
+                            bankAccounts={bankAccounts}
+                            onReload={loadAll}
+                        />
+
+                        {/* Rules panel — redesigned in Task 8 */}
+                        <AssociationRulesPanel
+                            user={user}
+                            assocParam={assocParam}
+                            rules={rules}
+                            onReload={loadAll}
+                        />
+                    </Box>
+
+                    {/* RIGHT column: Athugasemdir — added in Task 8 */}
+                    <Box />
+
                 </Box>
             </Box>
 
