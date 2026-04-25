@@ -41,11 +41,13 @@ function CollectionPage() {
     const [matchTarget, setMatchTarget] = useState(null);
     const [bankConfigured, setBankConfigured] = useState(false);
     const [claimMessage, setClaimMessage] = useState(null);
+    const [sendingAll, setSendingAll] = useState(false);
 
     const load = useCallback(() => {
         if (!user) return;
         setData(null);
         setError('');
+        setClaimMessage(null);
         // assocParam starts with '?' when set (e.g. '?as=5'), so build:
         // /Collection/{id}?as=5&month=M&year=Y  or  /Collection/{id}?month=M&year=Y
         const qs = assocParam
@@ -109,6 +111,7 @@ function CollectionPage() {
 
     const handleSendAllClaims = () => {
         setClaimMessage(null);
+        setSendingAll(true);
         apiFetch(`${API_URL}/associations/${currentAssociation?.id}/bank/send-all-claims?month=${month}&year=${year}`, {
             method: 'POST',
         })
@@ -117,7 +120,8 @@ function CollectionPage() {
                 load();
                 setClaimMessage({ type: 'success', text: `${d.sent} kröfur sendar, ${d.skipped} sleppt.` });
             })
-            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }));
+            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }))
+            .finally(() => setSendingAll(false));
     };
 
     const handleMatch = (collectionId, transactionId) => {
@@ -175,7 +179,7 @@ function CollectionPage() {
                                 size="small"
                                 sx={secondaryButtonSx}
                                 onClick={handleSendAllClaims}
-                                disabled={rows.every(r => r.claim_status)}
+                                disabled={sendingAll || rows.every(r => r.claim_status && r.claim_status !== 'CANCELLED')}
                             >
                                 Senda allar kröfur
                             </Button>
