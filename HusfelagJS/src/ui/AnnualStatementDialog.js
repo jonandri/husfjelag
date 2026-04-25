@@ -206,14 +206,6 @@ export default function AnnualStatementDialog({ open, onClose, year, userId, ass
 
     const prev = data?.previous_year;
 
-    const ColHeader = () => (
-        <tr>
-            <th style={{ textAlign: 'left' }}>Flokkur</th>
-            <th style={{ textAlign: 'right' }}>{year}</th>
-            {prev && <th style={{ textAlign: 'right' }}>{year - 1}</th>}
-        </tr>
-    );
-
     const numSx = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
     const renderRows = (rows, uncatAmt, prevRows, prevUncat) => {
         const prevMap = {};

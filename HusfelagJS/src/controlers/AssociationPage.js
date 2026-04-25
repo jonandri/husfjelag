@@ -30,7 +30,6 @@ import { fmtKennitala, fmtAmount } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
-import { useHelp } from '../ui/HelpContext';
 import Eyebrow from '../ui/Eyebrow';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -38,7 +37,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function AssociationPage() {
     const navigate = useNavigate();
     const { user, assocParam, currentAssociation } = React.useContext(UserContext);
-    const { openHelp } = useHelp();
+
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
     const [error, setError] = useState('');
@@ -285,47 +284,7 @@ function AssociationPage() {
     );
 }
 
-function KpiCard({ label, value, small, alert }) {
-    return (
-        <Grid item xs={12} sm={6} md={3} lg={2} sx={{ display: 'flex' }}>
-            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 110 }}>
-                <Typography
-                    variant={small ? 'h6' : 'h4'}
-                    sx={{ fontWeight: small ? 400 : 300, lineHeight: 1.2, color: alert ? '#c62828' : 'secondary.main' }}
-                >
-                    {value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {label}
-                </Typography>
-            </Paper>
-        </Grid>
-    );
-}
 
-function RoleCard({ label, value, onEdit }) {
-    return (
-        <Grid item xs={12} sm={6} md={3} lg={2} sx={{ display: 'flex' }}>
-            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 110 }}>
-                <Tooltip title={`Breyta ${label}`}>
-                    <IconButton
-                        size="small"
-                        onClick={onEdit}
-                        sx={{ position: 'absolute', top: 8, right: 8, opacity: 0.4, '&:hover': { opacity: 1 } }}
-                    >
-                        <EditIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                </Tooltip>
-                <Typography variant="h6" color="secondary.main" sx={{ fontWeight: 300, lineHeight: 1.3 }}>
-                    {value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {label}
-                </Typography>
-            </Paper>
-        </Grid>
-    );
-}
 
 function RoleDialog({ open, role, label, currentName, owners, userId, assocParam, onClose, onSaved }) {
     const [selected, setSelected] = useState(null);
