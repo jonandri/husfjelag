@@ -156,13 +156,13 @@ export default function BankSettingsPage() {
           {canManageBank && (
             <Card variant="outlined">
               <CardContent>
-                <Typography variant="h6" sx={{ mb: 1 }}>Sniðmát krafna</Typography>
+                <Typography variant="h6" sx={{ mb: 1 }}>Innheimtusniðmát</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Sniðmáts-ID frá Landsbankanum. Þarf að vera stillt til að geta sent kröfur.
+                  Auðkenni innheimtusniðmáts frá Landsbankanum þarf að vera stillt til að geta sent inn kröfur.
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                   <TextField
-                    label="Sniðmáts-ID"
+                    label="Innheimtusniðmát"
                     value={templateId}
                     onChange={e => setTemplateId(e.target.value)}
                     size="small"

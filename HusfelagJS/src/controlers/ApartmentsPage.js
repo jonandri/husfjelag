@@ -74,7 +74,7 @@ function ApartmentsPage() {
                             sx={secondaryButtonSx}
                             onClick={() => navigate('/ibudir/innflutningur')}
                         >
-                            ⬇ HMS innflutningur
+                            ⬇ Innflutningur
                         </Button>
                         <Button
                             variant="contained"
