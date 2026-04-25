@@ -28,19 +28,56 @@ def _require_chair_or_cfo(request, association):
 
 
 class BankStatusView(APIView):
-    """GET /associations/{id}/bank/status — temporary stub until Task 11"""
+    """GET /associations/{id}/bank/status"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, association_id):
-        return Response({"configured": False, "last_sync_at": None})
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        configured = AssociationBankSettings.objects.filter(association=association).exists()
+
+        last_sync = (
+            association.bank_audit_logs
+            .filter(http_method="GET")
+            .order_by("-timestamp")
+            .values_list("timestamp", flat=True)
+            .first()
+        )
+
+        return Response({
+            "configured": configured,
+            "last_sync_at": last_sync.isoformat() if last_sync else None,
+        })
 
 
 class BankDisconnectView(APIView):
-    """DELETE /associations/{id}/bank/disconnect — temporary stub until Task 11"""
+    """DELETE /associations/{id}/bank/disconnect"""
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, association_id):
-        return Response({"detail": "Bankatengind aftengt."})
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        deleted_count, _ = AssociationBankSettings.objects.filter(association=association).delete()
+        if deleted_count == 0:
+            return Response(
+                {"detail": "Engar bankastillingar til að hreinsa."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"detail": "Bankastillingar hreinsaðar."})
 
 
 class AdminBankSyncView(APIView):
@@ -57,13 +94,47 @@ class AdminBankSyncView(APIView):
 
 
 class AdminBankHealthView(APIView):
-    """GET /admin/bank/health — superadmin only — temporary stub until Task 11"""
+    """GET /admin/bank/health — superadmin only"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         if not request.user.is_superadmin:
-            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
-        return Response({"summary": {}, "associations": []})
+            return Response(
+                {"detail": "Aðeins kerfisstjórar hafa aðgang."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        settings_qs = AssociationBankSettings.objects.select_related("association").all()
+        total_configured = settings_qs.count()
+        total_unsent_claims = BankClaim.objects.filter(status=BankClaimStatus.UNPAID).count()
+
+        rows = []
+        for bs in settings_qs.order_by("association__name"):
+            last_sync = (
+                bs.association.bank_audit_logs
+                .filter(http_method="GET")
+                .order_by("-timestamp")
+                .values_list("timestamp", flat=True)
+                .first()
+            )
+            rows.append({
+                "association_id": bs.association.id,
+                "association_name": bs.association.name,
+                "template_id": bs.template_id,
+                "last_sync_at": last_sync.isoformat() if last_sync else None,
+                "unsent_claims": BankClaim.objects.filter(
+                    collection__budget__association=bs.association,
+                    status=BankClaimStatus.UNPAID,
+                ).count(),
+            })
+
+        return Response({
+            "summary": {
+                "configured_associations": total_configured,
+                "total_unsent_claims": total_unsent_claims,
+            },
+            "associations": rows,
+        })
 
 
 class AssociationBankSettingsView(APIView):
