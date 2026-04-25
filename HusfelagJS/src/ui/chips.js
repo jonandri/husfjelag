@@ -8,6 +8,9 @@ const CHIP_STYLES = {
     RECONCILED:  { bg: '#e8f4fd', color: '#1565c0',  label: 'Jafnað'    },
     PAID:        { bg: '#e8f5e9', color: '#2e7d32',  label: 'Greitt'    },
     UNPAID:      { bg: '#fff3e0', color: '#e65100',  label: 'Ógreitt'   },
+    CLAIM_UNPAID:    { bg: '#fff8e1', color: '#f57c00',  label: 'Sent — Ógreitt' },
+    CLAIM_PAID:      { bg: '#e8f5e9', color: '#2e7d32',  label: 'Greitt'         },
+    CLAIM_CANCELLED: { bg: '#f3f4f6', color: '#555',     label: 'Afturkallað'    },
 };
 
 export function LabelChip({ label }) {
