@@ -104,28 +104,17 @@ SKATTUR_CLOUD_API_KEY = env("SKATTUR_CLOUD_API_KEY", default="")
 # ── Bank integration ──────────────────────────────────────────────────────────
 BANK_FERNET_KEY = env("BANK_FERNET_KEY", default="")
 
-# Feature flags — set to True per bank once sandbox credentials are in place
 BANK_LANDSBANKINN_ENABLED = env.bool("BANK_LANDSBANKINN_ENABLED", default=False)
-BANK_ARION_ENABLED = env.bool("BANK_ARION_ENABLED", default=False)
-BANK_ISLANDSBANKI_ENABLED = env.bool("BANK_ISLANDSBANKI_ENABLED", default=False)
-
-BANK_LANDSBANKINN_CLIENT_ID = env("BANK_LANDSBANKINN_CLIENT_ID", default="")
-BANK_LANDSBANKINN_CLIENT_SECRET = env("BANK_LANDSBANKINN_CLIENT_SECRET", default="")
-BANK_LANDSBANKINN_REDIRECT_URI = env(
-    "BANK_LANDSBANKINN_REDIRECT_URI",
-    default="http://localhost:8000/bank/callback/landsbankinn",
+BANK_LANDSBANKINN_API_KEY = env("BANK_LANDSBANKINN_API_KEY", default="")
+BANK_LANDSBANKINN_CERT_PATH = env("BANK_LANDSBANKINN_CERT_PATH", default="")
+BANK_LANDSBANKINN_CERT_PASSWORD = env("BANK_LANDSBANKINN_CERT_PASSWORD", default="")
+BANK_LANDSBANKINN_AUTH_URL = env(
+    "BANK_LANDSBANKINN_AUTH_URL",
+    default="https://mtls-auth.landsbankinn.is/connect/token",
 )
 BANK_LANDSBANKINN_API_BASE = env(
     "BANK_LANDSBANKINN_API_BASE",
-    default="https://psd2.landsbanki.is/sandbox/v1",
-)
-BANK_LANDSBANKINN_AUTH_URL = env(
-    "BANK_LANDSBANKINN_AUTH_URL",
-    default="https://psd2.landsbanki.is/sandbox/oauth2/auth",
-)
-BANK_LANDSBANKINN_TOKEN_URL = env(
-    "BANK_LANDSBANKINN_TOKEN_URL",
-    default="https://psd2.landsbanki.is/sandbox/oauth2/token",
+    default="https://apisandbox.landsbankinn.is/api",
 )
 
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3010")
@@ -137,8 +126,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "associations.banks.tasks.sync_all_associations",
         "schedule": crontab(hour=3, minute=0),
     },
-    "check-consent-expiry": {
-        "task": "associations.banks.tasks.check_consent_expiry",
-        "schedule": crontab(hour=4, minute=0),
+    "sync-all-claim-statuses": {
+        "task": "associations.banks.tasks.sync_all_claim_statuses",
+        "schedule": crontab(hour=3, minute=30),
     },
 }
