@@ -30,6 +30,9 @@ function AssociationPage() {
     const [owners, setOwners] = useState([]);
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [rules, setRules] = useState([]);
+    const [collections, setCollections] = useState([]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -37,10 +40,17 @@ function AssociationPage() {
     }, [user, assocParam]);
 
     const loadAll = async () => {
+        const today = new Date();
+        const month = today.getMonth() + 1;
+        const year  = today.getFullYear();
+        const collQs = assocParam ? `${assocParam}&month=${month}&year=${year}` : `?month=${month}&year=${year}`;
         try {
-            const [assocResp, ownersResp] = await Promise.all([
+            const [assocResp, ownersResp, banksResp, rulesResp, collResp] = await Promise.all([
                 apiFetch(`${API_URL}/Association/${user.id}${assocParam}`),
                 apiFetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Collection/${user.id}${collQs}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -50,6 +60,16 @@ function AssociationPage() {
                 const all = await ownersResp.json();
                 const seen = new Set();
                 setOwners(all.filter(o => !o.deleted && !seen.has(o.user_id) && seen.add(o.user_id)));
+            }
+
+            if (banksResp.ok) setBankAccounts(await banksResp.json());
+            if (rulesResp.ok) {
+                const rd = await rulesResp.json();
+                setRules(rd.association_rules || []);
+            }
+            if (collResp.ok) {
+                const cd = await collResp.json();
+                setCollections(cd.rows || []);
             }
         } catch {
             setError('Tenging við þjón mistókst.');
@@ -76,6 +96,17 @@ function AssociationPage() {
             </div>
         );
     }
+
+    const setupSteps = [
+        true,                                             // 1. Stofna húsfélag
+        !!(association.chair && association.cfo),         // 2. Bæta við stjórn
+        association.apartment_count > 0,                  // 3. Skrá íbúðir
+        bankAccounts.length > 0,                          // 4. Tengja banka
+        rules.length > 0,                                 // 5. Setja flokkunarreglur
+        collections.length > 0,                           // 6. Hefja innheimtu
+    ];
+    const setupComplete = setupSteps.filter(Boolean).length;
+    const isSetup = setupComplete >= 6;
 
     const subtitle = [
         `Kennitala: ${fmtKennitala(association.ssn)}`,
@@ -137,8 +168,19 @@ function AssociationPage() {
 
                     {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
 
-                    <BankAccountsPanel user={user} assocParam={assocParam} currentAssociation={currentAssociation} />
-                    <AssociationRulesPanel user={user} assocParam={assocParam} />
+                    <BankAccountsPanel
+                        user={user}
+                        assocParam={assocParam}
+                        currentAssociation={currentAssociation}
+                        bankAccounts={bankAccounts}
+                        onReload={loadAll}
+                    />
+                    <AssociationRulesPanel
+                        user={user}
+                        assocParam={assocParam}
+                        rules={rules}
+                        onReload={loadAll}
+                    />
                 </Box>
             </Box>
 
@@ -364,9 +406,8 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
     );
 }
 
-function BankAccountsPanel({ user, assocParam, currentAssociation }) {
+function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts, onReload }) {
     const navigate = useNavigate();
-    const [bankAccounts, setBankAccounts] = React.useState(undefined);
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [error, setError] = React.useState('');
     const [showForm, setShowForm] = React.useState(false);
@@ -374,33 +415,11 @@ function BankAccountsPanel({ user, assocParam, currentAssociation }) {
     const canManageBank = ['Formaður', 'Gjaldkeri', 'Kerfisstjóri'].includes(currentAssociation?.role);
 
     React.useEffect(() => {
-        loadBankAccounts();
         apiFetch(`${API_URL}/AccountingKey/list`)
             .then(r => r.ok ? r.json() : [])
             .then(data => setAccountingKeys(data.filter(k => k.type === 'ASSET')))
             .catch(() => {});
     }, [assocParam]);
-
-    const loadBankAccounts = async () => {
-        try {
-            const resp = await apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`);
-            if (resp.ok) setBankAccounts(await resp.json());
-            else { setError('Villa við að sækja bankareikninga.'); setBankAccounts([]); }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-            setBankAccounts([]);
-        }
-    };
-
-    if (bankAccounts === undefined) {
-        return (
-            <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress color="secondary" />
-                </Box>
-            </Paper>
-        );
-    }
 
     return (
         <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
@@ -430,7 +449,7 @@ function BankAccountsPanel({ user, assocParam, currentAssociation }) {
                 userId={user.id}
                 assocParam={assocParam}
                 accountingKeys={accountingKeys}
-                onCreated={loadBankAccounts}
+                onCreated={onReload}
             />
 
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
@@ -457,7 +476,7 @@ function BankAccountsPanel({ user, assocParam, currentAssociation }) {
                                     userId={user.id}
                                     assocParam={assocParam}
                                     accountingKeys={accountingKeys}
-                                    onSaved={loadBankAccounts}
+                                    onSaved={onReload}
                                 />
                             ))}
                         </TableBody>
@@ -634,8 +653,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
     );
 }
 
-function AssociationRulesPanel({ user, assocParam }) {
-    const [rules, setRules] = React.useState([]);
+function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
     const [categories, setCategories] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
@@ -648,20 +666,14 @@ function AssociationRulesPanel({ user, assocParam }) {
     const [deleteRule, setDeleteRule] = React.useState(null);
     const [deleting, setDeleting] = React.useState(false);
 
-    React.useEffect(() => { load(); }, [assocParam]);
-
-    const load = () => {
-        if (!user?.id) return;
+    React.useEffect(() => {
         setLoading(true);
-        Promise.all([
-            apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
-            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
-        ]).then(([rulesData, cats]) => {
-            if (rulesData) setRules(rulesData.association_rules || []);
-            setCategories(cats || []);
-        }).catch(() => setError('Gat ekki sótt reglur.'))
-        .finally(() => setLoading(false));
-    };
+        apiFetch(`${API_URL}/Category/list`)
+            .then(r => r.ok ? r.json() : [])
+            .then(cats => setCategories(cats || []))
+            .catch(() => setError('Gat ekki sótt flokka.'))
+            .finally(() => setLoading(false));
+    }, [assocParam]);
 
     const openCreate = () => { setEditRule(null); setKeyword(''); setCategoryId(''); setSaveError(''); setDialogOpen(true); };
     const openEdit = (rule) => { setEditRule(rule); setKeyword(rule.keyword); setCategoryId(rule.category.id); setSaveError(''); setDialogOpen(true); };
@@ -679,7 +691,7 @@ function AssociationRulesPanel({ user, assocParam }) {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: false }),
                 });
-            if (resp.ok) { setDialogOpen(false); load(); }
+            if (resp.ok) { setDialogOpen(false); onReload(); }
             else { const data = await resp.json(); setSaveError(data.detail || 'Villa við vistun.'); }
         } catch { setSaveError('Tenging við þjón mistókst.'); }
         finally { setSaving(false); }
@@ -693,7 +705,7 @@ function AssociationRulesPanel({ user, assocParam }) {
                 method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),
             });
-            if (resp.ok) { setDeleteRule(null); load(); }
+            if (resp.ok) { setDeleteRule(null); onReload(); }
         } catch {}
         finally { setDeleting(false); }
     };
