@@ -272,34 +272,6 @@ class CategoryRule(models.Model):
         return f"{self.keyword} → {self.category} ({scope})"
 
 
-class BankChoice(models.TextChoices):
-    LANDSBANKINN = "LANDSBANKINN", "Landsbankinn"
-    ARION        = "ARION",        "Arion"
-    ISLANDSBANKI = "ISLANDSBANKI", "Íslandsbanki"
-
-
-class BankConsent(models.Model):
-    association      = models.OneToOneField(
-        Association, on_delete=models.CASCADE, related_name="bank_consent"
-    )
-    bank             = models.CharField(max_length=20, choices=BankChoice.choices)
-    consent_id       = models.CharField(max_length=255, blank=True)
-    access_token     = models.TextField()
-    refresh_token    = models.TextField(blank=True)
-    token_expires_at = models.DateTimeField()
-    consent_expires_at = models.DateField()
-    is_active        = models.BooleanField(default=True)
-    renewal_notified_at = models.DateTimeField(null=True, blank=True)
-    created_at       = models.DateTimeField(auto_now_add=True)
-    updated_at       = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "associations_bankconsent"
-
-    def __str__(self):
-        return f"{self.association} — {self.bank}"
-
-
 class BankApiAuditLog(models.Model):
     association = models.ForeignKey(
         Association, on_delete=models.CASCADE, related_name="bank_audit_logs"
@@ -308,7 +280,7 @@ class BankApiAuditLog(models.Model):
         "users.User", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="bank_audit_logs"
     )
-    bank        = models.CharField(max_length=20, choices=BankChoice.choices)
+    bank        = models.CharField(max_length=20)
     endpoint    = models.CharField(max_length=500)
     http_method = models.CharField(max_length=10)
     status_code = models.IntegerField()
@@ -341,3 +313,61 @@ class BankNotificationLog(models.Model):
 
     def __str__(self):
         return f"{self.association} — {self.notification_type} ({'ok' if self.success else 'failed'})"
+
+
+class BankTokenCache(models.Model):
+    """Single global row (always id=1). Stores the platform access token for Landsbankinn."""
+    bank = models.CharField(max_length=32)           # e.g. "LANDSBANKINN"
+    access_token = models.TextField()               # Fernet-encrypted
+    expires_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "associations_banktokencache"
+
+    def __str__(self):
+        return f"{self.bank} token (expires {self.expires_at})"
+
+
+class AssociationBankSettings(models.Model):
+    """Per-association Landsbankinn configuration. Set up by CHAIR/CFO before claims can be sent."""
+    association = models.OneToOneField(
+        Association, on_delete=models.CASCADE, related_name="bank_settings"
+    )
+    template_id = models.CharField(max_length=64)  # Landsbankinn claim template ID
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "associations_associationbanksettings"
+
+    def __str__(self):
+        return f"{self.association} — template {self.template_id}"
+
+
+class BankClaimStatus(models.TextChoices):
+    UNPAID = "UNPAID", "Ógreitt"
+    PAID = "PAID", "Greitt"
+    CANCELLED = "CANCELLED", "Afturkallað"
+
+
+class BankClaim(models.Model):
+    """One row per Collection. Tracks the lifecycle of a single bank claim (kröfu)."""
+    collection = models.OneToOneField(
+        "Collection", on_delete=models.CASCADE, related_name="bank_claim"
+    )
+    claim_id = models.CharField(max_length=64)                    # Landsbankinn's claim ID
+    payor_national_id = models.CharField(max_length=10)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    due_date = models.DateField()
+    status = models.CharField(
+        max_length=16, choices=BankClaimStatus.choices, default=BankClaimStatus.UNPAID
+    )
+    sent_at = models.DateTimeField()
+    synced_at = models.DateTimeField(null=True, blank=True)  # last status check timestamp
+
+    class Meta:
+        db_table = "associations_bankclaim"
+
+    def __str__(self):
+        return f"Claim {self.claim_id} ({self.status}) — {self.collection}"
