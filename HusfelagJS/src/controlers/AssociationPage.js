@@ -9,6 +9,14 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import BusinessIcon from '@mui/icons-material/Business';
+import GroupIcon from '@mui/icons-material/Group';
+import HomeIcon from '@mui/icons-material/Home';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import RuleIcon from '@mui/icons-material/Rule';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -17,8 +25,8 @@ import { fmtKennitala, fmtAmount } from '../format';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
+import Eyebrow from '../ui/Eyebrow';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -107,6 +115,16 @@ function AssociationPage() {
     ];
     const setupComplete = setupSteps.filter(Boolean).length;
     const isSetup = setupComplete >= 6;
+
+    if (!isSetup) {
+        return <UppsetningView
+            association={association}
+            setupSteps={setupSteps}
+            setupComplete={setupComplete}
+            owners={owners}
+            onNavigate={(path) => navigate(path)}
+        />;
+    }
 
     const subtitle = [
         `Kennitala: ${fmtKennitala(association.ssn)}`,
@@ -797,6 +815,196 @@ function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
                 </DialogActions>
             </Dialog>
         </Paper>
+    );
+}
+
+// Design tokens (file-level, reused across components)
+const NAVY = '#1D366F';
+const BORDER = '#e8e8e8';
+
+const SETUP_STEP_DEFS = [
+    { icon: <BusinessIcon sx={{ fontSize: 18 }} />, title: 'Stofna húsfélag', sub: 'Heiti, kennitala, heimilisfang', navPath: null },
+    { icon: <GroupIcon sx={{ fontSize: 18 }} />, title: 'Bæta við stjórn', sub: 'Formaður og gjaldkeri', navPath: null },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />, title: 'Skrá íbúðir', sub: 'Íbúðir + eignarhlutföll', navPath: '/ibudir/innflutningur' },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka', sub: 'Sjálfvirk afstemming', navPath: '/bank-settings' },
+    { icon: <RuleIcon sx={{ fontSize: 18 }} />, title: 'Setja flokkunarreglur', sub: 'Sjálfvirk flokkun bankafærslna', navPath: '/husfelag' },
+    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />, title: 'Hefja innheimtu', sub: 'Mánaðarlegar greiðslur', navPath: '/innheimta' },
+];
+
+function UppsetningView({ association, setupSteps, setupComplete, owners, onNavigate }) {
+    const firstIncomplete = setupSteps.findIndex(done => !done);
+    const nextPath = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navPath : null;
+
+    const chair = owners.find(o => o.role === 'CHAIR' || o.role === 'Formaður');
+    const cfo   = owners.find(o => o.role === 'CFO'   || o.role === 'Gjaldkeri');
+
+    const subtitle = `Kennitala ${fmtKennitala(association.ssn)}${association.address ? ` · ${association.address}` : ''}`;
+
+    return (
+        <div className="dashboard">
+            <SideBar />
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: `1px solid ${BORDER}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="h5">{association.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{subtitle}</Typography>
+                    </Box>
+                    <Button sx={ghostButtonSx} startIcon={<HelpOutlineIcon sx={{ fontSize: 17 }} />}>
+                        Leiðbeiningar
+                    </Button>
+                </Box>
+
+                {/* Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '28px 32px' }}>
+
+                    {/* Setup hero */}
+                    <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '8px', p: '28px 32px' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Box>
+                                <Eyebrow variant="green">UPPSETNING · {setupComplete} AF 6 LOKIÐ</Eyebrow>
+                                <Typography sx={{ fontSize: 24, fontWeight: 300, mt: 0.75, mb: 0.5 }}>
+                                    Settu upp húsfélagið —{' '}
+                                    <Box component="span" sx={{ fontWeight: 600 }}>
+                                        {6 - setupComplete} skref eftir
+                                    </Box>
+                                </Typography>
+                                <Typography sx={{ fontSize: 13.5, color: '#555' }}>
+                                    Eftir uppsetningu sér kerfið um innheimtu, afstemmingu og ársskýrslu.
+                                </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: 'right', flexShrink: 0, ml: 4 }}>
+                                <Typography sx={{ fontSize: 28, fontWeight: 300, color: NAVY, fontFamily: '"JetBrains Mono", monospace' }}>
+                                    {Math.round(setupComplete / 6 * 100)}%
+                                </Typography>
+                                <Typography sx={{ fontSize: 11, color: '#888', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                    LOKIÐ
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        {/* Progress bar */}
+                        <Box sx={{ height: 5, background: '#f0f0f0', borderRadius: '3px', mt: 2.5, overflow: 'hidden' }}>
+                            <Box sx={{ width: `${Math.round(setupComplete / 6 * 100)}%`, height: '100%', background: '#08C076', transition: 'width 300ms ease' }} />
+                        </Box>
+
+                        {/* Step grid */}
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mt: 2.5 }}>
+                            {SETUP_STEP_DEFS.map((def, i) => {
+                                const done = setupSteps[i];
+                                const isPrimary = !done && setupSteps.slice(0, i).every(Boolean);
+                                return (
+                                    <Box key={i}
+                                        onClick={() => def.navPath && onNavigate(def.navPath)}
+                                        sx={{
+                                            border: isPrimary ? `1.5px solid ${NAVY}` : `1px solid ${BORDER}`,
+                                            background: done ? '#fafafa' : isPrimary ? '#eef1f8' : '#fff',
+                                            borderRadius: '6px', p: '14px 16px',
+                                            opacity: done ? 0.7 : 1,
+                                            cursor: def.navPath && !done ? 'pointer' : 'default',
+                                            '&:hover': def.navPath && !done ? { borderColor: NAVY } : {},
+                                            transition: '150ms',
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                                            <Box sx={{ color: done ? '#2e7d32' : isPrimary ? NAVY : '#888', display: 'flex' }}>
+                                                {done ? <CheckCircleOutlineIcon sx={{ fontSize: 18, color: '#2e7d32' }} /> : def.icon}
+                                            </Box>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500, color: isPrimary ? NAVY : '#111' }}>
+                                                {def.title}
+                                            </Typography>
+                                        </Box>
+                                        <Typography sx={{ fontSize: 11.5, color: '#555', mt: 0.75, ml: 3.5 }}>
+                                            {def.sub}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+
+                        {/* CTA */}
+                        {nextPath && (
+                            <Box sx={{ mt: 3 }}>
+                                <Button
+                                    variant="contained"
+                                    sx={primaryButtonSx}
+                                    onClick={() => onNavigate(nextPath)}
+                                >
+                                    Halda áfram með uppsetningu →
+                                </Button>
+                            </Box>
+                        )}
+                    </Box>
+
+                    {/* Stjórn + Íbúðir strip */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 3.5 }}>
+                        <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                <Eyebrow variant="navy">STJÓRN</Eyebrow>
+                            </Box>
+                            {[
+                                { person: chair, roleLabel: 'Formaður', initColor: { bg: '#e8f5e9', color: '#2e7d32' } },
+                                { person: cfo,   roleLabel: 'Gjaldkeri', initColor: { bg: '#eef1f8', color: NAVY } },
+                            ].map(({ person, roleLabel, initColor }) =>
+                                person ? (
+                                    <Box key={roleLabel} sx={{ display: 'flex', gap: 1.75, alignItems: 'center', py: 1 }}>
+                                        <Box sx={{ width: 38, height: 38, borderRadius: '50%', background: initColor.bg, color: initColor.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                                            {person.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+                                        </Box>
+                                        <Box>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{person.name}</Typography>
+                                            <Typography sx={{ fontSize: 11.5, color: '#555' }}>{roleLabel}</Typography>
+                                        </Box>
+                                    </Box>
+                                ) : (
+                                    <Typography key={roleLabel} sx={{ fontSize: 12.5, color: '#888', py: 0.5 }}>
+                                        {roleLabel}: —
+                                    </Typography>
+                                )
+                            )}
+                        </Box>
+
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '18px 20px', background: '#fafbfd', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <Eyebrow variant="navy">ÍBÚÐIR · NÆSTA SKREF</Eyebrow>
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 0.75, mb: 0.5 }}>
+                                {association.apartment_count > 0 ? `${association.apartment_count} íbúðir skráðar` : 'Engar íbúðir skráðar enn'}
+                            </Typography>
+                            {association.apartment_count === 0 && (
+                                <>
+                                    <Typography sx={{ fontSize: 12.5, color: '#555', mb: 1.75 }}>
+                                        Skráðu íbúðirnar svo eignarhlutföllin reiknist sjálfkrafa.
+                                    </Typography>
+                                    <Button variant="contained" sx={primaryButtonSx} onClick={() => onNavigate('/ibudir/innflutningur')} startIcon={<HomeIcon />}>
+                                        Skrá íbúðir
+                                    </Button>
+                                </>
+                            )}
+                        </Box>
+                    </Box>
+
+                    {/* Bank + Rules placeholders */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 2 }}>
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '22px', background: '#fafbfd', textAlign: 'center' }}>
+                            <AccountBalanceIcon sx={{ fontSize: 32, color: NAVY }} />
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 1 }}>Tengja banka</Typography>
+                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.5, mb: 1.75 }}>Bankafærslur birtast sjálfkrafa og afstemmast við innheimtur</Typography>
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => onNavigate('/bank-settings')}>
+                                Tengja Landsbanka
+                            </Button>
+                        </Box>
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '22px', background: '#fafbfd', textAlign: 'center' }}>
+                            <RuleIcon sx={{ fontSize: 32, color: NAVY }} />
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 1 }}>Engar flokkunarreglur</Typography>
+                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.5, mb: 1.75 }}>Búðu til reglur til að flokka bankafærslur sjálfkrafa</Typography>
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => onNavigate('/husfelag')}>
+                                Búa til fyrstu reglu
+                            </Button>
+                        </Box>
+                    </Box>
+
+                </Box>
+            </Box>
+        </div>
     );
 }
 
