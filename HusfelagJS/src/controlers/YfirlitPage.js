@@ -3,7 +3,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Button,
+    Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
 } from '@mui/material';
+import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 import DownloadIcon from '@mui/icons-material/Download';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -19,7 +21,8 @@ import AnnualStatementDialog from '../ui/AnnualStatementDialog';
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 const NAVY     = '#1D366F';
-const GREEN    = '#08C076'; // used in Task 4
+// eslint-disable-next-line no-unused-vars
+const GREEN    = '#08C076';
 const BORDER   = '#e8e8e8';
 const BORDER_ROW = '#f2f2f2'; // used in Task 4
 const POSITIVE = '#2e7d32';
@@ -95,7 +98,6 @@ export default function YfirlitPage() {
 
     // ── Næstu skref (upcoming events) ─────────────────────────────────────────
     const nextMonth  = month === 12 ? 1 : month + 1;
-    // eslint-disable-next-line no-unused-vars
     const upcoming = [
         {
             dateDay: '1', dateMon: MONTH_NAMES_SHORT[nextMonth - 1].toUpperCase(),
@@ -200,7 +202,147 @@ export default function YfirlitPage() {
                         </Box>
                     </Box>
 
-                    {/* TODO: Næstu skref + Áætlun bars + Variance table — added in Task 4 */}
+                    {/* ── Two-column row: Næstu skref + Áætlun bars ─────── */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 3, mt: 4 }}>
+
+                        {/* Næstu skref */}
+                        <Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+                                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Næstu skref</Typography>
+                            </Box>
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px' }}>
+                                {upcoming.map((u, i) => (
+                                    <Box key={i} sx={{
+                                        display: 'flex', gap: 1.75, p: '14px 16px', alignItems: 'center',
+                                        borderBottom: i < upcoming.length - 1 ? `1px solid ${BORDER_ROW}` : 'none',
+                                    }}>
+                                        <Box sx={{ width: 42, textAlign: 'center', flexShrink: 0 }}>
+                                            <Typography sx={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
+                                                {u.dateMon}
+                                            </Typography>
+                                            <Typography sx={{ fontSize: 18, fontWeight: 600, lineHeight: 1.1 }}>
+                                                {u.dateDay}
+                                            </Typography>
+                                        </Box>
+                                        <Box sx={{ width: 32, height: 32, borderRadius: '8px', background: u.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            {u.icon}
+                                        </Box>
+                                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{u.title}</Typography>
+                                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.25 }}>{u.meta}</Typography>
+                                        </Box>
+                                    </Box>
+                                ))}
+                            </Box>
+                        </Box>
+
+                        {/* Áætlun vs raun — variance bars */}
+                        <Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+                                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Áætlun vs raun · {year}</Typography>
+                                <Typography sx={{ fontSize: 12, color: '#888' }}>Eftir flokki</Typography>
+                            </Box>
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', py: 0.75 }}>
+                                {expenses.slice(0, 6).map((e, i) => {
+                                    const b = parseFloat(e.budgeted || 0);
+                                    const a = parseFloat(e.actual || 0);
+                                    const pct = b > 0 ? Math.round(a / b * 100) : 0;
+                                    const barColor = pct > 90 ? NEGATIVE : pct > 50 ? WARNING : NAVY;
+                                    return (
+                                        <Box key={e.category_id || i} sx={{ p: '10px 16px', display: 'grid', gridTemplateColumns: '140px 1fr 90px 44px', gap: 1.5, alignItems: 'center', fontSize: 13 }}>
+                                            <Typography sx={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {e.category_name}
+                                            </Typography>
+                                            <Box sx={{ height: 6, background: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                <Box sx={{ width: `${Math.min(100, pct)}%`, height: '100%', background: barColor, transition: 'width 200ms ease' }} />
+                                            </Box>
+                                            <Typography sx={{ ...monoSx, fontSize: 12, color: '#555', textAlign: 'right' }}>
+                                                {fmtAmount(a)}
+                                            </Typography>
+                                            <Typography sx={{ ...monoSx, fontSize: 12, color: '#888', textAlign: 'right' }}>
+                                                {pct}%
+                                            </Typography>
+                                        </Box>
+                                    );
+                                })}
+                                {expenses.length === 0 && (
+                                    <Typography sx={{ fontSize: 13, color: '#888', p: '12px 16px' }}>Engin áætlun skráð.</Typography>
+                                )}
+                                <Box sx={{ p: '10px 16px', borderTop: `1px solid ${BORDER}`, mt: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Samtals nýtt</Typography>
+                                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                        <Typography sx={{ ...monoSx, fontSize: 13 }}>{fmtAmount(totalActual)} / {fmtAmount(totalBudget)}</Typography>
+                                        <Box component="span" sx={{ background: '#e3e8f4', color: NAVY, fontSize: 11, fontWeight: 600, px: 1, py: 0.25, borderRadius: 3 }}>
+                                            {budgetPct}%
+                                        </Box>
+                                    </Box>
+                                </Box>
+                            </Box>
+                        </Box>
+                    </Box>
+
+                    {/* ── Sundurliðun — full variance table ─────────────── */}
+                    <Box sx={{ mt: 4 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
+                            <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Sundurliðun</Typography>
+                        </Box>
+                        <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '4px', overflow: 'hidden' }}>
+                            <Table size="small">
+                                <TableHead sx={HEAD_SX}>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
+                                        <TableCell align="right" sx={HEAD_CELL_SX}>Áætlun</TableCell>
+                                        <TableCell align="right" sx={HEAD_CELL_SX}>Raun</TableCell>
+                                        <TableCell align="right" sx={HEAD_CELL_SX}>Frávik</TableCell>
+                                        <TableCell align="right" sx={{ ...HEAD_CELL_SX, width: 120 }}>Nýting</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {expenses.map((e, i) => {
+                                        const b = parseFloat(e.budgeted || 0);
+                                        const a = parseFloat(e.actual || 0);
+                                        const variance = b - a;
+                                        const pct = b > 0 ? Math.round(a / b * 100) : 0;
+                                        const over = pct > 100;
+                                        return (
+                                            <TableRow key={e.category_id || i} hover>
+                                                <TableCell>{e.category_name}</TableCell>
+                                                <AmountCell value={b} />
+                                                <AmountCell value={a} />
+                                                <TableCell align="right" sx={{ ...monoSx, color: over ? NEGATIVE : POSITIVE, fontSize: 13 }}>
+                                                    {fmtAmount(Math.abs(variance))}
+                                                </TableCell>
+                                                <TableCell align="right">
+                                                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
+                                                        <Box sx={{ width: 60, height: 5, background: '#f0f0f0', borderRadius: '3px', overflow: 'hidden' }}>
+                                                            <Box sx={{ width: `${Math.min(100, pct)}%`, height: '100%', background: over ? NEGATIVE : NAVY, transition: 'width 200ms ease' }} />
+                                                        </Box>
+                                                        <Typography sx={{ ...monoSx, fontSize: 12, color: '#888', width: 32, textAlign: 'right' }}>
+                                                            {pct}%
+                                                        </Typography>
+                                                    </Box>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {expenses.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} sx={{ color: '#888', textAlign: 'center' }}>Engin áætlun skráð.</TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                                <TableFooter>
+                                    <TableRow sx={{ '& td': { fontWeight: 600, borderTop: '2px solid rgba(0,0,0,0.12)', color: 'text.primary' } }}>
+                                        <TableCell>Samtals</TableCell>
+                                        <AmountCell value={totalBudget} sx={{ fontWeight: 600 }} />
+                                        <AmountCell value={totalActual} sx={{ fontWeight: 600 }} />
+                                        <TableCell />
+                                        <TableCell />
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </Box>
+                    </Box>
 
                 </Box>
             </Box>
