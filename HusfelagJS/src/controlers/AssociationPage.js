@@ -10,6 +10,8 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import BusinessIcon from '@mui/icons-material/Business';
 import GroupIcon from '@mui/icons-material/Group';
 import HomeIcon from '@mui/icons-material/Home';
@@ -255,8 +257,13 @@ function AssociationPage() {
                         />
                     </Box>
 
-                    {/* RIGHT column: Athugasemdir — added in Task 8 */}
-                    <Box />
+                    {/* RIGHT column: sticky Athugasemdir */}
+                    <AthugasemdarPanel
+                        collections={collections}
+                        bankAccounts={bankAccounts}
+                        userId={user.id}
+                        assocParam={assocParam}
+                    />
 
                 </Box>
             </Box>
@@ -499,23 +506,19 @@ function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts,
     }, [assocParam]);
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Bankareikningar</Typography>
+        <Box sx={{ mt: '28px' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Bankareikningar</Typography>
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                    {canManageBank && (
-                        <Button
-                            variant="outlined" sx={secondaryButtonSx}
-                            onClick={() => navigate('/bank-settings')}
-                        >
-                            Tengja banka
-                        </Button>
-                    )}
-                    <Button
-                        variant="contained" sx={primaryButtonSx}
+                    <Button variant="outlined" sx={{ ...secondaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
+                        onClick={() => navigate('/bank-settings')}
+                    >
+                        Tengja banka
+                    </Button>
+                    <Button variant="contained" sx={{ ...primaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
                         onClick={() => setShowForm(true)}
                     >
-                        + Bæta við reikning
+                        + Bæta við
                     </Button>
                 </Box>
             </Box>
@@ -529,66 +532,64 @@ function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts,
                 onCreated={onReload}
             />
 
-            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
 
             {bankAccounts.length === 0 ? (
-                <Typography color="text.secondary" sx={{ mt: 2 }}>Enginn bankareikningur skráður.</Typography>
+                <Typography color="text.secondary" sx={{ fontSize: 13 }}>Enginn bankareikningur skráður.</Typography>
             ) : (
-                <Paper variant="outlined" sx={{ mt: 2 }}>
-                    <Table size="small">
-                        <TableHead sx={HEAD_SX}>
-                            <TableRow>
-                                <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
-                                <TableCell sx={HEAD_CELL_SX}>Reikningsnúmer</TableCell>
-                                <TableCell sx={HEAD_CELL_SX}>Bókhaldslykill</TableCell>
-                                <TableCell sx={{ ...HEAD_CELL_SX, textAlign: 'right' }}>Staða</TableCell>
-                                <TableCell />
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {bankAccounts.map(b => (
-                                <BankAccountRow
-                                    key={b.id}
-                                    bankAccount={b}
-                                    userId={user.id}
-                                    assocParam={assocParam}
-                                    accountingKeys={accountingKeys}
-                                    onSaved={onReload}
-                                />
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Paper>
+                <Box sx={{ border: `1px solid #e8e8e8`, borderRadius: '4px', overflow: 'hidden' }}>
+                    {bankAccounts.map((a, i) => (
+                        <BankAccountRow
+                            key={a.id}
+                            bankAccount={a}
+                            userId={user.id}
+                            assocParam={assocParam}
+                            accountingKeys={accountingKeys}
+                            onSaved={onReload}
+                            showDivider={i < bankAccounts.length - 1}
+                        />
+                    ))}
+                </Box>
             )}
-        </Paper>
+        </Box>
     );
 }
 
-function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSaved }) {
+function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSaved, showDivider }) {
     const [editOpen, setEditOpen] = React.useState(false);
     return (
         <>
-            <TableRow hover>
-                <TableCell>{bankAccount.name}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{bankAccount.account_number}</TableCell>
-                <TableCell>
+            <Box sx={{
+                display: 'grid', gridTemplateColumns: '1fr 130px 180px 140px 40px',
+                alignItems: 'center', p: '12px 18px', gap: 1.5,
+                borderBottom: showDivider ? '1px solid #f2f2f2' : 'none',
+            }}>
+                <Box>
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{bankAccount.name}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                        <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', background: '#2e7d32', display: 'inline-block' }} />
+                        <Typography sx={{ fontSize: 11.5, color: '#888' }}>Tengt</Typography>
+                    </Box>
+                </Box>
+                <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, color: '#555' }}>
+                    {bankAccount.account_number}
+                </Typography>
+                <Box>
                     {bankAccount.asset_account
-                        ? <LabelChip label={`${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`} />
+                        ? <LabelChip label={bankAccount.asset_account.name} />
                         : <Typography variant="body2" color="text.disabled">—</Typography>}
-                </TableCell>
-                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {bankAccount.current_balance != null
-                        ? fmtAmount(bankAccount.current_balance)
-                        : <Typography variant="body2" color="text.disabled">—</Typography>}
-                </TableCell>
-                <TableCell align="right" sx={{ width: 48 }}>
+                </Box>
+                <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 14.5, fontWeight: 500, textAlign: 'right', color: '#111' }}>
+                    {bankAccount.current_balance != null ? fmtAmount(bankAccount.current_balance) : '—'}
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <Tooltip title="Breyta">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
-                            <EditIcon fontSize="small" />
+                            <EditIcon fontSize="small" sx={{ color: '#888' }} />
                         </IconButton>
                     </Tooltip>
-                </TableCell>
-            </TableRow>
+                </Box>
+            </Box>
             <BankAccountEditDialog
                 open={editOpen}
                 onClose={() => setEditOpen(false)}
@@ -788,57 +789,63 @@ function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Flokkunarreglur</Typography>
-                <Button variant="contained" sx={primaryButtonSx} onClick={openCreate}>
+        <Box sx={{ mt: '28px' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Box>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Flokkunarreglur</Typography>
+                    <Typography sx={{ fontSize: 12, color: '#555', mt: 0.25 }}>Sjálfvirk flokkun bankafærslna eftir lykilorðum</Typography>
+                </Box>
+                <Button variant="contained" sx={{ ...primaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
+                    onClick={openCreate}
+                >
                     + Ný regla
                 </Button>
             </Box>
 
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress color="secondary" />
-                </Box>
+            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
+
+            {rules.length === 0 ? (
+                <Typography color="text.secondary" sx={{ fontSize: 13 }}>Engar reglur skráðar.</Typography>
             ) : (
-                <>
-                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                    {rules.length === 0 ? (
-                        <Typography color="text.secondary">Engar reglur skráðar.</Typography>
-                    ) : (
-                        <Paper variant="outlined">
-                            <Table size="small">
-                                <TableHead sx={HEAD_SX}>
-                                    <TableRow>
-                                        <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
-                                        <TableCell />
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {rules.map(rule => (
-                                        <TableRow key={rule.id} hover>
-                                            <TableCell>{rule.keyword}</TableCell>
-                                            <TableCell><LabelChip label={rule.category.name} /></TableCell>
-                                            <TableCell align="right" sx={{ width: 80 }}>
-                                                <Tooltip title="Breyta">
-                                                    <IconButton size="small" onClick={() => openEdit(rule)}>
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Eyða">
-                                                    <IconButton size="small" sx={{ color: '#c62828' }} onClick={() => setDeleteRule(rule)}>
-                                                        <DeleteOutlineIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Paper>
-                    )}
-                </>
+                <Box sx={{ border: `1px solid #e8e8e8`, borderRadius: '4px', overflow: 'hidden' }}>
+                    <Table size="small">
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={HEAD_CELL_SX}>Skýring inniheldur</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
+                                <TableCell align="right" sx={{ ...HEAD_CELL_SX, width: 100 }}>Notkun</TableCell>
+                                <TableCell />
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {rules.map(rule => (
+                                <TableRow key={rule.id} hover>
+                                    <TableCell>
+                                        <Typography component="span" sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12 }}>
+                                            "{rule.keyword}"
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell><LabelChip label={rule.category?.name || '—'} /></TableCell>
+                                    <TableCell align="right" sx={{ fontSize: 12, color: '#555' }}>
+                                        {rule.usage_count != null ? `${rule.usage_count} færslur` : '—'}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ width: 80 }}>
+                                        <Tooltip title="Breyta">
+                                            <IconButton size="small" onClick={() => openEdit(rule)}>
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Eyða">
+                                            <IconButton size="small" sx={{ color: '#c62828' }} onClick={() => setDeleteRule(rule)}>
+                                                <DeleteOutlineIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Box>
             )}
 
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
@@ -873,7 +880,7 @@ function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Paper>
+        </Box>
     );
 }
 
@@ -1064,6 +1071,82 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, onNavi
                 </Box>
             </Box>
         </div>
+    );
+}
+
+function AthugasemdarPanel({ collections, bankAccounts, userId, assocParam }) {
+    const [unclassifiedCount, setUnclassifiedCount] = React.useState(0);
+    const year = new Date().getFullYear();
+
+    React.useEffect(() => {
+        const qs = assocParam ? `${assocParam}&status=IMPORTED&year=${year}` : `?status=IMPORTED&year=${year}`;
+        apiFetch(`${API_URL}/Transaction/${userId}${qs}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(txns => setUnclassifiedCount(Array.isArray(txns) ? txns.length : (txns?.count ?? 0)))
+            .catch(() => {});
+    }, [userId, assocParam, year]);
+
+    const pendingCount = collections.filter(r => r.status === 'PENDING' || r.status === 'UNPAID').length;
+    const hasBanks = bankAccounts.length > 0;
+
+    const notifications = [];
+
+    if (pendingCount > 0) {
+        notifications.push({
+            icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#e65100', mt: '1px' }} />,
+            text: `${pendingCount} íbúð${pendingCount === 1 ? '' : 'ir'} í vanskilum`,
+            cta: { label: 'Senda áminningar →', href: '/innheimta' },
+        });
+    }
+
+    if (unclassifiedCount > 0) {
+        notifications.push({
+            icon: <LinkOffIcon sx={{ fontSize: 22, color: '#777', mt: '1px' }} />,
+            text: `${unclassifiedCount} óflokkuð bankafærsla${unclassifiedCount === 1 ? '' : 'r'}`,
+            cta: { label: 'Flokka færslu →', href: '/faerslur' },
+        });
+    }
+
+    if (hasBanks) {
+        notifications.push({
+            icon: <CheckCircleOutlineIcon sx={{ fontSize: 22, color: '#2e7d32', mt: '1px' }} />,
+            text: 'Bankareikningar tengdir',
+            cta: { label: 'Skoða →', href: '/bank-settings' },
+        });
+    }
+
+    return (
+        <Box sx={{ border: '1px solid #e8e8e8', borderRadius: '8px', p: '18px 20px', position: 'sticky', top: 0 }}>
+            <Eyebrow variant="navy" sx={{ mb: 1.75 }}>ATHUGASEMDIR</Eyebrow>
+            {notifications.length === 0 ? (
+                <Typography sx={{ fontSize: 13, color: '#888' }}>Ekkert að gera.</Typography>
+            ) : (
+                notifications.map((n, i) => (
+                    <Box key={i} sx={{
+                        display: 'flex', gap: 1.5, py: 1.5,
+                        borderBottom: i < notifications.length - 1 ? '1px solid #f2f2f2' : 'none',
+                    }}>
+                        {n.icon}
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 13.5, lineHeight: 1.4 }}>{n.text}</Typography>
+                            <AthugasemdarLink href={n.cta.href} label={n.cta.label} />
+                        </Box>
+                    </Box>
+                ))
+            )}
+        </Box>
+    );
+}
+
+function AthugasemdarLink({ href, label }) {
+    const navigate = useNavigate();
+    return (
+        <Typography
+            sx={{ fontSize: 12.5, color: '#1D366F', mt: 0.5, cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}
+            onClick={() => navigate(href)}
+        >
+            {label}
+        </Typography>
     );
 }
 
