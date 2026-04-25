@@ -15,7 +15,7 @@ from .views import (
 from .banks.views import (
     BankStatusView,
     BankDisconnectView, AdminBankSyncView, AdminBankHealthView,
-    AssociationBankSettingsView,
+    AssociationBankSettingsView, SendClaimView,
 )
 
 urlpatterns = [
@@ -85,4 +85,5 @@ urlpatterns = [
     path("admin/associations/<int:association_id>/bank/sync", AdminBankSyncView.as_view(), name="admin-bank-sync"),
     path("admin/bank/health", AdminBankHealthView.as_view(), name="admin-bank-health"),
     path("associations/<int:association_id>/bank/settings", AssociationBankSettingsView.as_view(), name="bank-settings"),
+    path("Collection/<int:collection_id>/send-claim", SendClaimView.as_view(), name="collection-send-claim"),
 ]

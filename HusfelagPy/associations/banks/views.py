@@ -3,9 +3,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
+from django.utils.timezone import now as tz_now
 from associations.models import (
     Association, AssociationAccess, AssociationRole,
-    AssociationBankSettings,
+    AssociationBankSettings, BankClaim, BankClaimStatus, Collection,
 )
 
 
@@ -117,3 +118,73 @@ class AssociationBankSettingsView(APIView):
             "template_id": bank_settings.template_id,
             "updated_at": bank_settings.updated_at.isoformat(),
         })
+
+
+class SendClaimView(APIView):
+    """POST /Collection/{collection_id}/send-claim"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, collection_id):
+        try:
+            collection = Collection.objects.select_related(
+                "budget__association", "payer", "apartment"
+            ).get(id=collection_id)
+        except Collection.DoesNotExist:
+            return Response(
+                {"detail": "Innheimtufærsla ekki fundin."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        association = collection.budget.association
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        # Guard: already sent
+        if BankClaim.objects.filter(collection=collection).exists():
+            return Response(
+                {"detail": "Krafa hefur þegar verið send fyrir þessa færslu."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Guard: no payer kennitala
+        if not collection.payer or not collection.payer.kennitala:
+            return Response(
+                {"detail": "Greiðandi hefur enga kennitölu skráða."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # Load template settings
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar eru ekki stilltar fyrir þetta félag."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        try:
+            api_response = create_claim(collection, bank_settings)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Villa við sendingu kröfu: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        due_date = _last_day_of_month(collection.budget.year, collection.month)
+        claim = BankClaim.objects.create(
+            collection=collection,
+            claim_id=api_response["id"],
+            payor_national_id=collection.payer.kennitala,
+            amount=collection.amount_total,
+            due_date=due_date,
+            status=BankClaimStatus.UNPAID,
+            sent_at=tz_now(),
+        )
+        return Response({
+            "claim_id": claim.claim_id,
+            "status": claim.status,
+            "due_date": claim.due_date.isoformat(),
+            "sent_at": claim.sent_at.isoformat(),
+        }, status=status.HTTP_201_CREATED)
