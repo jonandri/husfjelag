@@ -16,6 +16,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
@@ -241,7 +243,7 @@ function SideBar() {
                             sx={{
                                 display: 'flex', alignItems: 'center', gap: 1.5,
                                 px: 1.5, py: 0.85, mx: 1, borderRadius: 2, cursor: 'pointer',
-                                backgroundColor: location.pathname.startsWith('/superadmin') || location.pathname.startsWith('/admin')
+                                backgroundColor: location.pathname.startsWith('/superadmin') || location.pathname.startsWith('/admin/')
                                     ? ACTIVE_BG : 'transparent',
                                 '&:hover': { backgroundColor: HOVER_BG },
                                 transition: 'background-color 0.15s',
@@ -270,6 +272,22 @@ function SideBar() {
                                     collapsed={false}
                                     active={location.pathname === '/superadmin'}
                                     onClick={() => navigate('/superadmin')}
+                                />
+                                <NavItem
+                                    path="/admin/categories"
+                                    label="Flokkar"
+                                    icon={<CategoryOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/categories'}
+                                    onClick={() => navigate('/admin/categories')}
+                                />
+                                <NavItem
+                                    path="/admin/accounting-keys"
+                                    label="Bókhaldslyklar"
+                                    icon={<AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/accounting-keys'}
+                                    onClick={() => navigate('/admin/accounting-keys')}
                                 />
                                 <NavItem
                                     path="/admin/bank-health"

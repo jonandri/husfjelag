@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     AssociationView, AssociationVerifyView, AssociationLookupView, AssociationRoleView, AssociationListView,
-    AdminAssociationView, ApartmentView, ApartmentOwnerView, OwnerView,
+    AdminAssociationView, AdminStatsView, ApartmentView, ApartmentOwnerView, OwnerView,
     CategoryView, CategoryListView,
     AccountingKeyListView, AccountingKeyView,
     BankAccountView, TransactionView,
@@ -13,8 +13,9 @@ from .views import (
     ReportView, AnnualStatementView,
 )
 from .banks.views import (
-    BankConnectView, BankCallbackView, BankStatusView,
+    BankStatusView,
     BankDisconnectView, AdminBankSyncView, AdminBankHealthView,
+    AssociationBankSettingsView, SendClaimView, SendAllClaimsView,
 )
 
 urlpatterns = [
@@ -28,6 +29,7 @@ urlpatterns = [
     path("Association", AssociationView.as_view(), name="association-create"),
     path("Association/roles/<int:user_id>", AssociationRoleView.as_view(), name="association-roles"),
     path("admin/Association", AdminAssociationView.as_view(), name="admin-association"),
+    path("admin/stats", AdminStatsView.as_view(), name="admin-stats"),
     path("Apartment/<int:user_id>", ApartmentView.as_view(), name="apartment-list"),
     path("Apartment", ApartmentView.as_view(), name="apartment-create"),
     path("Apartment/update/<int:apartment_id>", ApartmentView.as_view(), name="apartment-update"),
@@ -78,10 +80,11 @@ urlpatterns = [
     path("Report/<int:user_id>", ReportView.as_view(), name="report"),
     path("AnnualStatement/<int:user_id>", AnnualStatementView.as_view(), name="annual-statement"),
     # Bank integration
-    path("associations/<int:association_id>/bank/connect", BankConnectView.as_view(), name="bank-connect"),
     path("associations/<int:association_id>/bank/status", BankStatusView.as_view(), name="bank-status"),
     path("associations/<int:association_id>/bank/disconnect", BankDisconnectView.as_view(), name="bank-disconnect"),
-    path("bank/callback/<str:bank>", BankCallbackView.as_view(), name="bank-callback"),
     path("admin/associations/<int:association_id>/bank/sync", AdminBankSyncView.as_view(), name="admin-bank-sync"),
     path("admin/bank/health", AdminBankHealthView.as_view(), name="admin-bank-health"),
+    path("associations/<int:association_id>/bank/settings", AssociationBankSettingsView.as_view(), name="bank-settings"),
+    path("Collection/<int:collection_id>/send-claim", SendClaimView.as_view(), name="collection-send-claim"),
+    path("associations/<int:association_id>/bank/send-all-claims", SendAllClaimsView.as_view(), name="bank-send-all-claims"),
 ]

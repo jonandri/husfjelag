@@ -14,7 +14,7 @@ import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
 import { fmtKennitala, fmtAmount } from '../format';
-import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -24,7 +24,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function AssociationPage() {
     const navigate = useNavigate();
-    const { user, assocParam } = React.useContext(UserContext);
+    const { user, assocParam, currentAssociation } = React.useContext(UserContext);
     const { openHelp } = useHelp();
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
@@ -137,7 +137,7 @@ function AssociationPage() {
 
                     {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
 
-                    <BankAccountsPanel user={user} assocParam={assocParam} />
+                    <BankAccountsPanel user={user} assocParam={assocParam} currentAssociation={currentAssociation} />
                     <AssociationRulesPanel user={user} assocParam={assocParam} />
                 </Box>
             </Box>
@@ -364,11 +364,14 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
     );
 }
 
-function BankAccountsPanel({ user, assocParam }) {
+function BankAccountsPanel({ user, assocParam, currentAssociation }) {
+    const navigate = useNavigate();
     const [bankAccounts, setBankAccounts] = React.useState(undefined);
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [error, setError] = React.useState('');
     const [showForm, setShowForm] = React.useState(false);
+
+    const canManageBank = ['Formaður', 'Gjaldkeri', 'Kerfisstjóri'].includes(currentAssociation?.role);
 
     React.useEffect(() => {
         loadBankAccounts();
@@ -403,12 +406,22 @@ function BankAccountsPanel({ user, assocParam }) {
         <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h6">Bankareikningar</Typography>
-                <Button
-                    variant="contained" sx={primaryButtonSx}
-                    onClick={() => setShowForm(true)}
-                >
-                    + Bæta við reikning
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    {canManageBank && (
+                        <Button
+                            variant="outlined" sx={secondaryButtonSx}
+                            onClick={() => navigate('/bank-settings')}
+                        >
+                            Tengja banka
+                        </Button>
+                    )}
+                    <Button
+                        variant="contained" sx={primaryButtonSx}
+                        onClick={() => setShowForm(true)}
+                    >
+                        + Bæta við reikning
+                    </Button>
+                </Box>
             </Box>
 
             <BankAccountDialog

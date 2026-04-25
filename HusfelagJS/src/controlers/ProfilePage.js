@@ -4,6 +4,7 @@ import {
     Box, Typography, TextField, Button, Paper, Alert, CircularProgress,
 } from '@mui/material';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import { fmtPhone } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -28,7 +29,7 @@ function ProfilePage() {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/User/${user.id}`, {
+            const resp = await apiFetch(`${API_URL}/User/${user.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),

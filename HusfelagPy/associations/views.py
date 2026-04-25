@@ -13,7 +13,7 @@ from .models import (
     Association, AssociationAccess, AssociationRole, Apartment, ApartmentOwnership,
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
     AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
-    CategoryRule, Collection, CollectionStatus,
+    CategoryRule, Collection, CollectionStatus, AssociationBankSettings,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
@@ -1721,12 +1721,18 @@ class CollectionView(APIView):
         collections = (
             Collection.objects
             .filter(budget__association=association, budget__year=year, budget__is_active=True, month=month)
-            .select_related("apartment", "payer", "paid_transaction")
+            .select_related("apartment", "payer", "paid_transaction", "bank_claim")
             .order_by("apartment__anr")
         )
 
         rows = []
         for col in collections:
+            try:
+                claim_status = col.bank_claim.status
+                claim_id = col.bank_claim.claim_id
+            except Collection.bank_claim.RelatedObjectDoesNotExist:
+                claim_status = None
+                claim_id = None
             rows.append({
                 "collection_id": col.id,
                 "apartment_id": col.apartment_id,
@@ -1737,6 +1743,8 @@ class CollectionView(APIView):
                 "status": col.status,
                 "paid_transaction_id": col.paid_transaction_id,
                 "paid_transaction_date": str(col.paid_transaction.date) if col.paid_transaction else None,
+                "claim_status": claim_status,
+                "claim_id": claim_id,
             })
 
         # Unmatched: positive income transactions in this month, not RECONCILED, not linked to any collection
@@ -1758,7 +1766,8 @@ class CollectionView(APIView):
             for tx in unmatched_qs.order_by("date")
         ]
 
-        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched})
+        bank_settings_configured = AssociationBankSettings.objects.filter(association=association).exists()
+        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched, "bank_settings_configured": bank_settings_configured})
 
     def _summary_mode(self, association):
         """Computed-on-the-fly annual/monthly amounts per apartment (legacy behaviour)."""
@@ -2191,6 +2200,33 @@ class AdminAssociationView(APIView):
             raise
 
         return Response(AssociationAccessSerializer(association, context={"user_id": None}).data, status=status.HTTP_201_CREATED)
+
+
+class AdminStatsView(APIView):
+    def get(self, request):
+        """GET /admin/stats?days=N — System-wide KPIs. Superadmin only.
+        days: window for active users (default 365). 0 = all registered users."""
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            days = int(request.query_params.get("days", 365))
+        except ValueError:
+            days = 365
+
+        if days > 0:
+            cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=days)
+            active_users = User.objects.filter(last_login__gte=cutoff).count()
+        else:
+            active_users = User.objects.count()
+
+        return Response({
+            "active_associations": Association.objects.count(),
+            "active_apartments": Apartment.objects.filter(deleted=False).count(),
+            "active_owners": ApartmentOwnership.objects.filter(deleted=False).values("user").distinct().count(),
+            "active_users": active_users,
+            "days": days,
+        })
 
 
 HMS_URL_RE = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')

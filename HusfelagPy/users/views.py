@@ -144,16 +144,18 @@ class OIDCCallbackView(APIView):
             kennitala=kennitala,
             defaults={"name": name, "phone": phone},
         )
+        # Always update last_login; also sync name/phone if they changed
+        from django.utils import timezone
+        updated_fields = ["last_login"]
+        user.last_login = timezone.now()
         if not created:
-            updated = False
             if name and user.name != name:
                 user.name = name
-                updated = True
+                updated_fields.append("name")
             if phone and user.phone != phone:
                 user.phone = phone
-                updated = True
-            if updated:
-                user.save()
+                updated_fields.append("phone")
+        user.save(update_fields=updated_fields)
 
         jwt_token = create_access_token(user.id)
 

@@ -33,8 +33,8 @@ export const HELP = {
                 body: 'Smelltu á "Bæta við íbúð" til að skrá nýja íbúð. Þú þarft að gefa upp íbúðarnúmer og eignarhlutfall. Samtals eignarhlutfall allra íbúða þarf að vera 100%.',
             },
             {
-                heading: 'HMS innflutningur',
-                body: 'Ef þú ert með skrá frá HMS (Húseigendamiðstöðinni) með íbúðalista geturðu flutt hann inn í einu lagi með því að nota "HMS innflutningur" hnappinn.',
+                heading: 'Innflutningur',
+                body: 'Þú getur sótt lista af íbúðum frá HMS (Húsnæðis-, mannvirkja- og skipulagsstofnun) og flutt hann inn í einu lagi með því að nota "Innflutningur" hnappinn.',
             },
         ],
     },

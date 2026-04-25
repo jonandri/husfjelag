@@ -382,7 +382,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
         const method = isDisabled ? 'PATCH' : 'PUT';
         try {
             const [ownerResp, userResp] = await Promise.all([
-                fetch(url, {
+                apiFetch(url, {
                     method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ share: parseFloat(share), is_payer: isPayer }),

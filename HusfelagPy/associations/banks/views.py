@@ -1,19 +1,13 @@
-import secrets
-from datetime import datetime, timezone, timedelta, date
-
-from django.conf import settings
-from django.http import HttpResponseRedirect
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 
+from django.utils.timezone import now as tz_now
 from associations.models import (
     Association, AssociationAccess, AssociationRole,
-    BankConsent, BankApiAuditLog, BankNotificationLog,
+    AssociationBankSettings, BankClaim, BankClaimStatus, Collection,
 )
-from associations.banks.oauth_client import generate_pkce_pair, store_oauth_state, pop_oauth_state
-from associations.banks.consent_store import encrypt_token, decrypt_token
 
 
 def _require_chair_or_cfo(request, association):
@@ -33,107 +27,6 @@ def _require_chair_or_cfo(request, association):
     return None
 
 
-def _get_provider(bank: str):
-    if bank == "LANDSBANKINN":
-        from associations.banks.landsbankinn import LandsbankinnProvider
-        return LandsbankinnProvider()
-    raise ValueError(f"Unknown bank: {bank}")
-
-
-class BankConnectView(APIView):
-    """GET /associations/{id}/bank/connect?bank=LANDSBANKINN"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, association_id):
-        try:
-            association = Association.objects.get(id=association_id)
-        except Association.DoesNotExist:
-            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
-
-        err = _require_chair_or_cfo(request, association)
-        if err:
-            return err
-
-        bank = request.query_params.get("bank", "LANDSBANKINN").upper()
-        if not getattr(settings, f"BANK_{bank}_ENABLED", False):
-            return Response(
-                {"detail": f"{bank} samþætting er ekki virk."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        verifier, challenge = generate_pkce_pair()
-        state = secrets.token_urlsafe(32)
-        store_oauth_state(state, {
-            "association_id": association_id,
-            "bank": bank,
-            "user_id": request.user.id,
-            "verifier": verifier,
-        })
-
-        provider = _get_provider(bank)
-        url = provider.get_authorization_url(state=state, code_challenge=challenge)
-        return HttpResponseRedirect(url)
-
-
-class BankCallbackView(APIView):
-    """GET /bank/callback/{bank} — open endpoint, no JWT"""
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request, bank):
-        bank = bank.upper()
-        code = request.query_params.get("code")
-        state = request.query_params.get("state")
-        frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:3010")
-
-        if not code or not state:
-            return HttpResponseRedirect(f"{frontend_base}/bank-settings?status=error&reason=missing_params")
-
-        payload = pop_oauth_state(state)
-        if not payload:
-            return HttpResponseRedirect(f"{frontend_base}/bank-settings?status=error&reason=invalid_state")
-
-        association_id = payload["association_id"]
-        verifier = payload["verifier"]
-
-        try:
-            association = Association.objects.get(id=association_id)
-        except Association.DoesNotExist:
-            return HttpResponseRedirect(f"{frontend_base}/bank-settings?status=error&reason=assoc_not_found")
-
-        try:
-            provider = _get_provider(bank)
-            token_data = provider.exchange_code(code=code, code_verifier=verifier)
-        except Exception:
-            return HttpResponseRedirect(
-                f"{frontend_base}/bank-settings?status=error&reason=token_exchange_failed"
-            )
-
-        access_token = token_data.get("access_token", "")
-        refresh_token = token_data.get("refresh_token", "")
-        expires_in = int(token_data.get("expires_in", 3600))
-        consent_id = token_data.get("consent_id", "")
-
-        token_expires_at = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
-        consent_expires_at = date.today() + timedelta(days=90)
-
-        BankConsent.objects.update_or_create(
-            association=association,
-            defaults={
-                "bank": bank,
-                "consent_id": consent_id,
-                "access_token": encrypt_token(access_token),
-                "refresh_token": encrypt_token(refresh_token) if refresh_token else "",
-                "token_expires_at": token_expires_at,
-                "consent_expires_at": consent_expires_at,
-                "is_active": True,
-                "renewal_notified_at": None,
-            },
-        )
-
-        return HttpResponseRedirect(f"{frontend_base}/bank-settings?status=ok&assoc={association_id}")
-
-
 class BankStatusView(APIView):
     """GET /associations/{id}/bank/status"""
     permission_classes = [IsAuthenticated]
@@ -148,19 +41,19 @@ class BankStatusView(APIView):
         if err:
             return err
 
-        try:
-            consent = BankConsent.objects.get(association=association, is_active=True)
-        except BankConsent.DoesNotExist:
-            return Response({"detail": "Engin virk bankatengind."}, status=status.HTTP_404_NOT_FOUND)
+        configured = AssociationBankSettings.objects.filter(association=association).exists()
 
-        days_left = (consent.consent_expires_at - date.today()).days
+        last_sync = (
+            association.bank_audit_logs
+            .filter(http_method="GET")
+            .order_by("-timestamp")
+            .values_list("timestamp", flat=True)
+            .first()
+        )
+
         return Response({
-            "bank": consent.bank,
-            "bank_display": consent.get_bank_display(),
-            "consent_expires_at": consent.consent_expires_at.isoformat(),
-            "days_until_expiry": days_left,
-            "is_expiring_soon": days_left <= 10,
-            "updated_at": consent.updated_at.isoformat(),
+            "configured": configured,
+            "last_sync_at": last_sync.isoformat() if last_sync else None,
         })
 
 
@@ -178,16 +71,13 @@ class BankDisconnectView(APIView):
         if err:
             return err
 
-        try:
-            consent = BankConsent.objects.get(association=association, is_active=True)
-        except BankConsent.DoesNotExist:
-            return Response({"detail": "Engin virk bankatengind."}, status=status.HTTP_404_NOT_FOUND)
-
-        consent.is_active = False
-        consent.access_token = "CLEARED"
-        consent.refresh_token = "CLEARED"
-        consent.save(update_fields=["is_active", "access_token", "refresh_token", "updated_at"])
-        return Response({"detail": "Bankatengind aftengt."})
+        deleted_count, _ = AssociationBankSettings.objects.filter(association=association).delete()
+        if deleted_count == 0:
+            return Response(
+                {"detail": "Engar bankastillingar til að hreinsa."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"detail": "Bankastillingar hreinsaðar."})
 
 
 class AdminBankSyncView(APIView):
@@ -209,56 +99,241 @@ class AdminBankHealthView(APIView):
 
     def get(self, request):
         if not request.user.is_superadmin:
-            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Aðeins kerfisstjórar hafa aðgang."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        today = date.today()
-        in_14 = today + timedelta(days=14)
-
-        consents = BankConsent.objects.select_related("association").filter(is_active=True)
-        active = consents.count()
-        expiring_14 = consents.filter(consent_expires_at__lte=in_14).count()
-        expired = BankConsent.objects.filter(is_active=True, consent_expires_at__lt=today).count()
-
-        from django.utils.timezone import now
-        month_start = now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        notifications_this_month = BankNotificationLog.objects.filter(
-            sent_at__gte=month_start, success=True
-        ).count()
+        settings_qs = AssociationBankSettings.objects.select_related("association").all()
+        total_configured = settings_qs.count()
+        total_unsent_claims = BankClaim.objects.filter(status=BankClaimStatus.UNPAID).count()
 
         rows = []
-        for c in consents.order_by("consent_expires_at"):
-            days_left = (c.consent_expires_at - today).days
+        for bs in settings_qs.order_by("association__name"):
             last_sync = (
-                c.association.bank_audit_logs
+                bs.association.bank_audit_logs
                 .filter(http_method="GET")
                 .order_by("-timestamp")
                 .values_list("timestamp", flat=True)
                 .first()
             )
-            last_notif = (
-                c.association.bank_notification_logs
-                .order_by("-sent_at")
-                .values_list("sent_at", flat=True)
-                .first()
-            )
             rows.append({
-                "association_id": c.association.id,
-                "association_name": c.association.name,
-                "bank": c.bank,
-                "bank_display": c.get_bank_display(),
-                "consent_expires_at": c.consent_expires_at.isoformat(),
-                "days_until_expiry": days_left,
-                "is_expiring_soon": days_left <= 14,
+                "association_id": bs.association.id,
+                "association_name": bs.association.name,
+                "template_id": bs.template_id,
                 "last_sync_at": last_sync.isoformat() if last_sync else None,
-                "last_notification_at": last_notif.isoformat() if last_notif else None,
+                "unsent_claims": BankClaim.objects.filter(
+                    collection__budget__association=bs.association,
+                    status=BankClaimStatus.UNPAID,
+                ).count(),
             })
 
         return Response({
             "summary": {
-                "active_connections": active,
-                "expiring_within_14_days": expiring_14,
-                "expired": expired,
-                "notifications_this_month": notifications_this_month,
+                "configured_associations": total_configured,
+                "total_unsent_claims": total_unsent_claims,
             },
             "associations": rows,
         })
+
+
+class AssociationBankSettingsView(APIView):
+    """GET/POST /associations/{id}/bank/settings"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, association_id):
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar ekki stilltar."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "template_id": bank_settings.template_id,
+            "updated_at": bank_settings.updated_at.isoformat(),
+        })
+
+    def post(self, request, association_id):
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        template_id = request.data.get("template_id", "").strip()
+        if not template_id:
+            return Response(
+                {"detail": "template_id er nauðsynlegt."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        bank_settings, _ = AssociationBankSettings.objects.update_or_create(
+            association=association,
+            defaults={"template_id": template_id},
+        )
+        return Response({
+            "template_id": bank_settings.template_id,
+            "updated_at": bank_settings.updated_at.isoformat(),
+        })
+
+
+class SendClaimView(APIView):
+    """POST /Collection/{collection_id}/send-claim"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, collection_id):
+        try:
+            collection = Collection.objects.select_related(
+                "budget__association", "payer", "apartment"
+            ).get(id=collection_id)
+        except Collection.DoesNotExist:
+            return Response(
+                {"detail": "Innheimtufærsla ekki fundin."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        association = collection.budget.association
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        # Guard: already sent
+        if BankClaim.objects.filter(collection=collection).exists():
+            return Response(
+                {"detail": "Krafa hefur þegar verið send fyrir þessa færslu."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Guard: no payer kennitala
+        if not collection.payer or not collection.payer.kennitala:
+            return Response(
+                {"detail": "Greiðandi hefur enga kennitölu skráða."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # Load template settings
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar eru ekki stilltar fyrir þetta félag."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        try:
+            api_response = create_claim(collection, bank_settings)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Villa við sendingu kröfu: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        due_date = _last_day_of_month(collection.budget.year, collection.month)
+        claim = BankClaim.objects.create(
+            collection=collection,
+            claim_id=api_response["id"],
+            payor_national_id=collection.payer.kennitala,
+            amount=collection.amount_total,
+            due_date=due_date,
+            status=BankClaimStatus.UNPAID,
+            sent_at=tz_now(),
+        )
+        return Response({
+            "claim_id": claim.claim_id,
+            "status": claim.status,
+            "due_date": claim.due_date.isoformat(),
+            "sent_at": claim.sent_at.isoformat(),
+        }, status=status.HTTP_201_CREATED)
+
+
+class SendAllClaimsView(APIView):
+    """POST /associations/{id}/bank/send-all-claims?month=4&year=2026"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, association_id):
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        if not month or not year:
+            return Response(
+                {"detail": "month og year eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        month, year = int(month), int(year)
+
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar eru ekki stilltar."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        collections = (
+            Collection.objects
+            .select_related("budget", "payer", "apartment")
+            .filter(
+                budget__association=association,
+                budget__year=year,
+                budget__is_active=True,
+                month=month,
+            )
+            .exclude(bank_claim__isnull=False)
+        )
+
+        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        sent = 0
+        skipped = 0
+        errors = []
+
+        for collection in collections:
+            if not collection.payer or not collection.payer.kennitala:
+                skipped += 1
+                continue
+
+            try:
+                api_response = create_claim(collection, bank_settings)
+            except Exception as exc:
+                errors.append(f"Íbúð {collection.apartment.anr}: {exc}")
+                skipped += 1
+                continue
+
+            due_date = _last_day_of_month(year, month)
+            BankClaim.objects.create(
+                collection=collection,
+                claim_id=api_response["id"],
+                payor_national_id=collection.payer.kennitala,
+                amount=collection.amount_total,
+                due_date=due_date,
+                status=BankClaimStatus.UNPAID,
+                sent_at=tz_now(),
+            )
+            sent += 1
+
+        response_data = {"sent": sent, "skipped": skipped}
+        if errors:
+            response_data["errors"] = errors
+        return Response(response_data)

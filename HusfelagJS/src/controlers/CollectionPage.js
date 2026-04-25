@@ -11,7 +11,7 @@ import AddLinkIcon from '@mui/icons-material/AddLink';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
 import HelpDialogTitle from '../ui/HelpDialogTitle';
-import { ghostButtonSx, primaryButtonSx } from '../ui/buttons';
+import { ghostButtonSx, primaryButtonSx, secondaryButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -28,7 +28,7 @@ const MONTH_NAMES = [
 
 function CollectionPage() {
     const navigate = useNavigate();
-    const { user, assocParam } = React.useContext(UserContext);
+    const { user, assocParam, currentAssociation } = React.useContext(UserContext);
     const { openHelp } = useHelp();
 
     const today = new Date();
@@ -39,11 +39,15 @@ function CollectionPage() {
     const [generating, setGenerating] = useState(false);
     const [matchError, setMatchError] = useState('');
     const [matchTarget, setMatchTarget] = useState(null);
+    const [bankConfigured, setBankConfigured] = useState(false);
+    const [claimMessage, setClaimMessage] = useState(null);
+    const [sendingAll, setSendingAll] = useState(false);
 
     const load = useCallback(() => {
         if (!user) return;
         setData(null);
         setError('');
+        setClaimMessage(null);
         // assocParam starts with '?' when set (e.g. '?as=5'), so build:
         // /Collection/{id}?as=5&month=M&year=Y  or  /Collection/{id}?month=M&year=Y
         const qs = assocParam
@@ -51,7 +55,10 @@ function CollectionPage() {
             : `?month=${month}&year=${year}`;
         apiFetch(`${API_URL}/Collection/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
-            .then(setData)
+            .then(d => {
+                setData(d);
+                setBankConfigured(d.bank_settings_configured ?? false);
+            })
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], unmatched: [] }); });
     }, [user, assocParam, month, year]);
 
@@ -89,6 +96,32 @@ function CollectionPage() {
             .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
             .then(() => load())
             .catch(err => setMatchError(typeof err === 'string' ? err : 'Villa við að aftengja greiðslu.'));
+    };
+
+    const handleSendClaim = (collectionId) => {
+        setClaimMessage(null);
+        apiFetch(`${API_URL}/Collection/${collectionId}/send-claim`, { method: 'POST' })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => {
+                load();
+                setClaimMessage({ type: 'success', text: 'Krafa send.' });
+            })
+            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }));
+    };
+
+    const handleSendAllClaims = () => {
+        setClaimMessage(null);
+        setSendingAll(true);
+        apiFetch(`${API_URL}/associations/${currentAssociation?.id}/bank/send-all-claims?month=${month}&year=${year}`, {
+            method: 'POST',
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(d => {
+                load();
+                setClaimMessage({ type: 'success', text: `${d.sent} kröfur sendar, ${d.skipped} sleppt.` });
+            })
+            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }))
+            .finally(() => setSendingAll(false));
     };
 
     const handleMatch = (collectionId, transactionId) => {
@@ -140,6 +173,17 @@ function CollectionPage() {
                         >
                             {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
                         </Button>
+                        {hasItems && bankConfigured && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                sx={secondaryButtonSx}
+                                onClick={handleSendAllClaims}
+                                disabled={sendingAll || rows.every(r => r.claim_status && r.claim_status !== 'CANCELLED')}
+                            >
+                                Senda allar kröfur
+                            </Button>
+                        )}
                         <Tooltip title="Hjálp">
                             <IconButton size="small" onClick={() => openHelp('innheimta')}>
                                 <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
@@ -176,6 +220,11 @@ function CollectionPage() {
 
                     {error && <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{error}</Alert>}
                     {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
+                    {claimMessage && (
+                        <Alert severity={claimMessage.type} sx={{ mb: 2 }} onClose={() => setClaimMessage(null)}>
+                            {claimMessage.text}
+                        </Alert>
+                    )}
 
                     {/* Collection items table */}
                     {hasItems ? (
@@ -192,6 +241,7 @@ function CollectionPage() {
                                             <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
                                             <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
                                             <TableCell align="center" sx={HEAD_CELL_SX}>Staða</TableCell>
+                                            <TableCell align="center" sx={HEAD_CELL_SX}>Krafa</TableCell>
                                             <TableCell />
                                         </TableRow>
                                     </TableHead>
@@ -207,6 +257,35 @@ function CollectionPage() {
                                                     <StatusChip status={row.status === 'PAID' ? 'PAID' : 'UNPAID'} />
                                                     {row.status === 'PAID' && row.paid_transaction_date && (
                                                         <Typography variant="caption" display="block" color="text.secondary">{row.paid_transaction_date}</Typography>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell align="center" sx={{ width: 140, pr: 1 }}>
+                                                    {row.claim_status === 'UNPAID' && (
+                                                        <StatusChip status="CLAIM_UNPAID" />
+                                                    )}
+                                                    {row.claim_status === 'PAID' && (
+                                                        <StatusChip status="CLAIM_PAID" />
+                                                    )}
+                                                    {row.claim_status === 'CANCELLED' && (
+                                                        <StatusChip status="CLAIM_CANCELLED" />
+                                                    )}
+                                                    {!row.claim_status && (
+                                                        <Tooltip title={
+                                                            !bankConfigured
+                                                                ? 'Þú þarft að stilla Landsbankinn sniðmát áður en hægt er að senda kröfur.'
+                                                                : 'Senda kröfu'
+                                                        }>
+                                                            <span>
+                                                                <Button
+                                                                    size="small"
+                                                                    sx={{ ...secondaryButtonSx, fontSize: 11, py: 0.25, px: 1 }}
+                                                                    onClick={() => handleSendClaim(row.collection_id)}
+                                                                    disabled={!bankConfigured}
+                                                                >
+                                                                    Senda kröfu
+                                                                </Button>
+                                                            </span>
+                                                        </Tooltip>
                                                     )}
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ width: 40, pr: 1 }}>
@@ -235,6 +314,7 @@ function CollectionPage() {
                                             <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
                                                 {paidCount}/{rows.length} greidd
                                             </TableCell>
+                                            <TableCell />
                                             <TableCell />
                                         </TableRow>
                                     </TableFooter>

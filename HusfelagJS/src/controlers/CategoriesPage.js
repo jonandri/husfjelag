@@ -262,7 +262,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
         setSaving(true);
         const url = `${API_URL}/Category/update/${category.id}`;
         try {
-            const resp = await fetch(url, {
+            const resp = await apiFetch(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user?.id, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
