@@ -188,3 +188,80 @@ class SendClaimView(APIView):
             "due_date": claim.due_date.isoformat(),
             "sent_at": claim.sent_at.isoformat(),
         }, status=status.HTTP_201_CREATED)
+
+
+class SendAllClaimsView(APIView):
+    """POST /associations/{id}/bank/send-all-claims?month=4&year=2026"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, association_id):
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        if not month or not year:
+            return Response(
+                {"detail": "month og year eru nauðsynleg."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        month, year = int(month), int(year)
+
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar eru ekki stilltar."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        collections = (
+            Collection.objects
+            .select_related("budget", "payer", "apartment")
+            .filter(
+                budget__association=association,
+                budget__year=year,
+                month=month,
+            )
+            .exclude(bank_claim__isnull=False)
+        )
+
+        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        sent = 0
+        skipped = 0
+        errors = []
+
+        for collection in collections:
+            if not collection.payer or not collection.payer.kennitala:
+                skipped += 1
+                continue
+
+            try:
+                api_response = create_claim(collection, bank_settings)
+            except Exception as exc:
+                errors.append(f"Íbúð {collection.apartment.anr}: {exc}")
+                skipped += 1
+                continue
+
+            due_date = _last_day_of_month(year, month)
+            BankClaim.objects.create(
+                collection=collection,
+                claim_id=api_response["id"],
+                payor_national_id=collection.payer.kennitala,
+                amount=collection.amount_total,
+                due_date=due_date,
+                status=BankClaimStatus.UNPAID,
+                sent_at=tz_now(),
+            )
+            sent += 1
+
+        response_data = {"sent": sent, "skipped": skipped}
+        if errors:
+            response_data["errors"] = errors
+        return Response(response_data)
