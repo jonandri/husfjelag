@@ -15,6 +15,7 @@ from .views import (
 from .banks.views import (
     BankStatusView,
     BankDisconnectView, AdminBankSyncView, AdminBankHealthView,
+    AssociationBankSettingsView,
 )
 
 urlpatterns = [
@@ -83,4 +84,5 @@ urlpatterns = [
     path("associations/<int:association_id>/bank/disconnect", BankDisconnectView.as_view(), name="bank-disconnect"),
     path("admin/associations/<int:association_id>/bank/sync", AdminBankSyncView.as_view(), name="admin-bank-sync"),
     path("admin/bank/health", AdminBankHealthView.as_view(), name="admin-bank-health"),
+    path("associations/<int:association_id>/bank/settings", AssociationBankSettingsView.as_view(), name="bank-settings"),
 ]
