@@ -57,6 +57,30 @@ const theme = createTheme({
     h5: { fontWeight: 600 },
     h6: { fontWeight: 400 },
   },
+  components: {
+    MuiTextField: {
+      defaultProps: { variant: 'outlined' },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#1D366F',
+            borderWidth: 2,
+          },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          '&.Mui-focused': {
+            color: '#1D366F',
+          },
+        },
+      },
+    },
+  },
 });
 
 // Shown to logged-in users who have no association membership yet.
