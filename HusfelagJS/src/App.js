@@ -1,7 +1,7 @@
 import React from 'react';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import Login from './controlers/Login';
 import Logout from './controlers/Logout';
 import AuthCallback from './controlers/AuthCallback';
@@ -25,6 +25,7 @@ import BankSettingsPage from './controlers/BankSettingsPage';
 import BankHealthPage from './controlers/BankHealthPage';
 import AdminCategoriesPage from './controlers/AdminCategoriesPage';
 import AdminAccountingKeysPage from './controlers/AdminAccountingKeysPage';
+import RegistrationRequestPage from './controlers/RegistrationRequestPage';
 import { apiFetch } from './api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
@@ -85,6 +86,7 @@ const theme = createTheme({
 
 // Shown to logged-in users who have no association membership yet.
 function NoAssociationView() {
+  const navigate = useNavigate();
   return (
     <Box sx={{ minHeight: '100vh', background: '#1D366F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Box sx={{ background: '#fff', borderRadius: 2, p: '40px 36px', maxWidth: 420, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
@@ -92,9 +94,16 @@ function NoAssociationView() {
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#1D366F', mb: 1 }}>
           Ekki skráð/ur í húsfélag
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Þú ert ekki skráð/ur í neitt húsfélag. Hafðu samband við formann húsfélags þíns til að fá aðgang.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Þú ert ekki skráð/ur í neitt húsfélag. Hafðu samband við formann húsfélags þíns til að fá aðgang, eða skráðu húsfélag þitt.
         </Typography>
+        <Button
+          variant="contained"
+          sx={{ backgroundColor: '#08C076', color: '#fff', fontWeight: 600, textTransform: 'none', '&:hover': { backgroundColor: '#06a866' } }}
+          onClick={() => navigate('/skraning')}
+        >
+          Skrá húsfélag
+        </Button>
       </Box>
     </Box>
   );
@@ -116,7 +125,8 @@ function ProtectedRoute({ children }) {
   // Routes that are valid even without an association
   const isAdminRoute = location.pathname.startsWith('/superadmin') ||
                        location.pathname.startsWith('/admin') ||
-                       location.pathname.startsWith('/profile');
+                       location.pathname.startsWith('/profile') ||
+                       location.pathname.startsWith('/skraning');
 
   // Always prompt for email/phone if either is missing
   if (location.pathname !== '/profile' && (!user.email || !user.phone)) {
@@ -211,6 +221,7 @@ function App() {
             <Route path="/ibudir/innflutningur" element={<ProtectedRoute><ApartmentImportPage /></ProtectedRoute>} />
             <Route path="/eigendur" element={<ProtectedRoute><OwnersPage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/skraning" element={<ProtectedRoute><RegistrationRequestPage /></ProtectedRoute>} />
             <Route path="/aaetlun" element={<ProtectedRoute><BudgetPage /></ProtectedRoute>} />
             <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
             <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
