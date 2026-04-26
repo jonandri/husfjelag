@@ -5,7 +5,6 @@ import {
 } from '@mui/material';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
-import { fmtPhone } from '../format';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -23,7 +22,16 @@ function ProfilePage() {
         return null;
     }
 
-    const isValid = email.trim().length > 3 && email.includes('@') && phone.trim().length >= 7;
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+    const phoneDigits = phone.replace(/\D/g, '');
+    const phoneValid = phoneDigits.length === 7;
+    const isValid = emailValid && phoneValid;
+
+    const handlePhoneChange = (val) => {
+        const digits = val.replace(/\D/g, '').slice(0, 7);
+        const formatted = digits.length > 3 ? `${digits.slice(0, 3)} ${digits.slice(3)}` : digits;
+        setPhone(formatted);
+    };
 
     const handleSave = async () => {
         setError('');
@@ -32,7 +40,7 @@ function ProfilePage() {
             const resp = await apiFetch(`${API_URL}/User/${user.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),
+                body: JSON.stringify({ email: email.trim(), phone: phone.trim() }),
             });
             if (resp.ok) {
                 const updated = await resp.json();
@@ -68,14 +76,18 @@ function ProfilePage() {
                     size="small"
                     fullWidth
                     autoFocus
+                    error={email.length > 0 && !emailValid}
+                    helperText={email.length > 0 && !emailValid ? 'Netfang er ekki gilt' : ''}
                 />
                 <TextField
                     label="Símanúmer"
                     value={phone}
-                    onChange={e => setPhone(e.target.value.replace(/[^0-9+\s-]/g, ''))}
+                    onChange={e => handlePhoneChange(e.target.value)}
                     size="small"
                     fullWidth
-                    inputProps={{ inputMode: 'tel' }}
+                    inputProps={{ inputMode: 'tel', placeholder: '000 0000' }}
+                    error={phone.length > 0 && !phoneValid}
+                    helperText={phone.length > 0 && !phoneValid ? 'Símanúmer verður að vera 7 tölustafir' : ''}
                 />
                 {error && <Alert severity="error">{error}</Alert>}
                 <Button
