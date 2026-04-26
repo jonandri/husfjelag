@@ -20,6 +20,16 @@ function SuperAdminPage() {
     const navigate = useNavigate();
     const { user, setCurrentAssociation } = React.useContext(UserContext);
     const [createOpen, setCreateOpen] = useState(false);
+    const [prefillAssocSsn, setPrefillAssocSsn] = useState('');
+    const [prefillChairSsn, setPrefillChairSsn] = useState('');
+    const [reviewingRequestId, setReviewingRequestId] = useState(null);
+
+    const handleReview = (req) => {
+        setPrefillAssocSsn(req.assoc_ssn);
+        setPrefillChairSsn(req.chair_ssn);
+        setReviewingRequestId(req.id);
+        setCreateOpen(true);
+    };
 
     React.useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -44,24 +54,99 @@ function SuperAdminPage() {
                     </Button>
                 </Box>
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <PendingRequestsPanel user={user} onReview={handleReview} />
                     <KpiPanel user={user} />
                     <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
                 </Box>
             </Box>
             <CreateAssociationDialog
                 open={createOpen}
-                onClose={() => setCreateOpen(false)}
+                onClose={() => {
+                    setCreateOpen(false);
+                    setPrefillAssocSsn('');
+                    setPrefillChairSsn('');
+                    setReviewingRequestId(null);
+                }}
                 user={user}
-                onCreated={(assoc) => { setCurrentAssociation(assoc); setCreateOpen(false); navigate('/husfelag'); }}
+                onCreated={async (assoc) => {
+                    if (reviewingRequestId) {
+                        await apiFetch(`${API_URL}/admin/RegistrationRequest/${reviewingRequestId}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'REVIEWED' }),
+                        });
+                        setReviewingRequestId(null);
+                    }
+                    setPrefillAssocSsn('');
+                    setPrefillChairSsn('');
+                    setCurrentAssociation(assoc);
+                    setCreateOpen(false);
+                    navigate('/husfelag');
+                }}
+                initialAssocSsn={prefillAssocSsn}
+                initialChairSsn={prefillChairSsn}
             />
         </div>
+    );
+}
+
+function PendingRequestsPanel({ user, onReview }) {
+    const [requests, setRequests] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+
+    const load = React.useCallback(() => {
+        setLoading(true);
+        apiFetch(`${API_URL}/admin/RegistrationRequest`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => setRequests(data))
+            .catch(() => setRequests([]))
+            .finally(() => setLoading(false));
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    React.useEffect(() => { load(); }, [load]);
+
+    if (loading) return <CircularProgress size={20} color="secondary" />;
+    if (requests.length === 0) return null;
+
+    return (
+        <Paper variant="outlined" sx={{ p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+                Beiðnir um skráningu húsfélags ({requests.length})
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {requests.map(req => (
+                    <Box key={req.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
+                        <Box sx={{ flex: 1, minWidth: 200 }}>
+                            <Typography variant="body2" fontWeight={600}>{req.assoc_name}</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Kennitala: {req.assoc_ssn} · Formaður: {req.chair_name} ({req.chair_ssn})
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {req.chair_email} · {req.chair_phone}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Sent af {req.submitted_by} · {new Date(req.created_at).toLocaleDateString('is-IS')}
+                            </Typography>
+                        </Box>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                            onClick={() => onReview(req)}
+                        >
+                            Stofna húsfélag
+                        </Button>
+                    </Box>
+                ))}
+            </Box>
+        </Paper>
     );
 }
 
 // 'custom' means the user typed a different kennitala manually
 const CUSTOM_CHAIR = '__custom__';
 
-function CreateAssociationDialog({ open, onClose, user, onCreated }) {
+function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocSsn = '', initialChairSsn = '' }) {
     const [assocSsn, setAssocSsn] = useState('');
     const [looking, setLooking] = useState(false);
     const [lookupError, setLookupError] = useState('');
@@ -78,6 +163,22 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
 
     const handleClose = () => { reset(); onClose(); };
 
+    // Prefill SSNs when dialog opens with pre-supplied values
+    React.useEffect(() => {
+        if (open && initialAssocSsn) {
+            setAssocSsn(initialAssocSsn);
+            if (initialChairSsn) setCustomChairSsn(initialChairSsn);
+        }
+    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-trigger lookup once assocSsn reaches 10 digits from prefill
+    React.useEffect(() => {
+        const digits = assocSsn.replace(/-/g, '');
+        if (digits.length === 10 && !preview && !looking) {
+            handleLookup();
+        }
+    }, [assocSsn]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleLookup = async () => {
         setLookupError(''); setPreview(null); setChairSelection(''); setCustomChairSsn('');
         setLooking(true);
@@ -91,8 +192,13 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
             }
             setPreview(data);
             // Pre-select the first prokuruhafi if exactly one and not already registered
-            if (!data.already_registered && data.prokuruhafar?.length === 1) {
-                setChairSelection(data.prokuruhafar[0].national_id);
+            if (!data.already_registered) {
+                if (initialChairSsn) {
+                    setChairSelection(CUSTOM_CHAIR);
+                    setCustomChairSsn(initialChairSsn);
+                } else if (data.prokuruhafar?.length === 1) {
+                    setChairSelection(data.prokuruhafar[0].national_id);
+                }
             }
         } catch {
             setLookupError('Tenging við þjón mistókst.');
