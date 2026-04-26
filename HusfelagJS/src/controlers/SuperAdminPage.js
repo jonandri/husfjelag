@@ -99,12 +99,28 @@ function SuperAdminPage() {
 function PendingRequestsPanel({ user, onReview, refreshKey }) {
     const [requests, setRequests] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
+    // Map of assoc_ssn → true (already registered) | false (not registered) | null (checking)
+    const [existsMap, setExistsMap] = React.useState({});
 
     const load = React.useCallback(() => {
         setLoading(true);
         apiFetch(`${API_URL}/admin/RegistrationRequest`)
             .then(r => r.ok ? r.json() : [])
-            .then(data => setRequests(data))
+            .then(data => {
+                setRequests(data);
+                // Check each association's existence in parallel
+                const checks = {};
+                data.forEach(req => { checks[req.assoc_ssn] = null; });
+                setExistsMap(checks);
+                data.forEach(req => {
+                    apiFetch(`${API_URL}/Association/verify?ssn=${req.assoc_ssn}`)
+                        .then(r => r.ok ? r.json() : null)
+                        .then(info => {
+                            if (info) setExistsMap(prev => ({ ...prev, [req.assoc_ssn]: !!info.already_registered }));
+                        })
+                        .catch(() => {});
+                });
+            })
             .catch(() => setRequests([]))
             .finally(() => setLoading(false));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -120,30 +136,42 @@ function PendingRequestsPanel({ user, onReview, refreshKey }) {
                 Beiðnir um skráningu húsfélags ({requests.length})
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {requests.map(req => (
-                    <Box key={req.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
-                        <Box sx={{ flex: 1, minWidth: 200 }}>
-                            <Typography variant="body2" fontWeight={600}>{req.assoc_name}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Kennitala: {fmtKennitala(req.assoc_ssn)} · Formaður: {req.chair_name} ({fmtKennitala(req.chair_ssn)})
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {req.chair_email} · {req.chair_phone}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                                Sent af {req.submitted_by} · {new Date(req.created_at).toLocaleDateString('is-IS')}
-                            </Typography>
+                {requests.map(req => {
+                    const alreadyExists = existsMap[req.assoc_ssn];
+                    return (
+                        <Box key={req.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
+                            <Box sx={{ flex: 1, minWidth: 200 }}>
+                                <Typography variant="body2" fontWeight={600}>{req.assoc_name}</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Kennitala: {fmtKennitala(req.assoc_ssn)} · Formaður: {req.chair_name} ({fmtKennitala(req.chair_ssn)})
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    {req.chair_email} · {req.chair_phone}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Sent af {req.submitted_by} · {new Date(req.created_at).toLocaleDateString('is-IS')}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                {alreadyExists === null && <CircularProgress size={16} color="secondary" />}
+                                {alreadyExists === true && (
+                                    <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
+                                        Þegar skráð
+                                    </Typography>
+                                )}
+                                {alreadyExists === false && (
+                                    <Button
+                                        size="small"
+                                        sx={{ ...secondaryButtonSx, whiteSpace: 'nowrap' }}
+                                        onClick={() => onReview(req)}
+                                    >
+                                        Stofna húsfélag
+                                    </Button>
+                                )}
+                            </Box>
                         </Box>
-                        <Button
-                            variant="outlined"
-                            size="small"
-                            sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
-                            onClick={() => onReview(req)}
-                        >
-                            Stofna húsfélag
-                        </Button>
-                    </Box>
-                ))}
+                    );
+                })}
             </Box>
         </Paper>
     );
@@ -205,6 +233,8 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
                     setCustomChairSsn(initialChairSsn);
                 } else if (data.prokuruhafar?.length === 1) {
                     setChairSelection(data.prokuruhafar[0].national_id);
+                } else if (!data.prokuruhafar?.length) {
+                    setChairSelection(CUSTOM_CHAIR);
                 }
             }
         } catch {
@@ -348,7 +378,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
                                     <FormControlLabel
                                         value={CUSTOM_CHAIR}
                                         control={<Radio size="small" />}
-                                        label="Skrá aðra kennitölu"
+                                        label="Skrá kennitölu"
                                     />
                                 </RadioGroup>
                                 {chairSelection === CUSTOM_CHAIR && (

@@ -90,7 +90,7 @@ function NoAssociationView() {
   return (
     <Box sx={{ minHeight: '100vh', background: '#1D366F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Box sx={{ background: '#fff', borderRadius: 2, p: '40px 36px', maxWidth: 420, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
-        <img src={require('./assets/images/logo/logo-color.png')} alt="Húsfélag" style={{ width: 140, marginBottom: 24 }} />
+        <img src={require('./assets/images/logo/logo-no-background-blue.png')} alt="Húsfélag" style={{ width: 200, marginBottom: 24 }} />
         <Typography variant="h5" sx={{ fontWeight: 600, color: '#1D366F', mb: 1 }}>
           Ekki skráð/ur í húsfélag
         </Typography>

@@ -38,9 +38,9 @@ function LoginForm() {
             }}>
                 {/* Logo */}
                 <img
-                    src={require('../assets/images/logo/logo-color.png')}
+                    src={require('../assets/images/logo/logo-no-background.png')}
                     alt="Húsfélag"
-                    style={{ width: 180 }}
+                    style={{ width: 200 }}
                 />
 
                 {/* Card */}

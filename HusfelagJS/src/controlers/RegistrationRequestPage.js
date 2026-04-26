@@ -78,12 +78,20 @@ function RegistrationRequestPage() {
     if (submitted) {
         return (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', bgcolor: '#f5f5f5' }}>
-                <Paper variant="outlined" sx={{ p: 4, maxWidth: 480, width: '100%', display: 'flex', flexDirection: 'column', gap: 3, textAlign: 'center' }}>
+                <Paper variant="outlined" sx={{ p: 4, maxWidth: 480, width: '100%', display: 'flex', flexDirection: 'column', gap: 3, textAlign: 'center', alignItems: 'center' }}>
+                    <img src={require('../assets/images/logo/logo-no-background-blue.png')} alt="Húsfélag" style={{ width: 200 }} />
                     <Typography variant="h5">Beiðni móttekin</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Umsóknin þín um skráningu húsfélags hefur verið móttekin. Kerfisstjóri mun fara yfir hana og hafa samband.
+                        Umsóknin þín um skráningu húsfélags hefur verið móttekin. Við munum fara yfir hana og hafa samband mjög fljótlega.
+                        Þetta er til að tryggja að aðeins aðilar sem eru í forsvari fyrir húsfélagið geti stofnað það og sett upp.
                     </Typography>
-                    <Button variant="outlined" onClick={() => navigate('/')}>Til baka</Button>
+                    <Button
+                        variant="contained"
+                        sx={{ backgroundColor: '#08C076', color: '#fff', fontWeight: 600, textTransform: 'none', '&:hover': { backgroundColor: '#06a866' } }}
+                        onClick={() => navigate('/')}
+                    >
+                        Fara á forsíðu
+                    </Button>
                 </Paper>
             </Box>
         );
@@ -95,7 +103,7 @@ function RegistrationRequestPage() {
                 <Box>
                     <Typography variant="h5" gutterBottom>Skrá húsfélag</Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Fylltu út upplýsingar um húsfélagið og formanninn. Kerfisstjóri mun fara yfir beiðnina.
+                        Fylltu út upplýsingar um húsfélagið og formanninn. Við munum fara yfir beiðnina og hafa samband fljótlega.
                     </Typography>
                 </Box>
 
