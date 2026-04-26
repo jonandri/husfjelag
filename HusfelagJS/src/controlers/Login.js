@@ -1,13 +1,15 @@
 import React from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { Box, Button, Typography, Alert } from '@mui/material';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { UserContext } from './UserContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
 
 function LoginForm() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = React.useContext(UserContext);
+    const error = new URLSearchParams(location.search).get('error');
 
     React.useEffect(() => {
         if (user) navigate('/dashboard');
@@ -61,6 +63,12 @@ function LoginForm() {
                             Skráðu þig inn með rafrænum skilríkjum, Auðkennisappinu eða aðgangslykil fyrir einfaldar og fljótlega innskráningu.
                         </Typography>
                     </Box>
+
+                    {error && (
+                        <Alert severity="error" sx={{ width: '100%' }}>
+                            Innskráning mistókst ({error}). Reyndu aftur.
+                        </Alert>
+                    )}
 
                     <Button
                         variant="contained"
