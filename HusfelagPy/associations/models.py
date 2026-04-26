@@ -371,3 +371,34 @@ class BankClaim(models.Model):
 
     def __str__(self):
         return f"Claim {self.claim_id} ({self.status}) — {self.collection}"
+
+
+class RegistrationRequestStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    REVIEWED = "REVIEWED", "Reviewed"
+
+
+class RegistrationRequest(models.Model):
+    """Submitted by a logged-in user who has no association access yet."""
+    submitted_by = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE, related_name="registration_requests"
+    )
+    assoc_ssn = models.CharField(max_length=10)   # kennitala, no hyphens
+    assoc_name = models.CharField(max_length=255)
+    chair_ssn = models.CharField(max_length=10)   # kennitala, no hyphens
+    chair_name = models.CharField(max_length=255)
+    chair_email = models.EmailField()
+    chair_phone = models.CharField(max_length=20)
+    status = models.CharField(
+        max_length=10,
+        choices=RegistrationRequestStatus.choices,
+        default=RegistrationRequestStatus.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "associations_registrationrequest"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.assoc_name} ({self.assoc_ssn}) — {self.status}"
