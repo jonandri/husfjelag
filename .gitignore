@@ -4,6 +4,7 @@ HusfelagPy/__pycache__/
 HusfelagPy/**/__pycache__/
 HusfelagPy/**/*.pyc
 HusfelagPy/db.sqlite3
+HusfelagPy/staticfiles/
 
 # Node / React
 HusfelagJS/node_modules/
