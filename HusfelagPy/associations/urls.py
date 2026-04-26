@@ -11,6 +11,7 @@ from .views import (
     CollectionGenerateView, CollectionMatchView, CollectionUnmatchView, CollectionCandidatesView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
     ReportView, AnnualStatementView,
+    RegistrationRequestView, AdminRegistrationRequestView,
 )
 from .banks.views import (
     BankStatusView,
@@ -87,4 +88,7 @@ urlpatterns = [
     path("associations/<int:association_id>/bank/settings", AssociationBankSettingsView.as_view(), name="bank-settings"),
     path("Collection/<int:collection_id>/send-claim", SendClaimView.as_view(), name="collection-send-claim"),
     path("associations/<int:association_id>/bank/send-all-claims", SendAllClaimsView.as_view(), name="bank-send-all-claims"),
+    path("RegistrationRequest", RegistrationRequestView.as_view(), name="registration-request-create"),
+    path("admin/RegistrationRequest", AdminRegistrationRequestView.as_view(), name="admin-registration-request-list"),
+    path("admin/RegistrationRequest/<int:req_id>", AdminRegistrationRequestView.as_view(), name="admin-registration-request-update"),
 ]

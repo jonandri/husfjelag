@@ -14,6 +14,7 @@ from .models import (
     Category, CategoryType, Budget, BudgetItem, HMSImportSource,
     AccountingKey, AccountingKeyType, BankAccount, Transaction, TransactionStatus,
     CategoryRule, Collection, CollectionStatus, AssociationBankSettings,
+    RegistrationRequest, RegistrationRequestStatus,
 )
 from .serializers import (
     AssociationSerializer, ApartmentSerializer, OwnershipSerializer,
@@ -2647,3 +2648,69 @@ class AnnualStatementView(APIView):
             **{k: v for k, v in current_data.items() if k != "has_data"},
             "previous_year": {k: v for k, v in prev_data.items() if k != "has_data"} if prev_data["has_data"] else None,
         })
+
+
+class RegistrationRequestView(APIView):
+    """POST /RegistrationRequest — any authenticated user may submit."""
+
+    def post(self, request):
+        data = request.data
+        assoc_ssn = str(data.get("assoc_ssn", "")).replace("-", "")
+        chair_ssn = str(data.get("chair_ssn", "")).replace("-", "")
+
+        if len(assoc_ssn) != 10:
+            return Response({"detail": "Kennitala húsfélags verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(chair_ssn) != 10:
+            return Response({"detail": "Kennitala formanns verður að vera 10 tólustafir."}, status=status.HTTP_400_BAD_REQUEST)
+        for field in ("assoc_name", "chair_name", "chair_email", "chair_phone"):
+            if not str(data.get(field, "")).strip():
+                return Response({"detail": f"Reitur '{field}' vantar."}, status=status.HTTP_400_BAD_REQUEST)
+
+        RegistrationRequest.objects.create(
+            submitted_by=request.user,
+            assoc_ssn=assoc_ssn,
+            assoc_name=str(data["assoc_name"]).strip(),
+            chair_ssn=chair_ssn,
+            chair_name=str(data["chair_name"]).strip(),
+            chair_email=str(data["chair_email"]).strip(),
+            chair_phone=str(data["chair_phone"]).strip(),
+        )
+        return Response({"detail": "Beiðni móttekin."}, status=status.HTTP_201_CREATED)
+
+
+class AdminRegistrationRequestView(APIView):
+    """GET /admin/RegistrationRequest — list pending; PATCH /<id> — mark reviewed."""
+
+    def get(self, request):
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        qs = RegistrationRequest.objects.filter(status=RegistrationRequestStatus.PENDING).select_related("submitted_by")
+        result = [
+            {
+                "id": r.id,
+                "assoc_ssn": r.assoc_ssn,
+                "assoc_name": r.assoc_name,
+                "chair_ssn": r.chair_ssn,
+                "chair_name": r.chair_name,
+                "chair_email": r.chair_email,
+                "chair_phone": r.chair_phone,
+                "submitted_by": r.submitted_by.name,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in qs
+        ]
+        return Response(result)
+
+    def patch(self, request, req_id):
+        if not request.user.is_superadmin:
+            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            reg_req = RegistrationRequest.objects.get(pk=req_id)
+        except RegistrationRequest.DoesNotExist:
+            return Response({"detail": "Beiðni finnst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        new_status = request.data.get("status")
+        if new_status not in RegistrationRequestStatus.values:
+            return Response({"detail": "Óþekkt staða."}, status=status.HTTP_400_BAD_REQUEST)
+        reg_req.status = new_status
+        reg_req.save(update_fields=["status"])
+        return Response({"detail": "Staða uppfærð."})
