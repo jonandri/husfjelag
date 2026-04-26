@@ -14,7 +14,7 @@ function Logout() {
         localStorage.removeItem('user');
         setUser(null);
         navigate('/');
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return null;
 }

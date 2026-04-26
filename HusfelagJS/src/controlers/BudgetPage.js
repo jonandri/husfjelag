@@ -38,7 +38,7 @@ function BudgetPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadBudget();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadBudget = async () => {
         try {

@@ -39,7 +39,7 @@ function CategoriesPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadCategories();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadCategories = async () => {
         try {

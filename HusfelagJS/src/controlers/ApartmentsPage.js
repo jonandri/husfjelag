@@ -33,7 +33,7 @@ function ApartmentsPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadApartments();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadApartments = async () => {
         try {

@@ -5,7 +5,6 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions,
     TextField, Button, Alert, CircularProgress,
 } from '@mui/material';
-import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
@@ -123,7 +122,7 @@ function BottomItem({ label, icon, collapsed, onClick, hoverColor }) {
 function SideBar() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, setUser, associations, currentAssociation, setCurrentAssociation, stopImpersonating, impersonating, assocParam } = React.useContext(UserContext);
+    const { user, setUser, currentAssociation, setCurrentAssociation, stopImpersonating, impersonating } = React.useContext(UserContext);
     const [collapsed, setCollapsed] = useState(
         () => localStorage.getItem('sidebarCollapsed') === 'true'
     );
@@ -407,7 +406,7 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
                 })
                 .finally(() => setLoading(false));
         }
-    }, [open]);
+    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const emailValid = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
     const phoneValid = !phone || /^(\+\d{1,3}[\s-]?)?\d{3}[\s]?\d{4}$/.test(phone.trim());

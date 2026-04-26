@@ -77,7 +77,7 @@ function AuthCallback() {
         };
 
         authenticate();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 2 }}>

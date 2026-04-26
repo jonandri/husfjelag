@@ -32,7 +32,7 @@ function ApartmentImportPage() {
                 if (sources.length > 0) setUrls(sources.map(s => s.url));
             })
             .catch(() => {});
-    }, [user]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const urlsValid = urls.every(u => HMS_URL_PATTERN.test(u.trim())) && urls.some(u => u.trim());
 

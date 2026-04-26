@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, CircularProgress, Paper, Grid,
+    Box, Typography, CircularProgress,
     IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogContentText,
     DialogActions, Button, Alert, Autocomplete, TextField,
     Table, TableHead, TableRow, TableCell, TableBody,
@@ -50,7 +50,7 @@ function AssociationPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadAll();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadAll = async () => {
         const today = new Date();
@@ -455,10 +455,7 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
 function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts, onReload }) {
     const navigate = useNavigate();
     const [accountingKeys, setAccountingKeys] = React.useState([]);
-    const [error, setError] = React.useState('');
     const [showForm, setShowForm] = React.useState(false);
-
-    const canManageBank = ['Formaður', 'Gjaldkeri', 'Kerfisstjóri'].includes(currentAssociation?.role);
 
     React.useEffect(() => {
         apiFetch(`${API_URL}/AccountingKey/list`)
@@ -494,8 +491,6 @@ function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts,
                 accountingKeys={accountingKeys}
                 onCreated={onReload}
             />
-
-            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
 
             {bankAccounts.length === 0 ? (
                 <Typography color="text.secondary" sx={{ fontSize: 13 }}>Enginn bankareikningur skráður.</Typography>
@@ -697,7 +692,6 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
 
 function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
     const [categories, setCategories] = React.useState([]);
-    const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [editRule, setEditRule] = React.useState(null);
@@ -709,12 +703,10 @@ function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
     const [deleting, setDeleting] = React.useState(false);
 
     React.useEffect(() => {
-        setLoading(true);
         apiFetch(`${API_URL}/Category/list`)
             .then(r => r.ok ? r.json() : [])
             .then(cats => setCategories(cats || []))
-            .catch(() => setError('Gat ekki sótt flokka.'))
-            .finally(() => setLoading(false));
+            .catch(() => setError('Gat ekki sótt flokka.'));
     }, [assocParam]);
 
     const openCreate = () => { setEditRule(null); setKeyword(''); setCategoryId(''); setSaveError(''); setDialogOpen(true); };

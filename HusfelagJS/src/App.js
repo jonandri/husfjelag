@@ -5,7 +5,6 @@ import { Box, CircularProgress } from '@mui/material';
 import Login from './controlers/Login';
 import Logout from './controlers/Logout';
 import AuthCallback from './controlers/AuthCallback';
-import Dashboard from './controlers/Dashboard';
 import HouseAssociation from './controlers/HouseAssociation';
 import AssociationPage from './controlers/AssociationPage';
 import ApartmentsPage from './controlers/ApartmentsPage';

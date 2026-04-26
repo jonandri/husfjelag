@@ -40,7 +40,7 @@ function TransactionsPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadAll();
-    }, [user, assocParam, year]);
+    }, [user, assocParam, year]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadAll = async () => {
         setTransactions(undefined);

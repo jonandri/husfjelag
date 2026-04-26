@@ -38,7 +38,7 @@ export default function BankHealthPage() {
       .then(setData)
       .catch(() => setError('Villa við að sækja gögn.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <div className="dashboard">

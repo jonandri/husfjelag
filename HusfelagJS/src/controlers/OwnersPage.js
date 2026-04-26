@@ -35,7 +35,7 @@ function OwnersPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadAll();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadAll = async () => {
         try {

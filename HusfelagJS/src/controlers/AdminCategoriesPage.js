@@ -36,7 +36,7 @@ export default function AdminCategoriesPage() {
     React.useEffect(() => {
         if (!user) { navigate('/login'); return; }
         if (!user.is_superadmin) { navigate('/dashboard'); }
-    }, [user]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!user?.is_superadmin) return null;
 
@@ -70,7 +70,7 @@ function GlobalCategoriesPanel({ user }) {
     const [showForm, setShowForm] = React.useState(false);
     const [showDisabled, setShowDisabled] = React.useState(false);
 
-    React.useEffect(() => { loadCategories(); }, []);
+    React.useEffect(() => { loadCategories(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadCategories = async () => {
         try {
@@ -442,7 +442,7 @@ function GlobalCategoryRulesPanel({ user }) {
     const [deleteRule, setDeleteRule] = React.useState(null);
     const [deleting, setDeleting] = React.useState(false);
 
-    React.useEffect(() => { load(); }, []);
+    React.useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const load = () => {
         if (!user?.id) return;

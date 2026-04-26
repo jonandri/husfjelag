@@ -35,7 +35,7 @@ export default function AdminAccountingKeysPage() {
     React.useEffect(() => {
         if (!user) { navigate('/login'); return; }
         if (!user.is_superadmin) { navigate('/dashboard'); }
-    }, [user]);
+    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!user?.is_superadmin) return null;
 
@@ -62,7 +62,7 @@ function GlobalAccountingKeysPanel({ user }) {
     const [showForm, setShowForm] = React.useState(false);
     const [showDisabled, setShowDisabled] = React.useState(false);
 
-    React.useEffect(() => { loadKeys(); }, []);
+    React.useEffect(() => { loadKeys(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadKeys = async () => {
         try {
