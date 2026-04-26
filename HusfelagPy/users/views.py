@@ -1,5 +1,6 @@
 import logging
 
+import bugsnag
 from django.conf import settings
 from django.http import HttpResponseRedirect
 from rest_framework import status
@@ -134,8 +135,9 @@ class OIDCCallbackView(APIView):
             tokens = exchange_code(code, code_verifier)
             claims = validate_id_token(tokens["id_token"])
             logger.info("OIDC token exchange succeeded, kennitala=%s", (claims.get("national_id") or "")[:6] + "****")
-        except Exception:
+        except Exception as exc:
             logger.exception("OIDC token exchange/validation failed")
+            bugsnag.notify(exc, context="OIDC token exchange/validation")
             return HttpResponseRedirect(f"{frontend_url}/?error=token_error")
 
         kennitala = (claims.get("national_id") or "").replace("-", "")
