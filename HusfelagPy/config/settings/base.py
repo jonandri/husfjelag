@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     "django_celery_beat",
+    "bugsnag.django",
     "users",
     "associations",
 ]
