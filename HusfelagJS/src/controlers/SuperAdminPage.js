@@ -23,6 +23,7 @@ function SuperAdminPage() {
     const [prefillAssocSsn, setPrefillAssocSsn] = useState('');
     const [prefillChairSsn, setPrefillChairSsn] = useState('');
     const [reviewingRequestId, setReviewingRequestId] = useState(null);
+    const [pendingRefreshKey, setPendingRefreshKey] = useState(0);
 
     const handleReview = (req) => {
         setPrefillAssocSsn(req.assoc_ssn);
@@ -54,7 +55,7 @@ function SuperAdminPage() {
                     </Button>
                 </Box>
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <PendingRequestsPanel user={user} onReview={handleReview} />
+                    <PendingRequestsPanel user={user} onReview={handleReview} refreshKey={pendingRefreshKey} />
                     <KpiPanel user={user} />
                     <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
                 </Box>
@@ -70,11 +71,16 @@ function SuperAdminPage() {
                 user={user}
                 onCreated={async (assoc) => {
                     if (reviewingRequestId) {
-                        await apiFetch(`${API_URL}/admin/RegistrationRequest/${reviewingRequestId}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ status: 'REVIEWED' }),
-                        });
+                        try {
+                            await apiFetch(`${API_URL}/admin/RegistrationRequest/${reviewingRequestId}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 'REVIEWED' }),
+                            });
+                            setPendingRefreshKey(k => k + 1);
+                        } catch {
+                            // best-effort; association already created
+                        }
                         setReviewingRequestId(null);
                     }
                     setPrefillAssocSsn('');
@@ -90,7 +96,7 @@ function SuperAdminPage() {
     );
 }
 
-function PendingRequestsPanel({ user, onReview }) {
+function PendingRequestsPanel({ user, onReview, refreshKey }) {
     const [requests, setRequests] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
 
@@ -103,7 +109,7 @@ function PendingRequestsPanel({ user, onReview }) {
             .finally(() => setLoading(false));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    React.useEffect(() => { load(); }, [load]);
+    React.useEffect(() => { load(); }, [load, refreshKey]);
 
     if (loading) return <CircularProgress size={20} color="secondary" />;
     if (requests.length === 0) return null;
@@ -180,7 +186,8 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
     }, [assocSsn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleLookup = async () => {
-        setLookupError(''); setPreview(null); setChairSelection(''); setCustomChairSsn('');
+        setLookupError(''); setPreview(null); setChairSelection('');
+        if (!initialChairSsn) setCustomChairSsn('');
         setLooking(true);
         try {
             const ssn = assocSsn.replace(/-/g, '');
