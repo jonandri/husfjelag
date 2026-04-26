@@ -24,5 +24,11 @@ export function apiFetch(url, options = {}) {
         headers['Content-Type'] = 'application/json';
     }
 
-    return fetch(url, { ...options, headers });
+    return fetch(url, { ...options, headers }).then(resp => {
+        if (resp.status === 401) {
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+        return resp;
+    });
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from './UserContext';
 
@@ -9,7 +9,6 @@ function LoginForm() {
     const navigate = useNavigate();
     const { user } = React.useContext(UserContext);
 
-    // Already logged in — skip straight to dashboard
     React.useEffect(() => {
         if (user) navigate('/dashboard');
     }, [user, navigate]);
@@ -19,40 +18,80 @@ function LoginForm() {
     };
 
     return (
-        <div className='login'>
-            <br />
-            <Box
-                sx={{
+        <Box sx={{
+            minHeight: '100vh',
+            background: '#1D366F',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+        }}>
+            <Box sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                width: '100%',
+                maxWidth: 400,
+                px: 3,
+            }}>
+                {/* Logo */}
+                <img
+                    src={require('../assets/images/logo/logo-color.png')}
+                    alt="Húsfélag"
+                    style={{ width: 180 }}
+                />
+
+                {/* Card */}
+                <Box sx={{
+                    width: '100%',
+                    background: '#fff',
+                    borderRadius: 2,
+                    p: '40px 36px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    border: '1px solid black',
-                    padding: '40px',
-                    width: '400px',
-                    margin: '0 auto',
-                    gap: 3,
-                }}
-            >
-                <img src={require('../assets/images/logo/logo-no-background.png')} alt="Logo" width={150} />
-                <Typography variant="h4" component="h1">
-                    Innskráning
+                    gap: 2.5,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                }}>
+                    <Box sx={{ textAlign: 'center' }}>
+                        <Typography variant="h5" sx={{ fontWeight: 600, color: '#1D366F', mb: 0.75 }}>
+                            Innskráning
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Skráðu þig inn með rafrænum skilríkjum, Auðkennisappinu eða aðgangslykil fyrir einfaldar og fljótlega innskráningu.
+                        </Typography>
+                    </Box>
+
+                    <Button
+                        variant="contained"
+                        size="large"
+                        fullWidth
+                        onClick={handleLogin}
+                        sx={{
+                            mt: 1,
+                            backgroundColor: '#08C076',
+                            color: '#fff',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                            py: 1.5,
+                            borderRadius: 1.5,
+                            textTransform: 'none',
+                            boxShadow: 'none',
+                            '&:hover': {
+                                backgroundColor: '#06a866',
+                                boxShadow: 'none',
+                            },
+                        }}
+                    >
+                        Innskráning
+                    </Button>
+                </Box>
+
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>
+                    © {new Date().getFullYear()} Húsfjelag. Öll réttindi áskilin.
                 </Typography>
-                <Typography variant="body2" color="text.secondary" textAlign="center">
-                    Skráðu þig inn með rafrænum skilríkjum eða Auðkennisappinu
-                </Typography>
-                <Button
-                    variant="contained"
-                    color="secondary"
-                    size="large"
-                    fullWidth
-                    onClick={handleLogin}
-                    sx={{ color: '#fff' }}
-                >
-                    Innskrá með Kenni
-                </Button>
             </Box>
-        </div>
+        </Box>
     );
 }
 
