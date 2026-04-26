@@ -108,26 +108,32 @@ class OIDCCallbackView(APIView):
         code = request.GET.get("code")
         state = request.GET.get("state")
         error = request.GET.get("error")
+        error_description = request.GET.get("error_description", "")
 
         frontend_url = settings.FRONTEND_URL
+        logger.info("OIDC callback — error=%s code_present=%s state_present=%s", error, bool(code), bool(state))
 
         if error:
-            logger.warning("Kenni auth error: %s", error)
+            logger.error("Kenni returned error: %s — %s", error, error_description)
             return HttpResponseRedirect(f"{frontend_url}/?error={error}")
 
         # CSRF: validate state matches what we set in the cookie
-        if not state or state != request.COOKIES.get("oidc_state"):
-            logger.warning("OIDC state mismatch")
+        cookie_state = request.COOKIES.get("oidc_state")
+        if not state or state != cookie_state:
+            logger.error("OIDC state mismatch — got=%s cookie=%s", state, cookie_state)
             return HttpResponseRedirect(f"{frontend_url}/?error=invalid_state")
 
         if not code:
+            logger.error("OIDC callback missing code")
             return HttpResponseRedirect(f"{frontend_url}/?error=no_code")
 
         code_verifier = request.COOKIES.get("oidc_cv", "")
+        logger.info("OIDC exchanging code, code_verifier_present=%s", bool(code_verifier))
 
         try:
             tokens = exchange_code(code, code_verifier)
             claims = validate_id_token(tokens["id_token"])
+            logger.info("OIDC token exchange succeeded, kennitala=%s", (claims.get("national_id") or "")[:6] + "****")
         except Exception:
             logger.exception("OIDC token exchange/validation failed")
             return HttpResponseRedirect(f"{frontend_url}/?error=token_error")
