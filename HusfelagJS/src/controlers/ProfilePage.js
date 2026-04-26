@@ -87,14 +87,6 @@ function ProfilePage() {
                 >
                     {saving ? <CircularProgress size={20} color="inherit" /> : 'Vista og halda áfram'}
                 </Button>
-                <Button
-                    variant="text"
-                    size="small"
-                    sx={{ color: 'text.disabled', textTransform: 'none', alignSelf: 'center' }}
-                    onClick={() => navigate('/dashboard')}
-                >
-                    Sleppa í bili
-                </Button>
             </Paper>
         </Box>
     );

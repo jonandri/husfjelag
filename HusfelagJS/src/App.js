@@ -118,6 +118,11 @@ function ProtectedRoute({ children }) {
                        location.pathname.startsWith('/admin') ||
                        location.pathname.startsWith('/profile');
 
+  // Always prompt for email/phone if either is missing
+  if (location.pathname !== '/profile' && (!user.email || !user.phone)) {
+    return <Navigate to="/profile" replace />;
+  }
+
   if (!isAdminRoute && associations.length === 0) {
     if (user.is_superadmin) return <Navigate to="/superadmin" replace />;
     return <NoAssociationView />;
