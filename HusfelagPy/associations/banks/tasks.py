@@ -1,6 +1,7 @@
 import logging
 from datetime import date, timedelta
 
+import bugsnag
 from celery import shared_task
 from django.conf import settings
 
@@ -53,6 +54,14 @@ def sync_transactions(association_id: int) -> dict:
             logger.error(
                 "sync_transactions: failed for account %s (assoc %s): %s",
                 account.account_number, association_id, exc,
+            )
+            bugsnag.notify(
+                exc,
+                context="celery:sync_transactions",
+                extra_data={
+                    "association_id": association_id,
+                    "account_number": account.account_number,
+                },
             )
 
     logger.info(
@@ -124,6 +133,11 @@ def sync_claim_statuses(association_id: int) -> dict:
         )
     except Exception as exc:
         logger.error("sync_claim_statuses: list fetch failed for assoc %s: %s", association_id, exc)
+        bugsnag.notify(
+            exc,
+            context="celery:sync_claim_statuses",
+            extra_data={"association_id": association_id, "step": "list_fetch"},
+        )
         return {"error": str(exc)}
 
     still_unpaid_ids = {c["id"] for c in resp_data.get("data", [])}
@@ -141,6 +155,15 @@ def sync_claim_statuses(association_id: int) -> dict:
             logger.error(
                 "sync_claim_statuses: individual fetch failed for claim %s: %s",
                 claim.claim_id, exc,
+            )
+            bugsnag.notify(
+                exc,
+                context="celery:sync_claim_statuses",
+                extra_data={
+                    "association_id": association_id,
+                    "claim_id": claim.claim_id,
+                    "step": "individual_fetch",
+                },
             )
             continue
 
