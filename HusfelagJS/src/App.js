@@ -18,7 +18,7 @@ import CategoriesPage from './controlers/CategoriesPage';
 import CollectionPage from './controlers/CollectionPage';
 import SuperAdminPage from './controlers/SuperAdminPage';
 import TransactionsPage from './controlers/TransactionsPage';
-import ReportPage from './controlers/ReportPage';
+import YfirlitPage from './controlers/YfirlitPage';
 import { UserContext } from './controlers/UserContext';
 import { HelpProvider } from './ui/HelpContext';
 import HomePage from './controlers/HomePage';
@@ -156,7 +156,7 @@ function App() {
             <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
             <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
             <Route path="/faerslur" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
-            <Route path="/yfirlit" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+            <Route path="/yfirlit" element={<ProtectedRoute><YfirlitPage /></ProtectedRoute>} />
             <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
             <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
             <Route path="/bank-settings" element={<ProtectedRoute><BankSettingsPage /></ProtectedRoute>} />
