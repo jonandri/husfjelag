@@ -23,6 +23,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "bugsnag.django.middleware.BugsnagMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -122,6 +123,14 @@ BANK_LANDSBANKINN_API_BASE = env(
 )
 
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3010")
+
+# Bugsnag error monitoring
+BUGSNAG = {
+    "api_key": env("BUGSNAG_API_KEY", default=""),
+    "project_root": str(BASE_DIR),
+    "release_stage": env("DJANGO_ENV", default="development"),
+    "notify_release_stages": ["production"],
+}
 
 # Celery beat — periodic tasks
 from celery.schedules import crontab
