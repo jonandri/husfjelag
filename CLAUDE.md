@@ -23,24 +23,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend (HusfelagPy)
 ```bash
 cd HusfelagPy
-poetry run python manage.py runserver 8000   # Start API on http://localhost:8000
-poetry run python manage.py makemigrations   # Generate migrations
-poetry run python manage.py migrate          # Apply migrations
+poetry run python3 manage.py runserver 8010  # Start API on http://localhost:8010
+poetry run python3 manage.py makemigrations  # Generate migrations
+poetry run python3 manage.py migrate         # Apply migrations
 poetry run celery -A config worker --loglevel=info  # Start Celery worker
 ```
-Swagger UI at `http://localhost:8000/swagger/` — ReDoc at `http://localhost:8000/redoc/`
+Swagger UI at `http://localhost:8010/swagger/` — ReDoc at `http://localhost:8010/redoc/`
 
-**Production server:**
+**Production server (Digital Ocean — run command):**
 ```bash
-poetry run gunicorn config.asgi:application \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 --workers 4
+python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080 --workers 4
 ```
+- DO runs on port **8080** (not 8000)
+- `createcachetable` must run before gunicorn — `DatabaseCache` is used for OIDC exchange codes (required for multi-worker setups; `LocMemCache` does not share state across workers)
+- Migrations apply automatically on every deploy via this run command
 
 ### Frontend (HusfelagJS)
 ```bash
 cd HusfelagJS
-npm start            # Start dev server on http://localhost:3000
+npm start            # Start dev server on http://localhost:3010
 npm run build        # Production build
 npm test             # Run tests
 ```
@@ -72,7 +73,7 @@ HusfelagPy/
 **Models:**
 - `User` — Kennitala (unique, 10 digits), Name, Email, Phone, is_superadmin. Has `is_authenticated = True` property (required by DRF).
 - `AssociationAccess` — links User ↔ Association with Role (CHAIR/CFO/MEMBER) and Active flag
-- `Association` — SSN, Name, Address, PostalCode, City
+- `Association` — SSN, Name, Address, PostalCode, City, date_of_board_change, registered, status (last three from Skattur Cloud)
 - `Apartment` — belongs to Association; tracks share percentages:
   - `share` → SHARED budget type (Sameiginlegt — general shared costs)
   - `share_2` → SHARE2 budget type (Hiti — heating)
@@ -80,8 +81,8 @@ HusfelagPy/
   - `share_eq` → EQUAL budget type (Jafnskipt — equal split, auto-recalculated by `_recalc_share_eq()`)
   - All shares must sum to 100% per type across all active apartments before a Collection can be generated
   - HMS import sets `anr`, `fnr`, `size` only — `share`, `share_2`, `share_3` must be entered manually; `share_eq` is auto-set after import
-- `Association` — SSN, Name, Address, PostalCode, City, date_of_board_change, registered, status (last three from Skattur Cloud)
 - `ApartmentOwnership` — links User ↔ Apartment with share and is_payer flag
+- `RegistrationRequest` — submitted by a logged-in user with no association access; status PENDING/REVIEWED (max_length=16); fields: assoc_ssn, assoc_name, chair_ssn, chair_name, chair_email, chair_phone, submitted_by (FK User), created_at. One PENDING request per user+assoc_ssn enforced in the view.
 
 ### Authentication & Security
 
@@ -93,7 +94,9 @@ HusfelagPy/
 3. Frontend receives `?code=<exchange_code>` → POSTs to `POST /auth/token` → gets JWT
 4. All subsequent requests: `Authorization: Bearer <jwt>`
 
-**JWT:** HS256, signed with `SECRET_KEY`, expires 24h. Issued by `users/oidc.py:create_access_token()`.
+**JWT:** HS256, signed with `SECRET_KEY`, expires 24h. Issued by `users/oidc.py:create_access_token(user_id: int)` — takes the integer user ID, **not** the User object. `sub` claim is `str(user_id)`. `JWTAuthentication` looks up the user via `User.objects.get(id=int(payload["sub"]))`.
+
+**401 auto-logout:** `apiFetch()` clears `localStorage` and redirects to `/` on any 401 response. This means a stale/invalid token will immediately log the user out.
 
 **DRF enforcement:** `users/authentication.py:JWTAuthentication` is set as the global `DEFAULT_AUTHENTICATION_CLASSES`. `DEFAULT_PERMISSION_CLASSES` is `IsAuthenticated`. Every endpoint requires a valid JWT unless explicitly listed below.
 
@@ -143,14 +146,30 @@ Note: components live in `src/controlers/` (intentional misspelling).
 - `/` → `HomePage.js` — public landing page
 - `/login` → `Login.js` — redirects to Kenni via backend
 - `/auth/callback` → `AuthCallback.js` — exchanges code for JWT, fetches profile, redirects
-- `/dashboard` → `Dashboard.js` — protected, main app entry
-- `/profile` → `ProfilePage.js` — prompted when email/phone missing after first login
+- `/dashboard` → redirects to `/yfirlit`
+- `/profile` → `ProfilePage.js` — gated: redirected here automatically if `user.email` or `user.phone` is missing
+- `/skraning` → `RegistrationRequestPage.js` — for logged-in users with no association; submit registration request
+
+**`ProtectedRoute` logic:**
+1. If `user.email` or `user.phone` missing → redirect to `/profile` (exempts `/profile` and `/skraning`)
+2. If user has no associations and is not superadmin → show `NoAssociationView` (with "Skrá húsfélag" CTA)
+3. If user has no associations and is superadmin → redirect to `/superadmin`
 
 ## Deployment
 
-- **Frontend** → Vercel (set `REACT_APP_API_URL` to production API URL)
-- **Backend** → Digital Ocean or GCP (set `DJANGO_ENV=production` + all env vars from `.env.example`)
-- **Database** → PostgreSQL (managed DB on Digital Ocean or Cloud SQL on GCP)
+- **Frontend** → Vercel (set `REACT_APP_API_URL` to production API URL, e.g. `https://api.husfjelag.is`)
+- **Backend** → Digital Ocean App Platform (set `DJANGO_ENV=production` + all env vars from `.env.example`)
+  - Run command: `python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080 --workers 4`
+  - Migrations and cache table creation happen automatically on every deploy
+- **Database** → PostgreSQL managed DB (Digital Ocean)
+- **DNS** — Cloudflare: `api.husfjelag.is` → DO backend, `www.husfjelag.is` → Vercel frontend
+
+**Critical env vars on DO:**
+- `DJANGO_ENV=production`
+- `FRONTEND_URL=https://www.husfjelag.is` (used in OIDC redirect back to frontend)
+- `KENNI_REDIRECT_URI=https://api.husfjelag.is/auth/callback`
+- `CORS_ALLOWED_ORIGINS=https://www.husfjelag.is,https://husfjelag.vercel.app` (HTTPS, comma-separated, no trailing slash)
+- `ALLOWED_HOSTS=api.husfjelag.is`
 
 ## Key Backend Patterns
 
@@ -161,6 +180,11 @@ Note: components live in `src/controlers/` (intentional misspelling).
 - `extract_prokuruhafar(entity)` → list of `{"national_id", "name"}` for Prókúruhafi relationships
 - `parse_entity_for_association(ssn, entity)` → dict ready to create/update an Association (prefers Póstfang address, falls back to Lögheimilisfang)
 - Requires `SKATTUR_CLOUD_API_KEY` in `.env`
+
+**Registration request endpoints:**
+- `POST /RegistrationRequest` — any authenticated user; creates a PENDING request; rejects duplicates (same user + assoc_ssn already PENDING) with 409
+- `GET /admin/RegistrationRequest` — superadmin only; returns all PENDING requests
+- `PATCH /admin/RegistrationRequest/<id>` — superadmin only; only accepts `{"status": "REVIEWED"}` (one-way transition)
 
 **Management commands:**
 - `poetry run python3 manage.py delete_association <id>` — cascading delete of an association and all related data (prompts for name confirmation)
