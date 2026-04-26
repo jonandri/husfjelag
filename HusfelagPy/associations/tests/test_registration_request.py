@@ -66,12 +66,22 @@ def test_create_validates_ssn_length(auth_client):
 
 def test_admin_list_pending(admin_client, regular_user, db):
     client, _ = admin_client
+    # Create one PENDING and one REVIEWED request
+    RegistrationRequest.objects.create(submitted_by=regular_user, **VALID_PAYLOAD)
     RegistrationRequest.objects.create(
-        submitted_by=regular_user, **VALID_PAYLOAD
+        submitted_by=regular_user,
+        assoc_ssn="9999999999",
+        assoc_name="Reviewed Assoc",
+        chair_ssn="8888888888",
+        chair_name="Reviewed Chair",
+        chair_email="reviewed@test.is",
+        chair_phone="999 9999",
+        status="REVIEWED",
     )
     resp = client.get("/admin/RegistrationRequest")
     assert resp.status_code == 200
     data = resp.json()
+    # Only the PENDING record should be returned
     assert len(data) == 1
     assert data[0]["assoc_ssn"] == "5512131230"
 

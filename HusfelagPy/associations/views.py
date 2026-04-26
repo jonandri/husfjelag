@@ -2661,7 +2661,7 @@ class RegistrationRequestView(APIView):
         if len(assoc_ssn) != 10:
             return Response({"detail": "Kennitala húsfélags verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
         if len(chair_ssn) != 10:
-            return Response({"detail": "Kennitala formanns verður að vera 10 tólustafir."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Kennitala formanns verður að vera 10 tölustafir."}, status=status.HTTP_400_BAD_REQUEST)
         for field in ("assoc_name", "chair_name", "chair_email", "chair_phone"):
             if not str(data.get(field, "")).strip():
                 return Response({"detail": f"Reitur '{field}' vantar."}, status=status.HTTP_400_BAD_REQUEST)
