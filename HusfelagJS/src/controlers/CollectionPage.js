@@ -16,6 +16,7 @@ import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
+
 import { StatusChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 

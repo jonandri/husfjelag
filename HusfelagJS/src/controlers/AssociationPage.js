@@ -40,6 +40,7 @@ function AssociationPage() {
 
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
+
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
     const [bankAccounts, setBankAccounts] = useState([]);
@@ -79,6 +80,7 @@ function AssociationPage() {
                 const rd = await rulesResp.json();
                 setRules(rd.association_rules || []);
             }
+
             if (collResp.ok) {
                 const cd = await collResp.json();
                 setCollections(cd.rows || []);
@@ -263,6 +265,7 @@ function AssociationPage() {
                         userId={user.id}
                         assocParam={assocParam}
                     />
+
 
                 </Box>
             </Box>
@@ -480,6 +483,7 @@ function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts,
                         + Bæta við
                     </Button>
                 </Box>
+
             </Box>
 
             <BankAccountDialog
@@ -542,6 +546,7 @@ function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSav
                     {bankAccount.current_balance != null ? fmtAmount(bankAccount.current_balance) : '—'}
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+
                     <Tooltip title="Breyta">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
                             <EditIcon fontSize="small" sx={{ color: '#888' }} />
@@ -805,6 +810,7 @@ function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
                         </TableBody>
                     </Table>
                 </Box>
+
             )}
 
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>

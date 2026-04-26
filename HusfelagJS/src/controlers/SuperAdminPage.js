@@ -140,6 +140,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                     Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja (Skattur Cloud).
                 </Typography>
 
+
                 {/* Step 1 — Association SSN + lookup */}
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -259,6 +260,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated }) {
                 <Button sx={ghostButtonSx} onClick={handleClose}>Hætta við</Button>
                 {preview && (
                     <Button
+
                         variant="contained" sx={primaryButtonSx}
                         onClick={handleCreate}
                         disabled={!canCreate}
