@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import {
     Box, Typography, TextField, Button, Paper, Alert, CircularProgress,
 } from '@mui/material';
@@ -22,10 +22,7 @@ function RegistrationRequestPage() {
     const [error, setError] = useState('');
     const [submitted, setSubmitted] = useState(false);
 
-    if (!user) {
-        navigate('/login');
-        return null;
-    }
+    if (!user) return <Navigate to="/login" replace />;
 
     const fmtSsn = (val) => {
         const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -62,7 +59,7 @@ function RegistrationRequestPage() {
                     chair_ssn: ssnDigits(chairSsn),
                     chair_name: chairName.trim(),
                     chair_email: chairEmail.trim(),
-                    chair_phone: chairPhone.trim(),
+                    chair_phone: chairPhone.replace(/\D/g, ''),
                 }),
             });
             if (resp.ok) {
@@ -107,7 +104,7 @@ function RegistrationRequestPage() {
                     label="Kennitala húsfélags"
                     value={assocSsn}
                     onChange={e => setAssocSsn(fmtSsn(e.target.value))}
-                    size="small" fullWidth placeholder="000000-0000"
+                    size="small" fullWidth placeholder="000000-0000" disabled={saving}
                     error={assocSsn.length > 0 && ssnDigits(assocSsn).length !== 10}
                     helperText={assocSsn.length > 0 && ssnDigits(assocSsn).length !== 10 ? 'Kennitala verður að vera 10 tölustafir' : ''}
                 />
@@ -115,7 +112,7 @@ function RegistrationRequestPage() {
                     label="Nafn húsfélags"
                     value={assocName}
                     onChange={e => setAssocName(e.target.value)}
-                    size="small" fullWidth
+                    size="small" fullWidth disabled={saving}
                 />
 
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1D366F', mb: -1 }}>Formaður</Typography>
@@ -123,7 +120,7 @@ function RegistrationRequestPage() {
                     label="Kennitala formanns"
                     value={chairSsn}
                     onChange={e => setChairSsn(fmtSsn(e.target.value))}
-                    size="small" fullWidth placeholder="000000-0000"
+                    size="small" fullWidth placeholder="000000-0000" disabled={saving}
                     error={chairSsn.length > 0 && ssnDigits(chairSsn).length !== 10}
                     helperText={chairSsn.length > 0 && ssnDigits(chairSsn).length !== 10 ? 'Kennitala verður að vera 10 tölustafir' : ''}
                 />
@@ -131,14 +128,14 @@ function RegistrationRequestPage() {
                     label="Nafn formanns"
                     value={chairName}
                     onChange={e => setChairName(e.target.value)}
-                    size="small" fullWidth
+                    size="small" fullWidth disabled={saving}
                 />
                 <TextField
                     label="Netfang formanns"
                     type="email"
                     value={chairEmail}
                     onChange={e => setChairEmail(e.target.value)}
-                    size="small" fullWidth
+                    size="small" fullWidth disabled={saving}
                     error={chairEmail.length > 0 && !emailValid}
                     helperText={chairEmail.length > 0 && !emailValid ? 'Netfang er ekki gilt' : ''}
                 />
@@ -146,7 +143,7 @@ function RegistrationRequestPage() {
                     label="Símanúmer formanns"
                     value={chairPhone}
                     onChange={e => handlePhoneChange(e.target.value)}
-                    size="small" fullWidth
+                    size="small" fullWidth disabled={saving}
                     inputProps={{ inputMode: 'tel', placeholder: '000 0000' }}
                     error={chairPhone.length > 0 && !phoneValid}
                     helperText={chairPhone.length > 0 && !phoneValid ? 'Símanúmer verður að vera 7 tölustafir' : ''}
