@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Paper, Divider, Grid } from '@mui/material';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
@@ -19,7 +20,7 @@ function Dashboard() {
 
         const fetchAssociation = async () => {
             try {
-                const response = await fetch(`${API_URL}/Association/${user.id}${assocParam}`);
+                const response = await apiFetch(`${API_URL}/Association/${user.id}${assocParam}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data === null) {

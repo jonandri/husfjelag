@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
@@ -42,7 +43,7 @@ function CategoriesPage() {
 
     const loadCategories = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Category/${user.id}${assocParam}`);
+            const resp = await apiFetch(`${API_URL}/Category/${user.id}${assocParam}`);
             if (resp.ok) setCategories(await resp.json());
             else { setError('Villa við að sækja flokka.'); setCategories([]); }
         } catch {
@@ -160,7 +161,7 @@ function AddCategoryDialog({ open, onClose, userId, assocParam, onCreated }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Category${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Category${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId, name: name.trim(), type }),
@@ -247,7 +248,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
             setError('');
             setExpenseAccountId(category.expense_account_id || '');
             setIncomeAccountId(category.income_account_id || '');
-            fetch(`${API_URL}/AccountingKey/list`)
+            apiFetch(`${API_URL}/AccountingKey/list`)
                 .then(r => r.ok ? r.json() : [])
                 .then(data => setAccountingKeys(data))
                 .catch(() => {});
@@ -261,7 +262,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
         setSaving(true);
         const url = `${API_URL}/Category/update/${category.id}`;
         try {
-            const resp = await fetch(url, {
+            const resp = await apiFetch(url, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user?.id, name: name.trim(), type, expense_account_id: expenseAccountId || null, income_account_id: incomeAccountId || null }),
@@ -269,7 +270,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
             if (resp.ok) {
                 if (isDisabled) {
                     // Re-enable by removing deleted flag — reuse update endpoint and then enable
-                    await fetch(`${API_URL}/Category/enable/${category.id}`, { method: 'PATCH' });
+                    await apiFetch(`${API_URL}/Category/enable/${category.id}`, { method: 'PATCH' });
                 }
                 onSaved();
             } else {
@@ -286,7 +287,7 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
     const handleDisable = async () => {
         setDisabling(true);
         try {
-            const resp = await fetch(`${API_URL}/Category/delete/${category.id}`, { method: 'DELETE' });
+            const resp = await apiFetch(`${API_URL}/Category/delete/${category.id}`, { method: 'DELETE' });
             if (resp.ok) { setConfirmDisable(false); onSaved(); }
             else { const data = await resp.json(); setError(data.detail || 'Villa við óvirkjun.'); setConfirmDisable(false); }
         } catch {
@@ -300,13 +301,13 @@ function EditCategoryDialog({ open, onClose, category, isDisabled, onSaved }) {
         setSaving(true);
         try {
             const [nameResp] = await Promise.all([
-                fetch(`${API_URL}/Category/update/${category.id}`, {
+                apiFetch(`${API_URL}/Category/update/${category.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user?.id, name: name.trim(), type }),
                 }),
             ]);
-            await fetch(`${API_URL}/Category/enable/${category.id}`, { method: 'PATCH' });
+            await apiFetch(`${API_URL}/Category/enable/${category.id}`, { method: 'PATCH' });
             if (nameResp.ok) onSaved();
             else { const data = await nameResp.json(); setError(data.detail || 'Villa.'); }
         } catch {

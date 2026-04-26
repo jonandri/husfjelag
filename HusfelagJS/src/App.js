@@ -18,8 +18,15 @@ import CategoriesPage from './controlers/CategoriesPage';
 import CollectionPage from './controlers/CollectionPage';
 import SuperAdminPage from './controlers/SuperAdminPage';
 import TransactionsPage from './controlers/TransactionsPage';
-import ReportPage from './controlers/ReportPage';
+import YfirlitPage from './controlers/YfirlitPage';
 import { UserContext } from './controlers/UserContext';
+import { HelpProvider } from './ui/HelpContext';
+import HomePage from './controlers/HomePage';
+import BankSettingsPage from './controlers/BankSettingsPage';
+import BankHealthPage from './controlers/BankHealthPage';
+import AdminCategoriesPage from './controlers/AdminCategoriesPage';
+import AdminAccountingKeysPage from './controlers/AdminAccountingKeysPage';
+import { apiFetch } from './api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -62,7 +69,7 @@ function ProtectedRoute({ children }) {
     </Box>
   );
   if (!user) return <Navigate to="/login" replace />;
-  return children;
+  return <HelpProvider>{children}</HelpProvider>;
 }
 
 // App component and navigation
@@ -90,11 +97,12 @@ function App() {
       setImpersonating(false);
       return;
     }
-    fetch(`${API_URL}/Association/list/${user.id}`)
+    apiFetch(`${API_URL}/Association/list/${user.id}`)
       .then(r => r.ok ? r.json() : [])
       .then(list => {
         setAssociations(list);
-        const savedRaw = localStorage.getItem('currentAssociation');
+        const storageKey = `currentAssociation_${user.id}`;
+        const savedRaw = localStorage.getItem(storageKey);
         const savedAssoc = savedRaw ? JSON.parse(savedRaw) : null;
         const match = savedAssoc ? list.find(a => a.id === savedAssoc.id) : null;
         // Only fall back to savedAssoc (outside own list) for superadmins (impersonation reload)
@@ -102,7 +110,7 @@ function App() {
         const isOwn = resolved ? list.some(a => a.id === resolved.id) : false;
         setCurrentAssociationState(resolved);
         setImpersonating(!!resolved && !isOwn);
-        if (resolved) localStorage.setItem('currentAssociation', JSON.stringify(resolved));
+        if (resolved) localStorage.setItem(storageKey, JSON.stringify(resolved));
       })
       .catch(() => {})
       .finally(() => setInitializing(false)); // Associations resolved (or failed) — ready to render
@@ -112,16 +120,18 @@ function App() {
     setCurrentAssociationState(assoc);
     const isOwn = associations.some(a => a.id === assoc?.id);
     setImpersonating(!!assoc && !isOwn);
-    if (assoc) localStorage.setItem('currentAssociation', JSON.stringify(assoc));
-    else localStorage.removeItem('currentAssociation');
+    const storageKey = `currentAssociation_${user?.id}`;
+    if (assoc) localStorage.setItem(storageKey, JSON.stringify(assoc));
+    else localStorage.removeItem(storageKey);
   };
 
   const stopImpersonating = () => {
     const first = associations[0] || null;
     setCurrentAssociationState(first);
     setImpersonating(false);
-    if (first) localStorage.setItem('currentAssociation', JSON.stringify(first));
-    else localStorage.removeItem('currentAssociation');
+    const storageKey = `currentAssociation_${user?.id}`;
+    if (first) localStorage.setItem(storageKey, JSON.stringify(first));
+    else localStorage.removeItem(storageKey);
   };
 
   const assocParam = currentAssociation ? `?as=${currentAssociation.id}` : '';
@@ -131,7 +141,7 @@ function App() {
       <ThemeProvider theme={theme}>
         <Router>
           <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/logout" element={<Logout />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
@@ -146,9 +156,13 @@ function App() {
             <Route path="/aaetlun/nyr" element={<ProtectedRoute><BudgetWizardPage /></ProtectedRoute>} />
             <Route path="/flokkar" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
             <Route path="/faerslur" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
-            <Route path="/yfirlit" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
+            <Route path="/yfirlit" element={<ProtectedRoute><YfirlitPage /></ProtectedRoute>} />
             <Route path="/innheimta" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
             <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
+            <Route path="/bank-settings" element={<ProtectedRoute><BankSettingsPage /></ProtectedRoute>} />
+            <Route path="/admin/bank-health" element={<ProtectedRoute><BankHealthPage /></ProtectedRoute>} />
+            <Route path="/admin/categories" element={<ProtectedRoute><AdminCategoriesPage /></ProtectedRoute>} />
+            <Route path="/admin/accounting-keys" element={<ProtectedRoute><AdminAccountingKeysPage /></ProtectedRoute>} />
           </Routes>
         </Router> 
       </ThemeProvider>

@@ -1,0 +1,269 @@
+/* Husfjelag -- design tokens
+ * Canonical reference for all visual primitives: brand color, neutrals,
+ * semantic / status colors, status-chip palette, type ramp, spacing, radii,
+ * shadows and motion. Use the semantic CSS vars (--brand-navy, --bg-toolbar,
+ * --positive, etc) -- never hard-code a hex.
+ * Tokens are rooted in the production palette but layered with an
+ * OKLCH-derived elevation system on top of a slightly warmer neutral ramp.
+ */
+
+/* JetBrains Mono -- self-hosted (TTF). Used for amount columns + monospaced numerals.
+ * Production needs only 400 (Regular) and 500 (Medium) but the full family is available. */
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 100; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Thin.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 100; font-display: swap;
+  src: url("./fonts/JetBrainsMono-ThinItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 200; font-display: swap;
+  src: url("./fonts/JetBrainsMono-ExtraLight.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 200; font-display: swap;
+  src: url("./fonts/JetBrainsMono-ExtraLightItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 300; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Light.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 300; font-display: swap;
+  src: url("./fonts/JetBrainsMono-LightItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Regular.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 400; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Italic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Medium.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 500; font-display: swap;
+  src: url("./fonts/JetBrainsMono-MediumItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("./fonts/JetBrainsMono-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 600; font-display: swap;
+  src: url("./fonts/JetBrainsMono-SemiBoldItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("./fonts/JetBrainsMono-Bold.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 700; font-display: swap;
+  src: url("./fonts/JetBrainsMono-BoldItalic.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 800; font-display: swap;
+  src: url("./fonts/JetBrainsMono-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-style: italic; font-weight: 800; font-display: swap;
+  src: url("./fonts/JetBrainsMono-ExtraBoldItalic.ttf") format("truetype"); }
+
+/* Switzer -- variable font (weight axis 100-900, upright + italic).
+ * Self-hosted; no Fontshare CDN dependency.
+ * Browsers without variable-font support fall back to system sans
+ * (acceptable; Husfjelag has zero IE11 traffic). */
+@font-face {
+  font-family: "Switzer";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Switzer-Variable.woff2") format("woff2-variations"),
+       url("./fonts/Switzer-Variable.woff")  format("woff-variations");
+}
+@font-face {
+  font-family: "Switzer";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Switzer-VariableItalic.woff2") format("woff2-variations"),
+       url("./fonts/Switzer-VariableItalic.woff")  format("woff-variations");
+}
+
+:root {
+  /* ---------- Brand ---------- */
+  --brand-navy:        #1D366F;   /* sidebar, primary buttons, active states */
+  --brand-navy-hover:  #162d5e;
+  --brand-navy-tint:   #eef1f8;   /* active filter bg, hover surfaces */
+  --brand-navy-tint-2: #c5cfe8;   /* disabled primary button */
+  --brand-navy-deep:   #0d2154;   /* hero gradient end */
+  --brand-green:       #08C076;   /* secondary, success, CTA pills */
+  --brand-green-hover: #06a866;
+  --brand-green-tint:  #e8f5e9;   /* paid chip bg, label chip bg */
+
+  /* ---------- Neutrals ---------- */
+  --white:             #ffffff;
+  --bg-page:           #ffffff;
+  --bg-toolbar:        #fafafa;
+  --bg-table-head:     #f5f5f5;
+  --bg-soft:           #f3f4f6;
+  --bg-section:        #fafafa;
+  --border:            #e8e8e8;
+  --border-row:        #f2f2f2;
+  --text-primary:      #111111;
+  --text-body:         #333333;
+  --text-secondary:    #555555;
+  --text-tertiary:     #777777;
+  --text-disabled:     #888888;
+  --text-faint:        #aaaaaa;
+
+  /* ---------- Semantic ---------- */
+  --positive:          #2e7d32;   /* positive amount green */
+  --negative:          #c62828;   /* negative amount red, destructive */
+  --negative-hover:    #8b0000;
+  --warning:           #e65100;   /* unpaid / imported chip text */
+  --info:              #1565c0;   /* reconciled chip text */
+
+  /* Status chip surfaces */
+  --chip-categorised-bg: #f3f4f6; --chip-categorised-fg: #555555;
+  --chip-imported-bg:    #fff8e1; --chip-imported-fg:    #e65100;
+  --chip-reconciled-bg:  #e8f4fd; --chip-reconciled-fg:  #1565c0;
+  --chip-paid-bg:        #e8f5e9; --chip-paid-fg:        #2e7d32;
+  --chip-unpaid-bg:      #fff3e0; --chip-unpaid-fg:      #e65100;
+  --chip-label-bg:       #e3e8f4; --chip-label-fg:       #1D366F;
+
+  /* ---------- Surfaces / overlays ---------- */
+  --sidebar-bg:        #1D366F;
+  --sidebar-fg:        #ffffff;
+  --sidebar-active:    rgba(255,255,255,0.18);
+  --sidebar-hover:     rgba(255,255,255,0.08);
+  --hero-grad:         linear-gradient(135deg, #1D366F 0%, #0d2154 100%);
+
+  /* ---------- Typography ---------- */
+  --font-sans: "Switzer", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-feature: "tnum";
+
+  /* type ramp -- tuned to MUI defaults (16px base) but exposed as vars */
+  --fs-11: 0.6875rem;  /* chip / micro label */
+  --fs-12: 0.75rem;    /* caption */
+  --fs-13: 0.8125rem;  /* filter controls, dense */
+  --fs-14: 0.875rem;   /* body-2 */
+  --fs-16: 1rem;       /* body */
+  --fs-18: 1.125rem;   /* h6 */
+  --fs-20: 1.25rem;    /* h5 default */
+  --fs-24: 1.5rem;     /* h5 in style guide (600) */
+  --fs-32: 2rem;       /* h4 / hero subhead */
+  --fs-42: 2.625rem;   /* hero headline desktop */
+
+  --fw-thin:    200;   /* h1-h4 in MUI theme */
+  --fw-regular: 400;
+  --fw-medium:  500;   /* buttons, nav active */
+  --fw-semi:    600;   /* h5, table headers, chip text */
+  --fw-bold:    700;   /* CtaBar wordmark, hero accents */
+
+  --lh-tight:  1.25;
+  --lh-base:   1.55;
+  --lh-loose:  1.75;
+
+  --tracking-wide:  0.06em;   /* HUSFJELAG wordmark */
+  --tracking-eyebrow: 0.10em; /* uppercase eyebrow labels */
+  --tracking-table: 0.06em;   /* HEAD_CELL_SX uppercase */
+
+  /* ---------- Spacing (8px grid; matches MUI sx units) ---------- */
+  --sp-0: 0;
+  --sp-1: 4px;     /* MUI 0.5 */
+  --sp-2: 8px;     /* 1   */
+  --sp-3: 12px;    /* 1.5 */
+  --sp-4: 16px;    /* 2   -- header zone padding y */
+  --sp-5: 20px;
+  --sp-6: 24px;    /* 3   -- header zone padding x, table first cell */
+  --sp-8: 32px;    /* 4   -- content panel padding */
+  --sp-10: 40px;
+  --sp-12: 48px;   /* action column width */
+
+  /* ---------- Radii ---------- */
+  --r-1: 4px;      /* fields, dialog rows */
+  --r-2: 8px;      /* nav items, surfaces */
+  --r-3: 12px;     /* chips, larger surfaces */
+  --r-pill: 20px;  /* CTA pill (CtaBar)  */
+  --r-pill-lg: 24px; /* hero CTA pill */
+  --r-circle: 50%;
+
+  /* ---------- Borders ---------- */
+  --bw-1: 1px;
+  --bw-15: 1.5px;  /* active filter, sidebar collapse handle */
+  --bw-2: 2px;     /* totals row top border */
+
+  /* ---------- Shadows ---------- */
+  --shadow-cta:    0 2px 12px rgba(0,0,0,0.20);   /* CtaBar */
+  --shadow-card:   0 1px 2px rgba(17,17,17,0.04), 0 2px 6px rgba(17,17,17,0.04);
+  --shadow-pop:    0 8px 24px rgba(17,17,17,0.10);
+  --shadow-modal:  0 12px 40px rgba(13,33,84,0.18);
+
+  /* ---------- Motion ---------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.20s;
+}
+
+/* ---------- Base ---------- */
+html, body {
+  font-family: var(--font-sans);
+  font-feature-settings: var(--font-feature);
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Semantic type roles ---------- */
+.h-display {
+  font-weight: var(--fw-thin);
+  font-size: var(--fs-42);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.h-display--accent { color: var(--brand-navy); font-weight: var(--fw-bold); }
+
+.h-page {
+  /* Zone (1) page title -- Typography variant="h5", fontWeight 600 */
+  font-weight: var(--fw-semi);
+  font-size: var(--fs-24);
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.h-section {
+  font-weight: var(--fw-semi);
+  font-size: var(--fs-20);
+  color: var(--text-primary);
+}
+
+.t-subtitle {
+  font-size: var(--fs-14);
+  color: var(--text-secondary);
+  font-weight: var(--fw-regular);
+}
+
+.t-body {
+  font-size: var(--fs-16);
+  line-height: var(--lh-base);
+  color: var(--text-body);
+}
+
+.t-body-sm {
+  font-size: var(--fs-14);
+  line-height: var(--lh-base);
+  color: var(--text-body);
+}
+
+.t-caption {
+  font-size: var(--fs-12);
+  color: var(--text-disabled);
+}
+
+.t-eyebrow {
+  font-size: var(--fs-11);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--brand-green);
+}
+
+.t-table-head {
+  font-size: var(--fs-11);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tracking-table);
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+.t-amount {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-feature);
+  white-space: nowrap;
+}
+.t-amount--positive { color: var(--positive); }
+.t-amount--negative { color: var(--negative); }
+.t-amount--zero     { color: var(--text-disabled); }
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-feature);
+}

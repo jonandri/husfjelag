@@ -14,6 +14,7 @@ class AssociationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Association
         fields = ["id", "ssn", "name", "address", "postal_code", "city",
+                  "date_of_board_change", "registered", "status",
                   "apartment_count", "owner_count", "chair", "cfo"]
 
     def get_apartment_count(self, obj):
@@ -112,6 +113,7 @@ class AccountingKeySerializer(serializers.ModelSerializer):
 
 class BankAccountSerializer(serializers.ModelSerializer):
     asset_account = serializers.SerializerMethodField()
+    current_balance = serializers.SerializerMethodField()
 
     def get_asset_account(self, obj):
         if not obj.asset_account_id:
@@ -122,9 +124,13 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "name": obj.asset_account.name,
         }
 
+    def get_current_balance(self, obj):
+        # Returns the annotated value if present, otherwise None (no transactions imported yet)
+        return getattr(obj, "current_balance", None)
+
     class Meta:
         model = BankAccount
-        fields = ["id", "name", "account_number", "description", "deleted", "asset_account"]
+        fields = ["id", "name", "account_number", "description", "deleted", "asset_account", "current_balance"]
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -170,7 +176,8 @@ class AssociationAccessSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Association
-        fields = ["id", "ssn", "name", "address", "postal_code", "city", "role"]
+        fields = ["id", "ssn", "name", "address", "postal_code", "city",
+                  "date_of_board_change", "registered", "status", "role"]
 
     ROLE_LABELS = {
         "CHAIR": "Formaður",

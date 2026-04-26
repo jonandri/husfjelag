@@ -8,7 +8,10 @@ import {
     Alert,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { useSort, HEAD_SX, HEAD_CELL_SX, TOTALS_ROW_SX, AmountCell } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx } from '../ui/buttons';
@@ -26,6 +29,7 @@ const TYPE_LABELS = {
 function BudgetPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [budget, setBudget] = useState(undefined);  // undefined = loading, null = none
     const [error, setError] = useState('');
     const year = new Date().getFullYear();
@@ -38,8 +42,9 @@ function BudgetPage() {
 
     const loadBudget = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Budget/${user.id}${assocParam}`);
+            const resp = await apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`);
             if (resp.ok) setBudget(await resp.json());
+            else if (resp.status === 404) setBudget(null);  // no budget yet — show empty state
             else { setError('Villa við að sækja áætlun.'); setBudget(null); }
         } catch {
             setError('Tenging við þjón mistókst.');
@@ -83,16 +88,32 @@ function BudgetPage() {
                             </Typography>
                         )}
                     </Box>
-                    <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
-                        + Ný áætlun
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
+                            + Ný áætlun
+                        </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('aaetlun')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
 
                 {/* Zone 3: Content */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    {!budget ? null : budget.items.length === 0 ? (
+                    {budget === null && !error && (
+                        <Box sx={{ mt: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <Typography color="text.secondary">Engin áætlun hefur verið stofnuð.</Typography>
+                            <Button variant="contained" sx={primaryButtonSx} onClick={handleCreate}>
+                                Stofna áætlun
+                            </Button>
+                        </Box>
+                    )}
+
+                    {budget && (budget.items.length === 0 ? (
                         <Typography color="text.secondary" sx={{ mt: 4 }}>
                             Áætlun er til en engir flokkar eru skráðir.
                         </Typography>
@@ -120,13 +141,13 @@ function BudgetPage() {
                                     <TableRow sx={TOTALS_ROW_SX}>
                                         <TableCell>Samtals</TableCell>
                                         <TableCell />
-                                        <AmountCell value={total} />
+                                        <AmountCell value={-total} />
                                         <TableCell />
                                     </TableRow>
                                 </TableFooter>
                             </Table>
                         </Paper>
-                    )}
+                    ))}
                 </Box>
             </Box>
         </div>
@@ -140,7 +161,7 @@ function BudgetItemRow({ item, onSaved }) {
             <TableRow hover>
                 <TableCell>{item.category_name}</TableCell>
                 <TableCell><LabelChip label={TYPE_LABELS[item.category_type] || item.category_type} /></TableCell>
-                <AmountCell value={item.amount} />
+                <AmountCell value={-parseFloat(item.amount || 0)} />
                 <TableCell align="right">
                     <Tooltip title="Breyta upphæð">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
@@ -174,7 +195,7 @@ function EditAmountDialog({ open, onClose, item, onSaved }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BudgetItem/update/${item.id}`, {
+            const resp = await apiFetch(`${API_URL}/BudgetItem/update/${item.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount: parseFloat(amount) }),

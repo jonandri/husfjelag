@@ -7,6 +7,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import SideBar from './Sidebar';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 const HMS_URL_PATTERN = /^https:\/\/hms\.is\/fasteignaskra\/\d+\/\d+$/;
@@ -25,7 +26,7 @@ function ApartmentImportPage() {
         if (!user) { navigate('/login'); return; }
         // Pre-fill URLs from saved sources
         const asParam = assocParam ? `&${assocParam.replace('?', '')}` : '';
-        fetch(`${API_URL}/Apartment/import/sources?user_id=${user.id}${asParam}`)
+        apiFetch(`${API_URL}/Apartment/import/sources?user_id=${user.id}${asParam}`)
             .then(r => r.ok ? r.json() : [])
             .then(sources => {
                 if (sources.length > 0) setUrls(sources.map(s => s.url));
@@ -39,7 +40,7 @@ function ApartmentImportPage() {
         setError('');
         setLoading(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/import/preview${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Apartment/import/preview${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, urls: urls.filter(u => u.trim()) }),
@@ -64,7 +65,7 @@ function ApartmentImportPage() {
         setError('');
         setLoading(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/import/confirm${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Apartment/import/confirm${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Húsfélag** is an Icelandic SaaS platform for Building Associations (Húsfélag). Users authenticate via Kennitala (10-digit Icelandic national ID) or phone number. The system manages house associations, apartments, ownership percentages, fee collection, invoices, budgets, and role-based access.
+**Húsfjelag** is an Icelandic SaaS platform for Building Associations (Húsfélag). Users authenticate via Kenni (Icelandic national identity provider, OIDC/PKCE flow). The system manages house associations, apartments, ownership percentages, fee collection, invoices, budgets, and role-based access.
 
 ## Subprojects
 
@@ -57,12 +57,12 @@ HusfelagPy/
 ├── config/
 │   ├── settings/
 │   │   ├── base.py     # shared settings (env-based config via django-environ)
-│   │   ├── dev.py      # DEBUG=True, CORS allows localhost:3000
+│   │   ├── dev.py      # DEBUG=True, CORS allows localhost:3010
 │   │   └── prod.py     # DEBUG=False, strict CORS, HTTPS
 │   ├── celery.py
 │   └── urls.py
-├── users/              # User, UserAccess models + /Login endpoint
-└── associations/       # HouseAssociation, Apartment models + /HouseAssociation endpoint
+├── users/              # User model, JWT auth, Kenni OIDC flow
+└── associations/       # Association, Apartment, Transaction, Budget, Collection models + endpoints
 ```
 
 **Config:** All secrets via `.env` file (see `.env.example`). `DJANGO_ENV=development|production` controls which settings file loads.
@@ -70,15 +70,62 @@ HusfelagPy/
 **Data flow:** DRF Views → Django ORM → PostgreSQL
 
 **Models:**
-- `User` — Kennitala (unique, 10 digits), Name, Email, Phone
-- `UserAccess` — links User ↔ HouseAssociation with Role (Admin/Finance/User) and Active flag
-- `HouseAssociation` — Kennitala, Name, Address, Email
-- `Apartment` — belongs to HouseAssociation; tracks PercentageOwned, PayCommonFees, BuildingName
+- `User` — Kennitala (unique, 10 digits), Name, Email, Phone, is_superadmin. Has `is_authenticated = True` property (required by DRF).
+- `AssociationAccess` — links User ↔ Association with Role (CHAIR/CFO/MEMBER) and Active flag
+- `Association` — SSN, Name, Address, PostalCode, City
+- `Apartment` — belongs to Association; tracks share percentages:
+  - `share` → SHARED budget type (Sameiginlegt — general shared costs)
+  - `share_2` → SHARE2 budget type (Hiti — heating)
+  - `share_3` → SHARE3 budget type (Lóð — lot/ground)
+  - `share_eq` → EQUAL budget type (Jafnskipt — equal split, auto-recalculated by `_recalc_share_eq()`)
+  - All shares must sum to 100% per type across all active apartments before a Collection can be generated
+  - HMS import sets `anr`, `fnr`, `size` only — `share`, `share_2`, `share_3` must be entered manually; `share_eq` is auto-set after import
+- `Association` — SSN, Name, Address, PostalCode, City, date_of_board_change, registered, status (last three from Skattur Cloud)
+- `ApartmentOwnership` — links User ↔ Apartment with share and is_payer flag
 
-**Endpoints:**
-- `POST /Login` — accepts `personID` (Kennitala) or `phone`; strips hyphens/spaces
-- `GET /HouseAssociation/{user_id}` — get association for a user
-- `POST /HouseAssociation` — create new association
+### Authentication & Security
+
+**Auth provider:** Kenni (Icelandic national identity, OIDC). Docs: https://docs.kenni.is
+
+**Flow:**
+1. Frontend redirects to `GET /auth/login` → backend redirects to Kenni with PKCE
+2. Kenni redirects to `GET /auth/callback` → backend validates, creates/updates User, stores JWT in cache under a one-time exchange code
+3. Frontend receives `?code=<exchange_code>` → POSTs to `POST /auth/token` → gets JWT
+4. All subsequent requests: `Authorization: Bearer <jwt>`
+
+**JWT:** HS256, signed with `SECRET_KEY`, expires 24h. Issued by `users/oidc.py:create_access_token()`.
+
+**DRF enforcement:** `users/authentication.py:JWTAuthentication` is set as the global `DEFAULT_AUTHENTICATION_CLASSES`. `DEFAULT_PERMISSION_CLASSES` is `IsAuthenticated`. Every endpoint requires a valid JWT unless explicitly listed below.
+
+**Open endpoints (no JWT required):**
+- `GET /auth/login` — starts Kenni OIDC flow
+- `GET /auth/callback` — Kenni redirect target
+- `POST /auth/token` — exchange one-time code for JWT
+- `POST /Login` — returns 410 Gone (legacy, disabled)
+
+**All other endpoints are authenticated.** Authorization is enforced in layers:
+
+1. **Data scoping** — `_resolve_assoc(user_id, request)` validates URL `user_id` matches `request.user` (superadmins may access any). Returns the association or None.
+2. **Membership check** — `_can_access_assoc(request, association)` — any active `AssociationAccess` entry. Used for read-only member pages (Apartments, Owners).
+3. **Role check** — `_require_chair_or_cfo(request, association)` — only CHAIR or CFO role. Used for all write operations and privileged read pages (Budget, Transactions, Collection, Report, AnnualStatement, import flows).
+4. **Chair-only** — `_require_chair(request, association)` — only CHAIR. Used for role management (`PATCH /AssociationRole`).
+5. **Superadmin** — `request.user.is_superadmin` — never from request body or query params. Used for system-admin views.
+
+**Role access matrix:**
+
+| Capability | MEMBER | CHAIR / CFO | Superadmin |
+|---|---|---|---|
+| Read apartments, owners | ✅ | ✅ | ✅ |
+| Mutate apartments, owners | ❌ | ✅ | ✅ |
+| Budget, Transactions, Collection, Report, AnnualStatement | ❌ | ✅ | ✅ |
+| Apartment import (HMS) | ❌ | ✅ | ✅ |
+| Manage association roles | ❌ | CHAIR only | ✅ |
+| Edit own profile (email, phone) | ✅ | ✅ | ✅ |
+| System admin (`/admin/*`, AccountingKey/Category mutations) | ❌ | ❌ | ✅ |
+
+**Frontend:** All API calls go through `src/api.js:apiFetch()` which injects `Authorization: Bearer <token>` automatically. Never use bare `fetch()` in controllers — always use `apiFetch()`.
+
+**Rate limiting:** `AnonRateThrottle` (60/min), `UserRateThrottle` (300/min), `login` scope (5/min, unused since login is now OIDC-only).
 
 ### Frontend — HusfelagJS
 
@@ -86,14 +133,18 @@ React 17 with React Router 6. Global user state via `UserContext` (also persiste
 
 Note: components live in `src/controlers/` (intentional misspelling).
 
-**API base URL:** Set via `REACT_APP_API_URL` env var (defaults to `http://localhost:8000`). Set this in Vercel for production.
+**API base URL:** Set via `REACT_APP_API_URL` env var (defaults to `http://localhost:8010`). Set this in Vercel for production.
 
 **MUI theme:** primary white `#FFFFFF`, secondary green `#08C076`, background dark blue `#1D366F`.
 
-**Routes:**
-- `/` → `Login.js` — two-tab form: Auðkennisappið (Kennitala) or Rafræn skilríki (phone)
-- `/dashboard` → `Dashboard.js` — fetches user's HouseAssociation; redirects to `/houseassociation` if none found
-- `/houseassociation` → `HouseAssociation.js` — form to register a new association
+**Auth state:** User object stored in `localStorage` as `user` key, including `token` field. Association memory stored per-user as `currentAssociation_${user.id}`.
+
+**Key routes:**
+- `/` → `HomePage.js` — public landing page
+- `/login` → `Login.js` — redirects to Kenni via backend
+- `/auth/callback` → `AuthCallback.js` — exchanges code for JWT, fetches profile, redirects
+- `/dashboard` → `Dashboard.js` — protected, main app entry
+- `/profile` → `ProfilePage.js` — prompted when email/phone missing after first login
 
 ## Deployment
 
@@ -101,9 +152,21 @@ Note: components live in `src/controlers/` (intentional misspelling).
 - **Backend** → Digital Ocean or GCP (set `DJANGO_ENV=production` + all env vars from `.env.example`)
 - **Database** → PostgreSQL (managed DB on Digital Ocean or Cloud SQL on GCP)
 
+## Key Backend Patterns
+
+**Never use `Response(None)`** — DRF renders it as an empty byte string `b''`, not JSON `null`. `resp.json()` on the frontend then throws `SyntaxError`. Use `Response({"detail": "..."}, status=HTTP_404_NOT_FOUND)` instead.
+
+**Skattur Cloud API** (`associations/skattur_cloud.py`) — Icelandic company registry. Key functions:
+- `fetch_legal_entity(kennitala)` → raw entity dict or None
+- `extract_prokuruhafar(entity)` → list of `{"national_id", "name"}` for Prókúruhafi relationships
+- `parse_entity_for_association(ssn, entity)` → dict ready to create/update an Association (prefers Póstfang address, falls back to Lögheimilisfang)
+- Requires `SKATTUR_CLOUD_API_KEY` in `.env`
+
+**Management commands:**
+- `poetry run python3 manage.py delete_association <id>` — cascading delete of an association and all related data (prompts for name confirmation)
+
 ## Icelandic Domain Notes
 
-- **Kennitala** — 10-digit national ID (formatted as `XXXXXX-XXXX`; hyphens stripped before API use)
-- **Auðkennisappið** — Icelandic government authentication app (login tab 1)
-- **Rafræn skilríki** — Icelandic digital credentials via phone (login tab 2)
-- Planned integration with these auth services is not yet implemented (TODO in `users/views.py`)
+- **Kennitala** — 10-digit national ID (formatted as `XXXXXX-XXXX`; hyphens stripped before use)
+- **Kenni** — Icelandic national identity provider (OIDC), used for login
+- **Auðkennisappið** — the app users authenticate with via Kenni

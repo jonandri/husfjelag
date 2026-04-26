@@ -16,10 +16,14 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import { fmtKennitala, fmtPhone } from '../format';
+import HelpDrawer from '../ui/HelpDrawer';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -128,11 +132,12 @@ function SideBar() {
     const [switcherQ, setSwitcherQ] = useState('');
     const [switcherResults, setSwitcherResults] = useState([]);
     const [switcherSearching, setSwitcherSearching] = useState(false);
+    const [adminOpen, setAdminOpen] = useState(false);
 
     React.useEffect(() => {
         if (!switcherOpen || !user?.id) return;
         setSwitcherSearching(true);
-        fetch(`${API_URL}/Association/list/${user.id}${switcherQ ? `?q=${encodeURIComponent(switcherQ)}` : ''}`)
+        apiFetch(`${API_URL}/Association/list/${user.id}${switcherQ ? `?q=${encodeURIComponent(switcherQ)}` : ''}`)
             .then(r => r.ok ? r.json() : [])
             .then(data => { setSwitcherResults(data); setSwitcherSearching(false); })
             .catch(() => setSwitcherSearching(false));
@@ -232,12 +237,69 @@ function SideBar() {
             {/* Bottom: superadmin + settings + logout */}
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, pb: 2, pt: 1 }}>
                 {user?.is_superadmin && (
-                    <BottomItem
-                        label="Kerfisstjóri"
-                        icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />}
-                        collapsed={collapsed}
-                        onClick={() => navigate('/superadmin')}
-                    />
+                    <>
+                        <Box
+                            onClick={() => setAdminOpen((v) => !v)}
+                            sx={{
+                                display: 'flex', alignItems: 'center', gap: 1.5,
+                                px: 1.5, py: 0.85, mx: 1, borderRadius: 2, cursor: 'pointer',
+                                backgroundColor: location.pathname.startsWith('/superadmin') || location.pathname.startsWith('/admin/')
+                                    ? ACTIVE_BG : 'transparent',
+                                '&:hover': { backgroundColor: HOVER_BG },
+                                transition: 'background-color 0.15s',
+                                justifyContent: collapsed ? 'center' : 'flex-start',
+                                minHeight: 40,
+                            }}
+                        >
+                            <Box sx={{ color: TEXT, display: 'flex', flexShrink: 0 }}>
+                                <AdminPanelSettingsOutlinedIcon sx={{ fontSize: 20 }} />
+                            </Box>
+                            {!collapsed && (
+                                <Typography sx={{ color: TEXT, fontFamily: '"Inter", sans-serif', fontWeight: 400, fontSize: '0.9rem', flex: 1 }}>
+                                    Kerfisstjórn
+                                </Typography>
+                            )}
+                            {!collapsed && (
+                                <Box sx={{ color: TEXT, fontSize: 16 }}>{adminOpen ? '▲' : '▼'}</Box>
+                            )}
+                        </Box>
+                        {adminOpen && !collapsed && (
+                            <Box sx={{ pl: 2 }}>
+                                <NavItem
+                                    path="/superadmin"
+                                    label="Félög"
+                                    icon={<AdminPanelSettingsOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/superadmin'}
+                                    onClick={() => navigate('/superadmin')}
+                                />
+                                <NavItem
+                                    path="/admin/categories"
+                                    label="Flokkar"
+                                    icon={<CategoryOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/categories'}
+                                    onClick={() => navigate('/admin/categories')}
+                                />
+                                <NavItem
+                                    path="/admin/accounting-keys"
+                                    label="Bókhaldslyklar"
+                                    icon={<AccountTreeOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/accounting-keys'}
+                                    onClick={() => navigate('/admin/accounting-keys')}
+                                />
+                                <NavItem
+                                    path="/admin/bank-health"
+                                    label="Bankaheilsa"
+                                    icon={<AccountBalanceWalletOutlinedIcon sx={{ fontSize: 18 }} />}
+                                    collapsed={false}
+                                    active={location.pathname === '/admin/bank-health'}
+                                    onClick={() => navigate('/admin/bank-health')}
+                                />
+                            </Box>
+                        )}
+                    </>
                 )}
                 <BottomItem
                     label="Stillingar"
@@ -308,6 +370,8 @@ function SideBar() {
                     <Button onClick={() => { setSwitcherOpen(false); setSwitcherQ(''); setSwitcherResults([]); }}>Loka</Button>
                 </DialogActions>
             </Dialog>
+
+            <HelpDrawer />
         </Box>
     );
 }
@@ -329,7 +393,7 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
             setPhone(user.phone || '');
         } else {
             setLoading(true);
-            fetch(`${API_URL}/User/${user.id}`)
+            apiFetch(`${API_URL}/User/${user.id}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => {
                     if (data) {
@@ -353,7 +417,7 @@ function UserSettingsDialog({ open, onClose, user, setUser }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/User/${user.id}`, {
+            const resp = await apiFetch(`${API_URL}/User/${user.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email.trim(), phone: fmtPhone(phone) }),

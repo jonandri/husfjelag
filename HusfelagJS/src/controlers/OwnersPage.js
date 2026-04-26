@@ -9,7 +9,10 @@ import {
     MenuItem, Select, FormControl, InputLabel, FormHelperText,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala, fmtPhone } from '../format';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
@@ -21,6 +24,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function OwnersPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [ownerships, setOwnerships] = useState(undefined);
     const [apartments, setApartments] = useState([]);
     const [error, setError] = useState('');
@@ -36,8 +40,8 @@ function OwnersPage() {
     const loadAll = async () => {
         try {
             const [ownRes, aptRes] = await Promise.all([
-                fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Apartment/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Apartment/${user.id}${assocParam}`),
             ]);
             if (ownRes.ok) setOwnerships(await ownRes.json());
             else { setError('Villa við að sækja eigendur.'); setOwnerships([]); }
@@ -74,9 +78,16 @@ function OwnersPage() {
                     <Box>
                         <Typography variant="h5">Eigendur</Typography>
                     </Box>
-                    <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
-                        + Bæta við eiganda
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                            + Bæta við eiganda
+                        </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('eigendur')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
                 {/* Zone 3: Content (no toolbar needed — no filters) */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
@@ -191,7 +202,7 @@ function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownersh
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Owner${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Owner${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -290,8 +301,16 @@ function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{ownership.name}</TableCell>
                 <TableCell>{fmtKennitala(ownership.kennitala)}</TableCell>
-                <TableCell>{ownership.email || <span style={{ color: '#bbb' }}>—</span>}</TableCell>
-                <TableCell>{ownership.phone ? fmtPhone(ownership.phone) : <span style={{ color: '#bbb' }}>—</span>}</TableCell>
+                <TableCell>
+                    {ownership.email
+                        ? <a href={`mailto:${ownership.email}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{ownership.email}</a>
+                        : <span style={{ color: '#bbb' }}>—</span>}
+                </TableCell>
+                <TableCell>
+                    {ownership.phone
+                        ? <a href={`tel:${ownership.phone.replace(/\s/g, '')}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{fmtPhone(ownership.phone)}</a>
+                        : <span style={{ color: '#bbb' }}>—</span>}
+                </TableCell>
                 <TableCell>{ownership.anr}</TableCell>
                 <TableCell>{ownership.share}%</TableCell>
                 {!isDisabled && (
@@ -363,12 +382,12 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
         const method = isDisabled ? 'PATCH' : 'PUT';
         try {
             const [ownerResp, userResp] = await Promise.all([
-                fetch(url, {
+                apiFetch(url, {
                     method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ share: parseFloat(share), is_payer: isPayer }),
                 }),
-                fetch(`${API_URL}/User/${ownership.user_id}`, {
+                apiFetch(`${API_URL}/User/${ownership.user_id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: fmtPhone(phone) }),
@@ -396,7 +415,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
     const handleDisable = async () => {
         setDisabling(true);
         try {
-            const resp = await fetch(`${API_URL}/Owner/delete/${ownership.id}`, { method: 'DELETE' });
+            const resp = await apiFetch(`${API_URL}/Owner/delete/${ownership.id}`, { method: 'DELETE' });
             if (resp.ok) {
                 setConfirmDisable(false);
                 onDisabled();

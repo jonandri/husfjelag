@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from unittest.mock import patch, MagicMock
 from django.db import models as django_models
+from decimal import Decimal
 from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, BudgetItem, ApartmentOwnership, Collection, CollectionStatus
 from .scraper import scrape_hms_apartments
 import json
@@ -2321,3 +2322,283 @@ class CollectionCandidatesViewTest(TestCase):
         )
         resp = self._get(collection_id=no_payer_col.id)
         self.assertEqual(resp.status_code, 400)
+
+
+class BankConsentModelTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567891", name="Banka Húsfélag",
+            address="Bankagata 1", postal_code="101", city="Reykjavík"
+        )
+
+    def test_one_consent_per_association(self):
+        from .models import BankConsent
+        import datetime
+        BankConsent.objects.create(
+            association=self.association,
+            bank="LANDSBANKINN",
+            consent_id="c-001",
+            access_token="tok",
+            token_expires_at=datetime.datetime(2026, 7, 1, tzinfo=datetime.timezone.utc),
+            consent_expires_at=datetime.date(2026, 7, 11),
+        )
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            BankConsent.objects.create(
+                association=self.association,
+                bank="ARION",
+                consent_id="c-002",
+                access_token="tok2",
+                token_expires_at=datetime.datetime(2026, 7, 1, tzinfo=datetime.timezone.utc),
+                consent_expires_at=datetime.date(2026, 7, 11),
+            )
+
+    def test_transaction_source_field(self):
+        from .models import TransactionSource, BankAccount
+        from decimal import Decimal
+        import datetime
+        bank_account = BankAccount.objects.create(
+            association=self.association, name="Aðalreikningur", account_number="0101-26-123456"
+        )
+        tx = Transaction.objects.create(
+            bank_account=bank_account,
+            date=datetime.date(2026, 4, 1),
+            amount=Decimal("1000.00"),
+            description="Test",
+            source=TransactionSource.BANK_SYNC,
+            external_id="ext-001",
+        )
+        self.assertEqual(tx.source, TransactionSource.BANK_SYNC)
+        self.assertEqual(tx.external_id, "ext-001")
+
+
+class BankConsentStoreTest(TestCase):
+    def test_encrypt_decrypt_round_trip(self):
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token, decrypt_token
+            original = "super-secret-access-token"
+            encrypted = encrypt_token(original)
+            self.assertNotEqual(encrypted, original)
+            self.assertEqual(decrypt_token(encrypted), original)
+
+    def test_encrypt_produces_different_ciphertext_each_time(self):
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key):
+            from associations.banks.consent_store import encrypt_token
+            enc1 = encrypt_token("token")
+            enc2 = encrypt_token("token")
+            self.assertNotEqual(enc1, enc2)
+
+
+class BankOAuthClientTest(TestCase):
+    def test_pkce_pair_lengths(self):
+        from associations.banks.oauth_client import generate_pkce_pair
+        verifier, challenge = generate_pkce_pair()
+        self.assertGreaterEqual(len(verifier), 43)
+        self.assertLessEqual(len(verifier), 128)
+        self.assertNotIn("=", challenge)
+        self.assertNotIn("+", challenge)
+        self.assertNotIn("/", challenge)
+
+    def test_pkce_challenge_is_sha256_of_verifier(self):
+        import hashlib, base64
+        from associations.banks.oauth_client import generate_pkce_pair
+        verifier, challenge = generate_pkce_pair()
+        expected = base64.urlsafe_b64encode(
+            hashlib.sha256(verifier.encode()).digest()
+        ).rstrip(b"=").decode()
+        self.assertEqual(challenge, expected)
+
+    def test_store_and_pop_state(self):
+        from unittest.mock import patch
+        from associations.banks.oauth_client import store_oauth_state, pop_oauth_state
+        fake_cache = {}
+        with patch("associations.banks.oauth_client.cache") as mock_cache:
+            mock_cache.set = lambda k, v, timeout: fake_cache.update({k: v})
+            mock_cache.get = lambda k: fake_cache.get(k)
+            mock_cache.delete = lambda k: fake_cache.pop(k, None)
+            store_oauth_state("state-abc", {"association_id": 1, "bank": "LANDSBANKINN", "user_id": 5})
+            result = pop_oauth_state("state-abc")
+        self.assertEqual(result["association_id"], 1)
+        self.assertEqual(result["bank"], "LANDSBANKINN")
+
+
+class LandsbankinnClientTest(TestCase):
+    def _settings(self):
+        return dict(
+            BANK_LANDSBANKINN_CLIENT_ID="test-client",
+            BANK_LANDSBANKINN_CLIENT_SECRET="test-secret",
+            BANK_LANDSBANKINN_REDIRECT_URI="http://localhost/bank/callback/landsbankinn",
+            BANK_LANDSBANKINN_AUTH_URL="https://psd2.landsbanki.is/sandbox/oauth2/auth",
+            BANK_LANDSBANKINN_TOKEN_URL="https://psd2.landsbanki.is/sandbox/oauth2/token",
+            BANK_LANDSBANKINN_API_BASE="https://psd2.landsbanki.is/sandbox/v1",
+        )
+
+    def test_get_authorization_url_contains_required_params(self):
+        from django.test.utils import override_settings
+        with override_settings(**self._settings()):
+            from associations.banks.landsbankinn import LandsbankinnProvider
+            provider = LandsbankinnProvider()
+            url = provider.get_authorization_url(state="test-state", code_challenge="test-challenge")
+        self.assertIn("state=test-state", url)
+        self.assertIn("code_challenge=test-challenge", url)
+        self.assertIn("code_challenge_method=S256", url)
+        self.assertIn("client_id=test-client", url)
+        self.assertIn("response_type=code", url)
+
+    @patch("associations.banks.landsbankinn.requests.post")
+    def test_exchange_code_returns_token_dict(self, mock_post):
+        from django.test.utils import override_settings
+        mock_post.return_value.json.return_value = {
+            "access_token": "at-123",
+            "refresh_token": "rt-456",
+            "expires_in": 3600,
+        }
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.raise_for_status = lambda: None
+        with override_settings(**self._settings()):
+            from associations.banks.landsbankinn import LandsbankinnProvider
+            provider = LandsbankinnProvider()
+            result = provider.exchange_code(code="code-xyz", code_verifier="verifier-abc")
+        self.assertEqual(result["access_token"], "at-123")
+        self.assertEqual(result["refresh_token"], "rt-456")
+        self.assertIn("expires_in", result)
+
+
+class BankTasksTest(TestCase):
+    def setUp(self):
+        self.association = Association.objects.create(
+            ssn="1234567892", name="Task Húsfélag",
+            address="Taskgata 1", postal_code="101", city="Reykjavík"
+        )
+        self.bank_account = BankAccount.objects.create(
+            association=self.association,
+            name="Aðalreikningur",
+            account_number="0101-26-999999",
+        )
+
+    @patch("associations.banks.tasks.LandsbankinnProvider")
+    def test_sync_transactions_creates_new_transaction(self, MockProvider):
+        import datetime as dt
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        from associations.models import BankConsent, TransactionSource
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key, BANK_LANDSBANKINN_ENABLED=True):
+            from associations.banks.consent_store import encrypt_token
+            consent = BankConsent.objects.create(
+                association=self.association,
+                bank="LANDSBANKINN",
+                consent_id="c-tasks-001",
+                access_token=encrypt_token("fake-token"),
+                token_expires_at=dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc),
+                consent_expires_at=dt.date(2026, 7, 11),
+                is_active=True,
+            )
+            mock_instance = MockProvider.return_value
+            mock_instance.get_transactions.return_value = [{
+                "account_id": "0101-26-999999",
+                "external_id": "ext-tx-001",
+                "date": dt.date(2026, 4, 10),
+                "amount": Decimal("5000.00"),
+                "description": "Húsaleiga",
+                "reference": "ref-001",
+            }]
+            mock_instance.get_accounts.return_value = [
+                {"account_id": "0101-26-999999", "iban": "", "name": "Aðalreikningur"}
+            ]
+            from associations.banks.tasks import sync_transactions
+            sync_transactions(self.association.id)
+
+        tx = Transaction.objects.filter(external_id="ext-tx-001").first()
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.source, TransactionSource.BANK_SYNC)
+        self.assertEqual(tx.amount, Decimal("5000.00"))
+
+    @patch("associations.banks.tasks.LandsbankinnProvider")
+    def test_sync_transactions_skips_duplicate(self, MockProvider):
+        import datetime as dt
+        from cryptography.fernet import Fernet
+        from django.test.utils import override_settings
+        from associations.models import BankConsent, TransactionSource
+        key = Fernet.generate_key().decode()
+        with override_settings(BANK_FERNET_KEY=key, BANK_LANDSBANKINN_ENABLED=True):
+            from associations.banks.consent_store import encrypt_token
+            BankConsent.objects.create(
+                association=self.association,
+                bank="LANDSBANKINN",
+                consent_id="c-tasks-002",
+                access_token=encrypt_token("fake-token"),
+                token_expires_at=dt.datetime(2026, 7, 1, tzinfo=dt.timezone.utc),
+                consent_expires_at=dt.date(2026, 7, 11),
+                is_active=True,
+            )
+            Transaction.objects.create(
+                bank_account=self.bank_account,
+                date=dt.date(2026, 4, 10),
+                amount=Decimal("5000.00"),
+                description="Already imported",
+                external_id="ext-dup-001",
+                source=TransactionSource.BANK_SYNC,
+            )
+            mock_instance = MockProvider.return_value
+            mock_instance.get_transactions.return_value = [{
+                "account_id": "0101-26-999999",
+                "external_id": "ext-dup-001",
+                "date": dt.date(2026, 4, 10),
+                "amount": Decimal("5000.00"),
+                "description": "Húsaleiga",
+                "reference": "ref-001",
+            }]
+            mock_instance.get_accounts.return_value = [
+                {"account_id": "0101-26-999999", "iban": "", "name": "Aðalreikningur"}
+            ]
+            from associations.banks.tasks import sync_transactions
+            sync_transactions(self.association.id)
+
+        self.assertEqual(Transaction.objects.filter(external_id="ext-dup-001").count(), 1)
+
+
+class BankViewsTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create(
+            kennitala="1234567893", name="Stjórnandi",
+            email="stjorn@test.is", is_superadmin=False
+        )
+        self.association = Association.objects.create(
+            ssn="1234567894", name="View Húsfélag",
+            address="Viewgata 1", postal_code="101", city="Reykjavík"
+        )
+        AssociationAccess.objects.create(
+            user=self.user, association=self.association,
+            role="CHAIR", active=True
+        )
+        from users.oidc import create_access_token
+        self.token = create_access_token(self.user.id)
+
+    def test_bank_status_no_consent_returns_404(self):
+        resp = self.client.get(
+            f"/associations/{self.association.id}/bank/status",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_bank_disconnect_no_consent_returns_404(self):
+        resp = self.client.delete(
+            f"/associations/{self.association.id}/bank/disconnect",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_bank_callback_invalid_state_returns_redirect_with_error(self):
+        resp = self.client.get(
+            "/bank/callback/landsbankinn?code=abc&state=nonexistent-state"
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("status=error", resp["Location"])

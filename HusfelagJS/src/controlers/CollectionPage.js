@@ -4,15 +4,19 @@ import {
     Box, Typography, CircularProgress, Paper, Button, Select, MenuItem,
     Table, TableHead, TableRow, TableCell, TableBody, TableFooter,
     Alert, Chip, Tooltip, IconButton,
-    Dialog, DialogTitle, DialogContent, DialogActions,
+    Dialog, DialogContent, DialogActions,
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
-import { ghostButtonSx } from '../ui/buttons';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
+import HelpDialogTitle from '../ui/HelpDialogTitle';
+import { ghostButtonSx, primaryButtonSx, secondaryButtonSx } from '../ui/buttons';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtKennitala } from '../format';
-import { primaryButtonSx } from '../ui/buttons';
+
 import { StatusChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX, AmountCell } from './tableUtils';
 
@@ -25,7 +29,8 @@ const MONTH_NAMES = [
 
 function CollectionPage() {
     const navigate = useNavigate();
-    const { user, assocParam } = React.useContext(UserContext);
+    const { user, assocParam, currentAssociation } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
 
     const today = new Date();
     const [month, setMonth] = useState(today.getMonth() + 1);
@@ -35,19 +40,26 @@ function CollectionPage() {
     const [generating, setGenerating] = useState(false);
     const [matchError, setMatchError] = useState('');
     const [matchTarget, setMatchTarget] = useState(null);
+    const [bankConfigured, setBankConfigured] = useState(false);
+    const [claimMessage, setClaimMessage] = useState(null);
+    const [sendingAll, setSendingAll] = useState(false);
 
     const load = useCallback(() => {
         if (!user) return;
         setData(null);
         setError('');
+        setClaimMessage(null);
         // assocParam starts with '?' when set (e.g. '?as=5'), so build:
         // /Collection/{id}?as=5&month=M&year=Y  or  /Collection/{id}?month=M&year=Y
         const qs = assocParam
             ? `${assocParam}&month=${month}&year=${year}`
             : `?month=${month}&year=${year}`;
-        fetch(`${API_URL}/Collection/${user.id}${qs}`)
+        apiFetch(`${API_URL}/Collection/${user.id}${qs}`)
             .then(r => r.ok ? r.json() : Promise.reject())
-            .then(setData)
+            .then(d => {
+                setData(d);
+                setBankConfigured(d.bank_settings_configured ?? false);
+            })
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], unmatched: [] }); });
     }, [user, assocParam, month, year]);
 
@@ -59,12 +71,16 @@ function CollectionPage() {
     const handleGenerate = () => {
         setGenerating(true);
         setError('');
-        fetch(`${API_URL}/Collection/generate${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/generate${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, month, year }),
         })
-            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(r => r.ok ? r.json() : r.json().then(d => {
+                const msg = d.detail || 'Villa';
+                const details = d.errors?.length ? '\n' + d.errors.join('\n') : '';
+                return Promise.reject(msg + details);
+            }))
             .then(() => load())
             .catch(err => setError(typeof err === 'string' ? err : 'Villa við að búa til innheimtu.'))
             .finally(() => setGenerating(false));
@@ -73,7 +89,7 @@ function CollectionPage() {
     const handleUnmatch = (collectionId) => {
         if (!collectionId) return;
         setMatchError('');
-        fetch(`${API_URL}/Collection/unmatch${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/unmatch${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId) }),
@@ -83,10 +99,36 @@ function CollectionPage() {
             .catch(err => setMatchError(typeof err === 'string' ? err : 'Villa við að aftengja greiðslu.'));
     };
 
+    const handleSendClaim = (collectionId) => {
+        setClaimMessage(null);
+        apiFetch(`${API_URL}/Collection/${collectionId}/send-claim`, { method: 'POST' })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(() => {
+                load();
+                setClaimMessage({ type: 'success', text: 'Krafa send.' });
+            })
+            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }));
+    };
+
+    const handleSendAllClaims = () => {
+        setClaimMessage(null);
+        setSendingAll(true);
+        apiFetch(`${API_URL}/associations/${currentAssociation?.id}/bank/send-all-claims?month=${month}&year=${year}`, {
+            method: 'POST',
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(d => {
+                load();
+                setClaimMessage({ type: 'success', text: `${d.sent} kröfur sendar, ${d.skipped} sleppt.` });
+            })
+            .catch(err => setClaimMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu.' }))
+            .finally(() => setSendingAll(false));
+    };
+
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
-        fetch(`${API_URL}/Collection/match${assocParam}`, {
+        apiFetch(`${API_URL}/Collection/match${assocParam}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id, collection_id: parseInt(collectionId), transaction_id: parseInt(transactionId) }),
@@ -123,14 +165,32 @@ function CollectionPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Innheimta</Typography>
-                    <Button
-                        variant="contained"
-                        sx={primaryButtonSx}
-                        onClick={handleGenerate}
-                        disabled={generating || hasItems}
-                    >
-                        {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button
+                            variant="contained"
+                            sx={primaryButtonSx}
+                            onClick={handleGenerate}
+                            disabled={generating || hasItems}
+                        >
+                            {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
+                        </Button>
+                        {hasItems && bankConfigured && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                sx={secondaryButtonSx}
+                                onClick={handleSendAllClaims}
+                                disabled={sendingAll || rows.every(r => r.claim_status && r.claim_status !== 'CANCELLED')}
+                            >
+                                Senda allar kröfur
+                            </Button>
+                        )}
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('innheimta')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
                 {/* Zone 2: Toolbar — month navigation / filters */}
                 <Box sx={{ px: 3, py: 1, background: '#fafafa', borderBottom: '1px solid #e8e8e8', display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
@@ -159,8 +219,13 @@ function CollectionPage() {
                         }}
                     />
 
-                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{error}</Alert>}
                     {matchError && <Alert severity="error" sx={{ mb: 2 }}>{matchError}</Alert>}
+                    {claimMessage && (
+                        <Alert severity={claimMessage.type} sx={{ mb: 2 }} onClose={() => setClaimMessage(null)}>
+                            {claimMessage.text}
+                        </Alert>
+                    )}
 
                     {/* Collection items table */}
                     {hasItems ? (
@@ -177,6 +242,7 @@ function CollectionPage() {
                                             <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
                                             <TableCell align="right" sx={HEAD_CELL_SX}>Upphæð</TableCell>
                                             <TableCell align="center" sx={HEAD_CELL_SX}>Staða</TableCell>
+                                            <TableCell align="center" sx={HEAD_CELL_SX}>Krafa</TableCell>
                                             <TableCell />
                                         </TableRow>
                                     </TableHead>
@@ -192,6 +258,35 @@ function CollectionPage() {
                                                     <StatusChip status={row.status === 'PAID' ? 'PAID' : 'UNPAID'} />
                                                     {row.status === 'PAID' && row.paid_transaction_date && (
                                                         <Typography variant="caption" display="block" color="text.secondary">{row.paid_transaction_date}</Typography>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell align="center" sx={{ width: 140, pr: 1 }}>
+                                                    {row.claim_status === 'UNPAID' && (
+                                                        <StatusChip status="CLAIM_UNPAID" />
+                                                    )}
+                                                    {row.claim_status === 'PAID' && (
+                                                        <StatusChip status="CLAIM_PAID" />
+                                                    )}
+                                                    {row.claim_status === 'CANCELLED' && (
+                                                        <StatusChip status="CLAIM_CANCELLED" />
+                                                    )}
+                                                    {!row.claim_status && (
+                                                        <Tooltip title={
+                                                            !bankConfigured
+                                                                ? 'Þú þarft að stilla Landsbankinn sniðmát áður en hægt er að senda kröfur.'
+                                                                : 'Senda kröfu'
+                                                        }>
+                                                            <span>
+                                                                <Button
+                                                                    size="small"
+                                                                    sx={{ ...secondaryButtonSx, fontSize: 11, py: 0.25, px: 1 }}
+                                                                    onClick={() => handleSendClaim(row.collection_id)}
+                                                                    disabled={!bankConfigured}
+                                                                >
+                                                                    Senda kröfu
+                                                                </Button>
+                                                            </span>
+                                                        </Tooltip>
                                                     )}
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ width: 40, pr: 1 }}>
@@ -220,6 +315,7 @@ function CollectionPage() {
                                             <TableCell align="center" sx={{ fontSize: 11, color: '#888' }}>
                                                 {paidCount}/{rows.length} greidd
                                             </TableCell>
+                                            <TableCell />
                                             <TableCell />
                                         </TableRow>
                                     </TableFooter>
@@ -313,7 +409,7 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
         const qs = assocParam
             ? `${assocParam}&user_id=${userId}`
             : `?user_id=${userId}`;
-        fetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`, { signal: controller.signal })
+        apiFetch(`${API_URL}/Collection/candidates/${row.collection_id}${qs}`, { signal: controller.signal })
             .then(r => r.ok ? r.json() : Promise.reject())
             .then(data => { setCandidates(data); setLoading(false); })
             .catch(err => {
@@ -328,7 +424,9 @@ function ManualMatchDialog({ open, row, userId, assocParam, onClose, onMatched }
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-            <DialogTitle>Tengja greiðslu við {row.payer_name ?? 'greiðanda'}</DialogTitle>
+            <HelpDialogTitle helpSection="innheimta-tengja" onClose={onClose}>
+                Tengja greiðslu við {row.payer_name ?? 'greiðanda'}
+            </HelpDialogTitle>
             <DialogContent sx={{ pt: 1 }}>
                 {loading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>

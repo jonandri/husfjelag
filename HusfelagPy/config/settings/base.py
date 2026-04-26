@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
+    "django_celery_beat",
     "users",
     "associations",
 ]
@@ -60,6 +61,21 @@ USE_TZ = True
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "users.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/minute",
+        "user": "300/minute",
+        "login": "5/minute",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -82,5 +98,36 @@ KENNI_TOKEN_ENDPOINT = "https://idp.kenni.is/digit.is/oidc/token"
 KENNI_JWKS_URI = "https://idp.kenni.is/digit.is/oidc/jwks"
 KENNI_REDIRECT_URI = env("KENNI_REDIRECT_URI", default="http://localhost:8003/auth/callback")
 
-# Frontend URL (used for post-login redirect)
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3003")
+# Skattur Cloud — Icelandic company registry API
+SKATTUR_CLOUD_API_KEY = env("SKATTUR_CLOUD_API_KEY", default="")
+
+# ── Bank integration ──────────────────────────────────────────────────────────
+BANK_FERNET_KEY = env("BANK_FERNET_KEY", default="")
+
+BANK_LANDSBANKINN_ENABLED = env.bool("BANK_LANDSBANKINN_ENABLED", default=False)
+BANK_LANDSBANKINN_API_KEY = env("BANK_LANDSBANKINN_API_KEY", default="")
+BANK_LANDSBANKINN_CERT_PATH = env("BANK_LANDSBANKINN_CERT_PATH", default="")
+BANK_LANDSBANKINN_CERT_PASSWORD = env("BANK_LANDSBANKINN_CERT_PASSWORD", default="")
+BANK_LANDSBANKINN_AUTH_URL = env(
+    "BANK_LANDSBANKINN_AUTH_URL",
+    default="https://mtls-auth.landsbankinn.is/connect/token",
+)
+BANK_LANDSBANKINN_API_BASE = env(
+    "BANK_LANDSBANKINN_API_BASE",
+    default="https://apisandbox.landsbankinn.is/api",
+)
+
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:3010")
+
+# Celery beat — periodic tasks
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    "sync-all-bank-transactions": {
+        "task": "associations.banks.tasks.sync_all_associations",
+        "schedule": crontab(hour=3, minute=0),
+    },
+    "sync-all-claim-statuses": {
+        "task": "associations.banks.tasks.sync_all_claim_statuses",
+        "schedule": crontab(hour=3, minute=30),
+    },
+}

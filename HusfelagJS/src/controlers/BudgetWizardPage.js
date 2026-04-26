@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Button, Paper,
     Table, TableHead, TableRow, TableCell, TableBody,
-    TextField, Alert,
+    TextField, Alert, IconButton, Tooltip,
 } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
 
@@ -21,6 +24,7 @@ const TYPE_META = {
 function BudgetWizardPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -36,8 +40,8 @@ function BudgetWizardPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         Promise.all([
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : Promise.reject('categories')),
-            fetch(`${API_URL}/Budget/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null).catch(() => null),
+            apiFetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : Promise.reject('categories')),
+            apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null).catch(() => null),
         ]).then(([cats, budget]) => {
             setCategories(cats);
             if (budget && budget.items && budget.items.length > 0) {
@@ -90,7 +94,7 @@ function BudgetWizardPage() {
             .map(c => ({ category_id: c.id, amount: parseInt(amounts[c.id]) || 0 }))
             .filter(i => i.amount > 0);
         try {
-            const resp = await fetch(`${API_URL}/Budget/wizard${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Budget/wizard${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, items }),
@@ -122,16 +126,28 @@ function BudgetWizardPage() {
     return (
         <div className="dashboard">
             <SideBar />
-            <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
-                <Box sx={{ mb: 3 }}>
-                    <Button
-                        size="small" variant="text" color="inherit"
-                        sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0 }}
-                        onClick={() => navigate('/aaetlun')}
-                    >
-                        ← Áætlun
-                    </Button>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                    <Box>
+                        <Button
+                            size="small" variant="text" color="inherit"
+                            sx={{ color: 'text.secondary', textTransform: 'none', p: 0, minWidth: 0, mb: 0.5 }}
+                            onClick={() => navigate('/aaetlun')}
+                        >
+                            ← Áætlun
+                        </Button>
+                        <Typography variant="h5">Ný áætlun</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('aaetlun-wizard')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 </Box>
+                <Box sx={{ p: 4, flex: 1, overflowY: 'auto', minWidth: 0 }}>
 
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -169,6 +185,7 @@ function BudgetWizardPage() {
                         onConfirm={handleConfirm}
                     />
                 )}
+                </Box>
             </Box>
         </div>
     );
@@ -252,7 +269,7 @@ function Step2({ hasPrevious, categories, amounts, setAmounts, totals, grandTota
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {categories.map(c => (
+                                {categories.filter(c => c.type !== 'INCOME').map(c => (
                                     <TableRow key={c.id}>
                                         <TableCell>{c.name}</TableCell>
                                         <TableCell sx={{ color: TYPE_META[c.type]?.color || 'text.secondary' }}>

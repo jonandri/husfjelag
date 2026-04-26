@@ -3,65 +3,62 @@ import logging
 from django.conf import settings
 from django.http import HttpResponseRedirect
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
 from .models import User
-from .serializers import UserSerializer, LoginRequestSerializer
+from .serializers import UserSerializer
 from .oidc import build_auth_url, exchange_code, generate_pkce_pair, generate_state, validate_id_token, create_access_token
 
 logger = logging.getLogger(__name__)
 
 
 class LoginView(APIView):
-    @extend_schema(request=LoginRequestSerializer, responses=UserSerializer)
+    """Legacy login — disabled. Use POST /auth/login (Kenni OIDC) instead."""
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        """
-        POST /Login — legacy endpoint, kept for backwards compatibility.
-        TODO: Remove once OIDC flow is fully adopted.
-        """
-        serializer = LoginRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        person_id = data.get("personID", "")
-        phone = data.get("phone", "")
-
-        if len(person_id) >= 10:
-            kennitala = person_id.replace("-", "")
-            try:
-                user = User.objects.get(kennitala=kennitala)
-                return Response(UserSerializer(user).data)
-            except User.DoesNotExist:
-                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        elif len(phone) >= 7:
-            phone = phone.replace(" ", "")
-            # TODO: Integrate with Rafræn skilríki
-            return Response({})
-
         return Response(
-            {"detail": "Invalid personID or phone number."},
-            status=status.HTTP_401_UNAUTHORIZED,
+            {"detail": "This endpoint has been disabled. Use /auth/login instead."},
+            status=status.HTTP_410_GONE,
         )
 
 
+class UserMeView(APIView):
+    """GET /User/me — return the authenticated user's own profile."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
+
 class UserView(APIView):
+    """GET/PATCH /User/{user_id} — users may only access their own profile."""
+    permission_classes = [IsAuthenticated]
+
+    def _get_user(self, request, user_id):
+        """Return the user if the requester owns this profile (or is superadmin)."""
+        if not request.user.is_superadmin and request.user.id != user_id:
+            return None, Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            return User.objects.get(id=user_id), None
+        except User.DoesNotExist:
+            return None, Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
     def get(self, request, user_id):
         """GET /User/{user_id} — Return profile for a user."""
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        user, err = self._get_user(request, user_id)
+        if err:
+            return err
         return Response(UserSerializer(user).data)
 
     def patch(self, request, user_id):
         """PATCH /User/{user_id} — Update name, email and/or phone."""
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        user, err = self._get_user(request, user_id)
+        if err:
+            return err
 
         if "name" in request.data:
             name = (request.data["name"] or "").strip()
@@ -82,6 +79,8 @@ class OIDCLoginView(APIView):
     Redirects the user to Kenni for authentication.
     A random state token is stored in a cookie to prevent CSRF.
     """
+    permission_classes = [AllowAny]
+
     def get(self, request):
         state = generate_state()
         code_verifier, code_challenge = generate_pkce_pair()
@@ -97,9 +96,15 @@ class OIDCCallbackView(APIView):
     GET /auth/callback
     Kenni redirects here after authentication.
     Validates state, exchanges code for tokens, creates/updates the User,
-    then redirects to the frontend with a JWT + user ID.
+    then redirects to the frontend with a short-lived one-time exchange code
+    (not the JWT itself — avoids token in URL / server logs).
     """
+    permission_classes = [AllowAny]
+
     def get(self, request):
+        from django.core.cache import cache
+        import secrets
+
         code = request.GET.get("code")
         state = request.GET.get("state")
         error = request.GET.get("error")
@@ -139,22 +144,55 @@ class OIDCCallbackView(APIView):
             kennitala=kennitala,
             defaults={"name": name, "phone": phone},
         )
+        # Always update last_login; also sync name/phone if they changed
+        from django.utils import timezone
+        updated_fields = ["last_login"]
+        user.last_login = timezone.now()
         if not created:
-            updated = False
             if name and user.name != name:
                 user.name = name
-                updated = True
+                updated_fields.append("name")
             if phone and user.phone != phone:
                 user.phone = phone
-                updated = True
-            if updated:
-                user.save()
+                updated_fields.append("phone")
+        user.save(update_fields=updated_fields)
 
-        token = create_access_token(user.id)
+        jwt_token = create_access_token(user.id)
+
+        # Store JWT in cache under a one-time exchange code (TTL: 60s).
+        # The frontend exchanges this short code for the real token via POST /auth/token.
+        # This keeps the JWT out of server logs and browser history.
+        exchange_code_val = secrets.token_urlsafe(32)
+        cache.set(f"auth_code:{exchange_code_val}", jwt_token, timeout=60)
 
         response = HttpResponseRedirect(
-            f"{frontend_url}/auth/callback?token={token}&uid={user.id}"
+            f"{frontend_url}/auth/callback?code={exchange_code_val}"
         )
         response.delete_cookie("oidc_state")
         response.delete_cookie("oidc_cv")
         return response
+
+
+class OIDCTokenExchangeView(APIView):
+    """
+    POST /auth/token  { "code": "<exchange_code>" }
+    Exchanges a one-time code (from the OIDC callback redirect) for the real JWT.
+    The code is deleted immediately after use and expires in 60 seconds.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from django.core.cache import cache
+
+        exchange_code_val = request.data.get("code", "")
+        if not exchange_code_val:
+            return Response({"detail": "Missing code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache_key = f"auth_code:{exchange_code_val}"
+        jwt_token = cache.get(cache_key)
+        if not jwt_token:
+            return Response({"detail": "Invalid or expired code."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # One-time use — delete immediately
+        cache.delete(cache_key)
+        return Response({"token": jwt_token})

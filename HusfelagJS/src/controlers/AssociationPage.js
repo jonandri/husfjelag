@@ -9,27 +9,43 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
+import BusinessIcon from '@mui/icons-material/Business';
+import GroupIcon from '@mui/icons-material/Group';
+import HomeIcon from '@mui/icons-material/Home';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import RuleIcon from '@mui/icons-material/Rule';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import HouseAssociationForm from './HouseAssociation';
-import { fmtAmount, fmtKennitala } from '../format';
-import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
+import { fmtKennitala, fmtAmount } from '../format';
+import { primaryButtonSx, secondaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
 import { LabelChip } from '../ui/chips';
 import { HEAD_SX, HEAD_CELL_SX } from './tableUtils';
+import Eyebrow from '../ui/Eyebrow';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function AssociationPage() {
     const navigate = useNavigate();
-    const { user, assocParam } = React.useContext(UserContext);
+    const { user, assocParam, currentAssociation } = React.useContext(UserContext);
+
     const [association, setAssociation] = useState(undefined);
     const [owners, setOwners] = useState([]);
-    const [budgetTotal, setBudgetTotal] = useState(null);
-    const [budgetName, setBudgetName] = useState(null);
-    const [monthlyTotal, setMonthlyTotal] = useState(null);
-    const [unpaidTotal, setUnpaidTotal] = useState(null);
+
     const [error, setError] = useState('');
     const [roleDialog, setRoleDialog] = useState(null);
+    const [bankAccounts, setBankAccounts] = useState([]);
+    const [rules, setRules] = useState([]);
+    const [collections, setCollections] = useState([]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -37,12 +53,17 @@ function AssociationPage() {
     }, [user, assocParam]);
 
     const loadAll = async () => {
+        const today = new Date();
+        const month = today.getMonth() + 1;
+        const year  = today.getFullYear();
+        const collQs = assocParam ? `${assocParam}&month=${month}&year=${year}` : `?month=${month}&year=${year}`;
         try {
-            const [assocResp, ownersResp, budgetResp, collectionResp] = await Promise.all([
-                fetch(`${API_URL}/Association/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Owner/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Budget/${user.id}${assocParam}`),
-                fetch(`${API_URL}/Collection/${user.id}${assocParam}`),
+            const [assocResp, ownersResp, banksResp, rulesResp, collResp] = await Promise.all([
+                apiFetch(`${API_URL}/Association/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Owner/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Collection/${user.id}${collQs}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -54,22 +75,15 @@ function AssociationPage() {
                 setOwners(all.filter(o => !o.deleted && !seen.has(o.user_id) && seen.add(o.user_id)));
             }
 
-            if (budgetResp.ok) {
-                const budget = await budgetResp.json();
-                if (budget?.items) {
-                    setBudgetTotal(budget.items.reduce((s, i) => s + parseFloat(i.amount || 0), 0));
-                    if (budget.name) setBudgetName(budget.name);
-                }
+            if (banksResp.ok) setBankAccounts(await banksResp.json());
+            if (rulesResp.ok) {
+                const rd = await rulesResp.json();
+                setRules(rd.association_rules || []);
             }
 
-            if (collectionResp.ok) {
-                const col = await collectionResp.json();
-                if (col?.rows) {
-                    setMonthlyTotal(col.rows.reduce((s, r) => s + parseFloat(r.monthly || 0), 0));
-                }
-                if (col?.pending_total !== undefined) {
-                    setUnpaidTotal(parseFloat(col.pending_total));
-                }
+            if (collResp.ok) {
+                const cd = await collResp.json();
+                setCollections(cd.rows || []);
             }
         } catch {
             setError('Tenging við þjón mistókst.');
@@ -97,63 +111,162 @@ function AssociationPage() {
         );
     }
 
-    const subtitle = [
-        `Kennitala: ${fmtKennitala(association.ssn)}`,
-        `${association.address}, ${association.postal_code} ${association.city}`,
-    ].join('  ·  ');
+    const setupSteps = [
+        true,                                             // 1. Stofna húsfélag
+        !!(association.chair && association.cfo),         // 2. Bæta við stjórn
+        association.apartment_count > 0,                  // 3. Skrá íbúðir
+        bankAccounts.length > 0,                          // 4. Tengja banka
+        rules.length > 0,                                 // 5. Setja flokkunarreglur
+        collections.length > 0,                           // 6. Hefja innheimtu
+    ];
+    const setupComplete = setupSteps.filter(Boolean).length;
+    const isSetup = setupComplete >= 6;
+
+    if (!isSetup) {
+        return <UppsetningView
+            association={association}
+            setupSteps={setupSteps}
+            setupComplete={setupComplete}
+            owners={owners}
+            onNavigate={(path) => navigate(path)}
+        />;
+    }
 
     return (
         <div className="dashboard">
             <SideBar />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-                {/* Header zone */}
-                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
-                    <Typography variant="h5">{association.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{subtitle}</Typography>
+                {/* Zone 1: Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: `1px solid ${BORDER}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>Húsfélag</Typography>
+                        <Typography variant="h5">{association.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            Kennitala {fmtKennitala(association.ssn)}{association.address ? ` · ${association.address}` : ''}
+                        </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <Button sx={ghostButtonSx} startIcon={<EditIcon sx={{ fontSize: 16 }} />}
+                            onClick={() => navigate('/husfelag')}
+                        >
+                            Breyta upplýsingum
+                        </Button>
+                        <Button variant="contained" sx={primaryButtonSx}
+                            startIcon={<PersonAddIcon sx={{ fontSize: 17 }} />}
+                            onClick={() => navigate('/eigendur')}
+                        >
+                            Skrá nýjan eiganda
+                        </Button>
+                    </Box>
                 </Box>
 
-                {/* Scrollable content zone */}
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                    {/* Row 1: association stats */}
-                    <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
-                        <KpiCard label="Íbúðir" value={association.apartment_count} />
-                        <KpiCard label="Eigendur" value={association.owner_count} />
-                        <RoleCard
-                            label="Formaður"
-                            value={association.chair || '—'}
-                            onEdit={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
-                        />
-                        <RoleCard
-                            label="Gjaldkeri"
-                            value={association.cfo || '—'}
-                            onEdit={() => setRoleDialog({ role: 'CFO', label: 'Gjaldkeri', currentName: association.cfo })}
-                        />
-                    </Grid>
+                {/* Zone 3: Content grid (1fr + 320px) */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '24px 32px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: '28px', alignItems: 'start' }}>
 
-                    {/* Row 2: financials */}
-                    <Grid container spacing={2} sx={{ alignItems: 'stretch' }}>
-                        <KpiCard
-                            label={budgetName || `Áætlun ${new Date().getFullYear()}`}
-                            value={budgetTotal !== null ? fmtAmount(budgetTotal) : '—'}
-                            small
-                        />
-                        <KpiCard
-                            label="Mánaðarleg innheimta"
-                            value={monthlyTotal !== null ? fmtAmount(monthlyTotal) : '—'}
-                            small
-                        />
-                        <KpiCard
-                            label="Ógreidd innheimta"
-                            value={unpaidTotal !== null ? fmtAmount(unpaidTotal) : '—'}
-                            small
-                            alert={unpaidTotal > 0}
-                        />
-                    </Grid>
+                    {/* LEFT column */}
+                    <Box>
+                        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-                    {error && <Typography color="error" sx={{ mt: 3 }}>{error}</Typography>}
+                        {/* Identity strip: Stjórn + Eignarhald */}
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2 }}>
+                            {/* Stjórn card */}
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                    <Eyebrow variant="navy">STJÓRN</Eyebrow>
+                                    <Button sx={{ ...ghostButtonSx, minHeight: 0, p: '4px 8px', fontSize: 12 }}
+                                        startIcon={<SwapHorizIcon sx={{ fontSize: 15 }} />}
+                                        onClick={() => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair })}
+                                    >
+                                        Breyta stjórn
+                                    </Button>
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                    {[
+                                        { name: association.chair, role: 'Formaður', initBg: '#e8f5e9', initColor: '#2e7d32' },
+                                        { name: association.cfo,   role: 'Gjaldkeri', initBg: '#eef1f8', initColor: NAVY },
+                                    ].map(({ name, role, initBg, initColor }) => (
+                                        <Box key={role} sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Box sx={{ width: 42, height: 42, borderRadius: '50%', background: initBg, color: initColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 14, flexShrink: 0 }}>
+                                                {name ? name.split(' ').map(w => w[0]).slice(0, 2).join('') : '—'}
+                                            </Box>
+                                            <Box>
+                                                <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{name || '—'}</Typography>
+                                                <Typography sx={{ fontSize: 11.5, color: '#555' }}>{role}</Typography>
+                                            </Box>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
 
-                    <BankAccountsPanel user={user} assocParam={assocParam} />
-                    <AssociationRulesPanel user={user} assocParam={assocParam} />
+                            {/* Eignarhald card */}
+                            <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                                <Eyebrow variant="navy">EIGNARHALD</Eyebrow>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1.25 }}>
+                                    {[
+                                        { value: association.apartment_count, label: 'Íbúðir' },
+                                        { value: association.owner_count != null ? association.owner_count : owners.length, label: 'Eigendur' },
+                                    ].map(({ value, label }) => (
+                                        <Box key={label}>
+                                            <Typography sx={{ fontSize: 24, fontWeight: 300 }}>{value}</Typography>
+                                            <Typography sx={{ fontSize: 11.5, color: '#555' }}>{label}</Typography>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Box>
+                        </Box>
+
+                        {/* Aðgerðir — 4 primary action cards */}
+                        <Box sx={{ mt: 3 }}>
+                            <Typography sx={{ fontSize: 14, fontWeight: 600, mb: 1.5 }}>Aðgerðir</Typography>
+                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1.5 }}>
+                                {[
+                                    { icon: <SwapHorizIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Breyta stjórn', sub: 'Skipta um formann eða gjaldkera', onClick: () => setRoleDialog({ role: 'CHAIR', label: 'Formaður', currentName: association.chair }) },
+                                    { icon: <PersonAddIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Skrá nýjan eiganda', sub: 'Tekur yfir fyrir fyrri eiganda íbúðar', onClick: () => navigate('/eigendur') },
+                                    { icon: <AssessmentIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Uppfæra áætlun', sub: `Tekjur og gjöld ${new Date().getFullYear()}`, onClick: () => navigate('/aaetlun') },
+                                    { icon: <EventRepeatIcon sx={{ fontSize: 20, color: NAVY }} />, title: 'Búa til innheimtu', sub: 'Mánaðargreiðslur eigenda', onClick: () => navigate('/innheimta') },
+                                ].map((action, i) => (
+                                    <Box key={i} onClick={action.onClick} sx={{
+                                        border: `1px solid ${BORDER}`, borderRadius: '6px', p: '14px 16px',
+                                        cursor: 'pointer', transition: '150ms ease',
+                                        '&:hover': { borderColor: NAVY },
+                                    }}>
+                                        <Box sx={{ width: 36, height: 36, borderRadius: '8px', background: '#eef1f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {action.icon}
+                                        </Box>
+                                        <Typography sx={{ fontSize: 13.5, fontWeight: 500, mt: 1.5 }}>{action.title}</Typography>
+                                        <Typography sx={{ fontSize: 11.5, color: '#555', mt: 0.25, lineHeight: 1.4 }}>{action.sub}</Typography>
+                                    </Box>
+                                ))}
+                            </Box>
+                        </Box>
+
+                        {/* Bank accounts panel — redesigned in Task 8 */}
+                        <BankAccountsPanel
+                            user={user}
+                            assocParam={assocParam}
+                            currentAssociation={currentAssociation}
+                            bankAccounts={bankAccounts}
+                            onReload={loadAll}
+                        />
+
+                        {/* Rules panel — redesigned in Task 8 */}
+                        <AssociationRulesPanel
+                            user={user}
+                            assocParam={assocParam}
+                            rules={rules}
+                            onReload={loadAll}
+                        />
+                    </Box>
+
+                    {/* RIGHT column: sticky Athugasemdir */}
+                    <AthugasemdarPanel
+                        collections={collections}
+                        bankAccounts={bankAccounts}
+                        userId={user.id}
+                        assocParam={assocParam}
+                    />
+
+
                 </Box>
             </Box>
 
@@ -174,47 +287,7 @@ function AssociationPage() {
     );
 }
 
-function KpiCard({ label, value, small, alert }) {
-    return (
-        <Grid item xs={12} sm={6} md={3} lg={2} sx={{ display: 'flex' }}>
-            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 110 }}>
-                <Typography
-                    variant={small ? 'h6' : 'h4'}
-                    sx={{ fontWeight: small ? 400 : 300, lineHeight: 1.2, color: alert ? '#c62828' : 'secondary.main' }}
-                >
-                    {value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {label}
-                </Typography>
-            </Paper>
-        </Grid>
-    );
-}
 
-function RoleCard({ label, value, onEdit }) {
-    return (
-        <Grid item xs={12} sm={6} md={3} lg={2} sx={{ display: 'flex' }}>
-            <Paper variant="outlined" sx={{ p: 3, textAlign: 'center', flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 110 }}>
-                <Tooltip title={`Breyta ${label}`}>
-                    <IconButton
-                        size="small"
-                        onClick={onEdit}
-                        sx={{ position: 'absolute', top: 8, right: 8, opacity: 0.4, '&:hover': { opacity: 1 } }}
-                    >
-                        <EditIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
-                </Tooltip>
-                <Typography variant="h6" color="secondary.main" sx={{ fontWeight: 300, lineHeight: 1.3 }}>
-                    {value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {label}
-                </Typography>
-            </Paper>
-        </Grid>
-    );
-}
 
 function RoleDialog({ open, role, label, currentName, owners, userId, assocParam, onClose, onSaved }) {
     const [selected, setSelected] = useState(null);
@@ -228,7 +301,7 @@ function RoleDialog({ open, role, label, currentName, owners, userId, assocParam
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Association/roles/${userId}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Association/roles/${userId}${assocParam}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ role, kennitala: selected.kennitala }),
@@ -309,7 +382,7 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -379,51 +452,38 @@ function BankAccountDialog({ open, onClose, userId, assocParam, accountingKeys, 
     );
 }
 
-function BankAccountsPanel({ user, assocParam }) {
-    const [bankAccounts, setBankAccounts] = React.useState(undefined);
+function BankAccountsPanel({ user, assocParam, currentAssociation, bankAccounts, onReload }) {
+    const navigate = useNavigate();
     const [accountingKeys, setAccountingKeys] = React.useState([]);
     const [error, setError] = React.useState('');
     const [showForm, setShowForm] = React.useState(false);
 
+    const canManageBank = ['Formaður', 'Gjaldkeri', 'Kerfisstjóri'].includes(currentAssociation?.role);
+
     React.useEffect(() => {
-        loadBankAccounts();
-        fetch(`${API_URL}/AccountingKey/list`)
+        apiFetch(`${API_URL}/AccountingKey/list`)
             .then(r => r.ok ? r.json() : [])
             .then(data => setAccountingKeys(data.filter(k => k.type === 'ASSET')))
             .catch(() => {});
     }, [assocParam]);
 
-    const loadBankAccounts = async () => {
-        try {
-            const resp = await fetch(`${API_URL}/BankAccount/${user.id}${assocParam}`);
-            if (resp.ok) setBankAccounts(await resp.json());
-            else { setError('Villa við að sækja bankareikninga.'); setBankAccounts([]); }
-        } catch {
-            setError('Tenging við þjón mistókst.');
-            setBankAccounts([]);
-        }
-    };
-
-    if (bankAccounts === undefined) {
-        return (
-            <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress color="secondary" />
-                </Box>
-            </Paper>
-        );
-    }
-
     return (
-        <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Bankareikningar</Typography>
-                <Button
-                    variant="contained" sx={primaryButtonSx}
-                    onClick={() => setShowForm(true)}
-                >
-                    + Bæta við reikning
-                </Button>
+        <Box sx={{ mt: '28px' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Bankareikningar</Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button variant="outlined" sx={{ ...secondaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
+                        onClick={() => navigate('/bank-settings')}
+                    >
+                        Tengja banka
+                    </Button>
+                    <Button variant="contained" sx={{ ...primaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
+                        onClick={() => setShowForm(true)}
+                    >
+                        + Bæta við
+                    </Button>
+                </Box>
+
             </Box>
 
             <BankAccountDialog
@@ -432,63 +492,68 @@ function BankAccountsPanel({ user, assocParam }) {
                 userId={user.id}
                 assocParam={assocParam}
                 accountingKeys={accountingKeys}
-                onCreated={loadBankAccounts}
+                onCreated={onReload}
             />
 
-            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
 
             {bankAccounts.length === 0 ? (
-                <Typography color="text.secondary" sx={{ mt: 2 }}>Enginn bankareikningur skráður.</Typography>
+                <Typography color="text.secondary" sx={{ fontSize: 13 }}>Enginn bankareikningur skráður.</Typography>
             ) : (
-                <Paper variant="outlined" sx={{ mt: 2 }}>
-                    <Table size="small">
-                        <TableHead sx={HEAD_SX}>
-                            <TableRow>
-                                <TableCell sx={HEAD_CELL_SX}>Heiti</TableCell>
-                                <TableCell sx={HEAD_CELL_SX}>Reikningsnúmer</TableCell>
-                                <TableCell sx={HEAD_CELL_SX}>Bókhaldslykill</TableCell>
-                                <TableCell />
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {bankAccounts.map(b => (
-                                <BankAccountRow
-                                    key={b.id}
-                                    bankAccount={b}
-                                    userId={user.id}
-                                    assocParam={assocParam}
-                                    accountingKeys={accountingKeys}
-                                    onSaved={loadBankAccounts}
-                                />
-                            ))}
-                        </TableBody>
-                    </Table>
-                </Paper>
+                <Box sx={{ border: `1px solid #e8e8e8`, borderRadius: '4px', overflow: 'hidden' }}>
+                    {bankAccounts.map((a, i) => (
+                        <BankAccountRow
+                            key={a.id}
+                            bankAccount={a}
+                            userId={user.id}
+                            assocParam={assocParam}
+                            accountingKeys={accountingKeys}
+                            onSaved={onReload}
+                            showDivider={i < bankAccounts.length - 1}
+                        />
+                    ))}
+                </Box>
             )}
-        </Paper>
+        </Box>
     );
 }
 
-function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSaved }) {
+function BankAccountRow({ bankAccount, userId, assocParam, accountingKeys, onSaved, showDivider }) {
     const [editOpen, setEditOpen] = React.useState(false);
     return (
         <>
-            <TableRow hover>
-                <TableCell>{bankAccount.name}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontFamily: 'monospace' }}>{bankAccount.account_number}</TableCell>
-                <TableCell>
+            <Box sx={{
+                display: 'grid', gridTemplateColumns: '1fr 130px 180px 140px 40px',
+                alignItems: 'center', p: '12px 18px', gap: 1.5,
+                borderBottom: showDivider ? '1px solid #f2f2f2' : 'none',
+            }}>
+                <Box>
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{bankAccount.name}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                        <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', background: '#2e7d32', display: 'inline-block' }} />
+                        <Typography sx={{ fontSize: 11.5, color: '#888' }}>Tengt</Typography>
+                    </Box>
+                </Box>
+                <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12, color: '#555' }}>
+                    {bankAccount.account_number}
+                </Typography>
+                <Box>
                     {bankAccount.asset_account
-                        ? <LabelChip label={`${bankAccount.asset_account.number} · ${bankAccount.asset_account.name}`} />
+                        ? <LabelChip label={bankAccount.asset_account.name} />
                         : <Typography variant="body2" color="text.disabled">—</Typography>}
-                </TableCell>
-                <TableCell align="right" sx={{ width: 48 }}>
+                </Box>
+                <Typography sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 14.5, fontWeight: 500, textAlign: 'right', color: '#111' }}>
+                    {bankAccount.current_balance != null ? fmtAmount(bankAccount.current_balance) : '—'}
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+
                     <Tooltip title="Breyta">
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
-                            <EditIcon fontSize="small" />
+                            <EditIcon fontSize="small" sx={{ color: '#888' }} />
                         </IconButton>
                     </Tooltip>
-                </TableCell>
-            </TableRow>
+                </Box>
+            </Box>
             <BankAccountEditDialog
                 open={editOpen}
                 onClose={() => setEditOpen(false)}
@@ -528,7 +593,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/update/${bankAccount.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount/update/${bankAccount.id}${assocParam}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -551,7 +616,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
     const handleDelete = async () => {
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/BankAccount/delete/${bankAccount.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/BankAccount/delete/${bankAccount.id}${assocParam}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId }),
@@ -630,8 +695,7 @@ function BankAccountEditDialog({ open, onClose, bankAccount, userId, assocParam,
     );
 }
 
-function AssociationRulesPanel({ user, assocParam }) {
-    const [rules, setRules] = React.useState([]);
+function AssociationRulesPanel({ user, assocParam, rules, onReload }) {
     const [categories, setCategories] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
@@ -644,20 +708,14 @@ function AssociationRulesPanel({ user, assocParam }) {
     const [deleteRule, setDeleteRule] = React.useState(null);
     const [deleting, setDeleting] = React.useState(false);
 
-    React.useEffect(() => { load(); }, [assocParam]);
-
-    const load = () => {
-        if (!user?.id) return;
+    React.useEffect(() => {
         setLoading(true);
-        Promise.all([
-            fetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`).then(r => r.ok ? r.json() : null),
-            fetch(`${API_URL}/Category/list`).then(r => r.ok ? r.json() : []),
-        ]).then(([rulesData, cats]) => {
-            if (rulesData) setRules(rulesData.association_rules || []);
-            setCategories(cats || []);
-        }).catch(() => setError('Gat ekki sótt reglur.'))
-        .finally(() => setLoading(false));
-    };
+        apiFetch(`${API_URL}/Category/list`)
+            .then(r => r.ok ? r.json() : [])
+            .then(cats => setCategories(cats || []))
+            .catch(() => setError('Gat ekki sótt flokka.'))
+            .finally(() => setLoading(false));
+    }, [assocParam]);
 
     const openCreate = () => { setEditRule(null); setKeyword(''); setCategoryId(''); setSaveError(''); setDialogOpen(true); };
     const openEdit = (rule) => { setEditRule(rule); setKeyword(rule.keyword); setCategoryId(rule.category.id); setSaveError(''); setDialogOpen(true); };
@@ -667,15 +725,15 @@ function AssociationRulesPanel({ user, assocParam }) {
         setSaving(true); setSaveError('');
         try {
             const resp = editRule
-                ? await fetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
+                ? await apiFetch(`${API_URL}/CategoryRule/update/${editRule.id}${assocParam}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId }),
                 })
-                : await fetch(`${API_URL}/CategoryRule${assocParam}`, {
+                : await apiFetch(`${API_URL}/CategoryRule${assocParam}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ user_id: user.id, keyword: keyword.trim(), category_id: categoryId, is_global: false }),
                 });
-            if (resp.ok) { setDialogOpen(false); load(); }
+            if (resp.ok) { setDialogOpen(false); onReload(); }
             else { const data = await resp.json(); setSaveError(data.detail || 'Villa við vistun.'); }
         } catch { setSaveError('Tenging við þjón mistókst.'); }
         finally { setSaving(false); }
@@ -685,67 +743,74 @@ function AssociationRulesPanel({ user, assocParam }) {
         if (!deleteRule) return;
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/CategoryRule/delete/${deleteRule.id}${assocParam}`, {
                 method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id }),
             });
-            if (resp.ok) { setDeleteRule(null); load(); }
+            if (resp.ok) { setDeleteRule(null); onReload(); }
         } catch {}
         finally { setDeleting(false); }
     };
 
     return (
-        <Paper variant="outlined" sx={{ p: 3, mt: 4 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Typography variant="h6">Flokkunarreglur</Typography>
-                <Button variant="contained" sx={primaryButtonSx} onClick={openCreate}>
+        <Box sx={{ mt: '28px' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                <Box>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Flokkunarreglur</Typography>
+                    <Typography sx={{ fontSize: 12, color: '#555', mt: 0.25 }}>Sjálfvirk flokkun bankafærslna eftir lykilorðum</Typography>
+                </Box>
+                <Button variant="contained" sx={{ ...primaryButtonSx, py: '5px', px: 1.5, minHeight: 0, fontSize: 12.5 }}
+                    onClick={openCreate}
+                >
                     + Ný regla
                 </Button>
             </Box>
 
-            {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                    <CircularProgress color="secondary" />
-                </Box>
+            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
+
+            {rules.length === 0 ? (
+                <Typography color="text.secondary" sx={{ fontSize: 13 }}>Engar reglur skráðar.</Typography>
             ) : (
-                <>
-                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-                    {rules.length === 0 ? (
-                        <Typography color="text.secondary">Engar reglur skráðar.</Typography>
-                    ) : (
-                        <Paper variant="outlined">
-                            <Table size="small">
-                                <TableHead sx={HEAD_SX}>
-                                    <TableRow>
-                                        <TableCell sx={HEAD_CELL_SX}>Lykilorð</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
-                                        <TableCell />
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {rules.map(rule => (
-                                        <TableRow key={rule.id} hover>
-                                            <TableCell>{rule.keyword}</TableCell>
-                                            <TableCell><LabelChip label={rule.category.name} /></TableCell>
-                                            <TableCell align="right" sx={{ width: 80 }}>
-                                                <Tooltip title="Breyta">
-                                                    <IconButton size="small" onClick={() => openEdit(rule)}>
-                                                        <EditIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                                <Tooltip title="Eyða">
-                                                    <IconButton size="small" sx={{ color: '#c62828' }} onClick={() => setDeleteRule(rule)}>
-                                                        <DeleteOutlineIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Tooltip>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Paper>
-                    )}
-                </>
+                <Box sx={{ border: `1px solid #e8e8e8`, borderRadius: '4px', overflow: 'hidden' }}>
+                    <Table size="small">
+                        <TableHead sx={HEAD_SX}>
+                            <TableRow>
+                                <TableCell sx={HEAD_CELL_SX}>Skýring inniheldur</TableCell>
+                                <TableCell sx={HEAD_CELL_SX}>Flokkur</TableCell>
+                                <TableCell align="right" sx={{ ...HEAD_CELL_SX, width: 100 }}>Notkun</TableCell>
+                                <TableCell />
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {rules.map(rule => (
+                                <TableRow key={rule.id} hover>
+                                    <TableCell>
+                                        <Typography component="span" sx={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 12 }}>
+                                            "{rule.keyword}"
+                                        </Typography>
+                                    </TableCell>
+                                    <TableCell><LabelChip label={rule.category?.name || '—'} /></TableCell>
+                                    <TableCell align="right" sx={{ fontSize: 12, color: '#555' }}>
+                                        {rule.usage_count != null ? `${rule.usage_count} færslur` : '—'}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ width: 80 }}>
+                                        <Tooltip title="Breyta">
+                                            <IconButton size="small" onClick={() => openEdit(rule)}>
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title="Eyða">
+                                            <IconButton size="small" sx={{ color: '#c62828' }} onClick={() => setDeleteRule(rule)}>
+                                                <DeleteOutlineIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </Box>
+
             )}
 
             <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
@@ -780,7 +845,273 @@ function AssociationRulesPanel({ user, assocParam }) {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Paper>
+        </Box>
+    );
+}
+
+// Design tokens (file-level, reused across components)
+const NAVY = '#1D366F';
+const BORDER = '#e8e8e8';
+
+const SETUP_STEP_DEFS = [
+    { icon: <BusinessIcon sx={{ fontSize: 18 }} />, title: 'Stofna húsfélag', sub: 'Heiti, kennitala, heimilisfang', navPath: null },
+    { icon: <GroupIcon sx={{ fontSize: 18 }} />, title: 'Bæta við stjórn', sub: 'Formaður og gjaldkeri', navPath: null },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />, title: 'Skrá íbúðir', sub: 'Íbúðir + eignarhlutföll', navPath: '/ibudir/innflutningur' },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka', sub: 'Sjálfvirk afstemming', navPath: '/bank-settings' },
+    { icon: <RuleIcon sx={{ fontSize: 18 }} />, title: 'Setja flokkunarreglur', sub: 'Sjálfvirk flokkun bankafærslna', navPath: '/husfelag' },
+    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />, title: 'Hefja innheimtu', sub: 'Mánaðarlegar greiðslur', navPath: '/innheimta' },
+];
+
+function UppsetningView({ association, setupSteps, setupComplete, owners, onNavigate }) {
+    const firstIncomplete = setupSteps.findIndex(done => !done);
+    const nextPath = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navPath : null;
+
+    const chair = owners.find(o => o.role === 'CHAIR' || o.role === 'Formaður');
+    const cfo   = owners.find(o => o.role === 'CFO'   || o.role === 'Gjaldkeri');
+
+    const subtitle = `Kennitala ${fmtKennitala(association.ssn)}${association.address ? ` · ${association.address}` : ''}`;
+
+    return (
+        <div className="dashboard">
+            <SideBar />
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+                {/* Header */}
+                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: `1px solid ${BORDER}`, flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box>
+                        <Typography variant="h5">{association.name}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{subtitle}</Typography>
+                    </Box>
+                    <Button sx={ghostButtonSx} startIcon={<HelpOutlineIcon sx={{ fontSize: 17 }} />}>
+                        Leiðbeiningar
+                    </Button>
+                </Box>
+
+                {/* Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '28px 32px' }}>
+
+                    {/* Setup hero */}
+                    <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '8px', p: '28px 32px' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Box>
+                                <Eyebrow variant="green">UPPSETNING · {setupComplete} AF 6 LOKIÐ</Eyebrow>
+                                <Typography sx={{ fontSize: 24, fontWeight: 300, mt: 0.75, mb: 0.5 }}>
+                                    Settu upp húsfélagið —{' '}
+                                    <Box component="span" sx={{ fontWeight: 600 }}>
+                                        {6 - setupComplete} skref eftir
+                                    </Box>
+                                </Typography>
+                                <Typography sx={{ fontSize: 13.5, color: '#555' }}>
+                                    Eftir uppsetningu sér kerfið um innheimtu, afstemmingu og ársskýrslu.
+                                </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: 'right', flexShrink: 0, ml: 4 }}>
+                                <Typography sx={{ fontSize: 28, fontWeight: 300, color: NAVY, fontFamily: '"JetBrains Mono", monospace' }}>
+                                    {Math.round(setupComplete / 6 * 100)}%
+                                </Typography>
+                                <Typography sx={{ fontSize: 11, color: '#888', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                    LOKIÐ
+                                </Typography>
+                            </Box>
+                        </Box>
+
+                        {/* Progress bar */}
+                        <Box sx={{ height: 5, background: '#f0f0f0', borderRadius: '3px', mt: 2.5, overflow: 'hidden' }}>
+                            <Box sx={{ width: `${Math.round(setupComplete / 6 * 100)}%`, height: '100%', background: '#08C076', transition: 'width 300ms ease' }} />
+                        </Box>
+
+                        {/* Step grid */}
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5, mt: 2.5 }}>
+                            {SETUP_STEP_DEFS.map((def, i) => {
+                                const done = setupSteps[i];
+                                const isPrimary = !done && setupSteps.slice(0, i).every(Boolean);
+                                return (
+                                    <Box key={i}
+                                        onClick={() => def.navPath && onNavigate(def.navPath)}
+                                        sx={{
+                                            border: isPrimary ? `1.5px solid ${NAVY}` : `1px solid ${BORDER}`,
+                                            background: done ? '#fafafa' : isPrimary ? '#eef1f8' : '#fff',
+                                            borderRadius: '6px', p: '14px 16px',
+                                            opacity: done ? 0.7 : 1,
+                                            cursor: def.navPath && !done ? 'pointer' : 'default',
+                                            '&:hover': def.navPath && !done ? { borderColor: NAVY } : {},
+                                            transition: '150ms',
+                                        }}
+                                    >
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                                            <Box sx={{ color: done ? '#2e7d32' : isPrimary ? NAVY : '#888', display: 'flex' }}>
+                                                {done ? <CheckCircleOutlineIcon sx={{ fontSize: 18, color: '#2e7d32' }} /> : def.icon}
+                                            </Box>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500, color: isPrimary ? NAVY : '#111' }}>
+                                                {def.title}
+                                            </Typography>
+                                        </Box>
+                                        <Typography sx={{ fontSize: 11.5, color: '#555', mt: 0.75, ml: 3.5 }}>
+                                            {def.sub}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })}
+                        </Box>
+
+                        {/* CTA */}
+                        {nextPath && (
+                            <Box sx={{ mt: 3 }}>
+                                <Button
+                                    variant="contained"
+                                    sx={primaryButtonSx}
+                                    onClick={() => onNavigate(nextPath)}
+                                >
+                                    Halda áfram með uppsetningu →
+                                </Button>
+                            </Box>
+                        )}
+                    </Box>
+
+                    {/* Stjórn + Íbúðir strip */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 3.5 }}>
+                        <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                                <Eyebrow variant="navy">STJÓRN</Eyebrow>
+                            </Box>
+                            {[
+                                { person: chair, roleLabel: 'Formaður', initColor: { bg: '#e8f5e9', color: '#2e7d32' } },
+                                { person: cfo,   roleLabel: 'Gjaldkeri', initColor: { bg: '#eef1f8', color: NAVY } },
+                            ].map(({ person, roleLabel, initColor }) =>
+                                person ? (
+                                    <Box key={roleLabel} sx={{ display: 'flex', gap: 1.75, alignItems: 'center', py: 1 }}>
+                                        <Box sx={{ width: 38, height: 38, borderRadius: '50%', background: initColor.bg, color: initColor.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
+                                            {person.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+                                        </Box>
+                                        <Box>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{person.name}</Typography>
+                                            <Typography sx={{ fontSize: 11.5, color: '#555' }}>{roleLabel}</Typography>
+                                        </Box>
+                                    </Box>
+                                ) : (
+                                    <Typography key={roleLabel} sx={{ fontSize: 12.5, color: '#888', py: 0.5 }}>
+                                        {roleLabel}: —
+                                    </Typography>
+                                )
+                            )}
+                        </Box>
+
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '18px 20px', background: '#fafbfd', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <Eyebrow variant="navy">ÍBÚÐIR · NÆSTA SKREF</Eyebrow>
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 0.75, mb: 0.5 }}>
+                                {association.apartment_count > 0 ? `${association.apartment_count} íbúðir skráðar` : 'Engar íbúðir skráðar enn'}
+                            </Typography>
+                            {association.apartment_count === 0 && (
+                                <>
+                                    <Typography sx={{ fontSize: 12.5, color: '#555', mb: 1.75 }}>
+                                        Skráðu íbúðirnar svo eignarhlutföllin reiknist sjálfkrafa.
+                                    </Typography>
+                                    <Button variant="contained" sx={primaryButtonSx} onClick={() => onNavigate('/ibudir/innflutningur')} startIcon={<HomeIcon />}>
+                                        Skrá íbúðir
+                                    </Button>
+                                </>
+                            )}
+                        </Box>
+                    </Box>
+
+                    {/* Bank + Rules placeholders */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 2 }}>
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '22px', background: '#fafbfd', textAlign: 'center' }}>
+                            <AccountBalanceIcon sx={{ fontSize: 32, color: NAVY }} />
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 1 }}>Tengja banka</Typography>
+                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.5, mb: 1.75 }}>Bankafærslur birtast sjálfkrafa og afstemmast við innheimtur</Typography>
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => onNavigate('/bank-settings')}>
+                                Tengja Landsbanka
+                            </Button>
+                        </Box>
+                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '22px', background: '#fafbfd', textAlign: 'center' }}>
+                            <RuleIcon sx={{ fontSize: 32, color: NAVY }} />
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 1 }}>Engar flokkunarreglur</Typography>
+                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.5, mb: 1.75 }}>Búðu til reglur til að flokka bankafærslur sjálfkrafa</Typography>
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => onNavigate('/husfelag')}>
+                                Búa til fyrstu reglu
+                            </Button>
+                        </Box>
+                    </Box>
+
+                </Box>
+            </Box>
+        </div>
+    );
+}
+
+function AthugasemdarPanel({ collections, bankAccounts, userId, assocParam }) {
+    const [unclassifiedCount, setUnclassifiedCount] = React.useState(0);
+    const year = new Date().getFullYear();
+
+    React.useEffect(() => {
+        const qs = assocParam ? `${assocParam}&status=IMPORTED&year=${year}` : `?status=IMPORTED&year=${year}`;
+        apiFetch(`${API_URL}/Transaction/${userId}${qs}`)
+            .then(r => r.ok ? r.json() : [])
+            .then(txns => setUnclassifiedCount(Array.isArray(txns) ? txns.length : (txns?.count ?? 0)))
+            .catch(() => {});
+    }, [userId, assocParam, year]);
+
+    const pendingCount = collections.filter(r => r.status === 'PENDING' || r.status === 'UNPAID').length;
+    const hasBanks = bankAccounts.length > 0;
+
+    const notifications = [];
+
+    if (pendingCount > 0) {
+        notifications.push({
+            icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#e65100', mt: '1px' }} />,
+            text: `${pendingCount} íbúð${pendingCount === 1 ? '' : 'ir'} í vanskilum`,
+            cta: { label: 'Senda áminningar →', href: '/innheimta' },
+        });
+    }
+
+    if (unclassifiedCount > 0) {
+        notifications.push({
+            icon: <LinkOffIcon sx={{ fontSize: 22, color: '#777', mt: '1px' }} />,
+            text: `${unclassifiedCount} óflokkuð bankafærsla${unclassifiedCount === 1 ? '' : 'r'}`,
+            cta: { label: 'Flokka færslu →', href: '/faerslur' },
+        });
+    }
+
+    if (hasBanks) {
+        notifications.push({
+            icon: <CheckCircleOutlineIcon sx={{ fontSize: 22, color: '#2e7d32', mt: '1px' }} />,
+            text: 'Bankareikningar tengdir',
+            cta: { label: 'Skoða →', href: '/bank-settings' },
+        });
+    }
+
+    return (
+        <Box sx={{ border: '1px solid #e8e8e8', borderRadius: '8px', p: '18px 20px', position: 'sticky', top: 0 }}>
+            <Eyebrow variant="navy" sx={{ mb: 1.75 }}>ATHUGASEMDIR</Eyebrow>
+            {notifications.length === 0 ? (
+                <Typography sx={{ fontSize: 13, color: '#888' }}>Ekkert að gera.</Typography>
+            ) : (
+                notifications.map((n, i) => (
+                    <Box key={i} sx={{
+                        display: 'flex', gap: 1.5, py: 1.5,
+                        borderBottom: i < notifications.length - 1 ? '1px solid #f2f2f2' : 'none',
+                    }}>
+                        {n.icon}
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 13.5, lineHeight: 1.4 }}>{n.text}</Typography>
+                            <AthugasemdarLink href={n.cta.href} label={n.cta.label} />
+                        </Box>
+                    </Box>
+                ))
+            )}
+        </Box>
+    );
+}
+
+function AthugasemdarLink({ href, label }) {
+    const navigate = useNavigate();
+    return (
+        <Typography
+            sx={{ fontSize: 12.5, color: '#1D366F', mt: 0.5, cursor: 'pointer', fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}
+            onClick={() => navigate(href)}
+        >
+            {label}
+        </Typography>
     );
 }
 

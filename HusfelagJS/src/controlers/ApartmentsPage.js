@@ -9,7 +9,10 @@ import {
     FormControlLabel, Checkbox,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import { useHelp } from '../ui/HelpContext';
 import { UserContext } from './UserContext';
+import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala } from '../format';
 import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
@@ -20,6 +23,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 function ApartmentsPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
+    const { openHelp } = useHelp();
     const [apartments, setApartments] = useState(undefined);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
@@ -33,7 +37,7 @@ function ApartmentsPage() {
 
     const loadApartments = async () => {
         try {
-            const resp = await fetch(`${API_URL}/Apartment/${user.id}${assocParam}`);
+            const resp = await apiFetch(`${API_URL}/Apartment/${user.id}${assocParam}`);
             if (resp.ok) {
                 setApartments(await resp.json());
             } else {
@@ -64,13 +68,13 @@ function ApartmentsPage() {
                 {/* Zone 1: Header */}
                 <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
                     <Typography variant="h5">Íbúðir</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <Button
                             variant="outlined"
                             sx={secondaryButtonSx}
                             onClick={() => navigate('/ibudir/innflutningur')}
                         >
-                            ⬇ HMS innflutningur
+                            ⬇ Innflutningur
                         </Button>
                         <Button
                             variant="contained"
@@ -79,6 +83,11 @@ function ApartmentsPage() {
                         >
                             + Bæta við íbúð
                         </Button>
+                        <Tooltip title="Hjálp">
+                            <IconButton size="small" onClick={() => openHelp('ibudir')}>
+                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                 </Box>
 
@@ -292,7 +301,7 @@ function AddApartmentDialog({ open, onClose, userId, assocParam, apartments, onC
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Apartment${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -500,7 +509,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/update/${apt.id}`, {
+            const resp = await apiFetch(`${API_URL}/Apartment/update/${apt.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -517,7 +526,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
     const handleDisable = async () => {
         setDeleting(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/delete/${apt.id}`, { method: 'DELETE' });
+            const resp = await apiFetch(`${API_URL}/Apartment/delete/${apt.id}`, { method: 'DELETE' });
             if (resp.ok) { setConfirmDelete(false); onDeleted(); }
             else { const data = await resp.json(); setError(data.detail || 'Villa við óvirkjun.'); setConfirmDelete(false); }
         } catch {
@@ -532,7 +541,7 @@ function EditApartmentDialog({ open, onClose, apt, apartments, isDisabled, onSav
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Apartment/enable/${apt.id}`, {
+            const resp = await apiFetch(`${API_URL}/Apartment/enable/${apt.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
@@ -671,7 +680,7 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
         setError('');
         setSaving(true);
         try {
-            const resp = await fetch(`${API_URL}/Owner${assocParam}`, {
+            const resp = await apiFetch(`${API_URL}/Owner${assocParam}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -697,7 +706,7 @@ function OwnerDialog({ open, onClose, apt, userId, onChanged }) {
 
     const handleRemove = async (ownerId) => {
         try {
-            await fetch(`${API_URL}/Owner/delete/${ownerId}`, { method: 'DELETE' });
+            await apiFetch(`${API_URL}/Owner/delete/${ownerId}`, { method: 'DELETE' });
             onChanged();
         } catch { /* ignore */ }
     };
