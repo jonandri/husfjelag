@@ -7,6 +7,8 @@ from rest_framework import status
 from drf_spectacular.utils import extend_schema
 
 from django.db import models as django_models, transaction
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 import datetime
 from .models import (
@@ -2666,6 +2668,22 @@ class RegistrationRequestView(APIView):
             if not str(data.get(field, "")).strip():
                 return Response({"detail": f"Reitur '{field}' vantar."}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            validate_email(str(data.get("chair_email", "")).strip())
+        except ValidationError:
+            return Response({"detail": "Netfang formanns er ekki gilt."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Prevent duplicate PENDING requests from the same user for the same association
+        if RegistrationRequest.objects.filter(
+            submitted_by=request.user,
+            assoc_ssn=assoc_ssn,
+            status=RegistrationRequestStatus.PENDING,
+        ).exists():
+            return Response(
+                {"detail": "Þú hefur þegar sent inn beiðni fyrir þetta húsfélag."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         RegistrationRequest.objects.create(
             submitted_by=request.user,
             assoc_ssn=assoc_ssn,
@@ -2709,8 +2727,8 @@ class AdminRegistrationRequestView(APIView):
         except RegistrationRequest.DoesNotExist:
             return Response({"detail": "Beiðni finnst ekki."}, status=status.HTTP_404_NOT_FOUND)
         new_status = request.data.get("status")
-        if new_status not in RegistrationRequestStatus.values:
-            return Response({"detail": "Óþekkt staða."}, status=status.HTTP_400_BAD_REQUEST)
+        if new_status != RegistrationRequestStatus.REVIEWED:
+            return Response({"detail": "Má aðeins breyta í 'REVIEWED'."}, status=status.HTTP_400_BAD_REQUEST)
         reg_req.status = new_status
         reg_req.save(update_fields=["status"])
         return Response({"detail": "Staða uppfærð."})

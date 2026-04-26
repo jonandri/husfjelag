@@ -125,7 +125,7 @@ function PendingRequestsPanel({ user, onReview, refreshKey }) {
                         <Box sx={{ flex: 1, minWidth: 200 }}>
                             <Typography variant="body2" fontWeight={600}>{req.assoc_name}</Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Kennitala: {req.assoc_ssn} · Formaður: {req.chair_name} ({req.chair_ssn})
+                                Kennitala: {fmtKennitala(req.assoc_ssn)} · Formaður: {req.chair_name} ({fmtKennitala(req.chair_ssn)})
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                                 {req.chair_email} · {req.chair_phone}
