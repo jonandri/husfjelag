@@ -1,7 +1,7 @@
 import React from 'react';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Box, CircularProgress } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import Login from './controlers/Login';
 import Logout from './controlers/Logout';
 import AuthCallback from './controlers/AuthCallback';
@@ -59,15 +59,46 @@ const theme = createTheme({
   },
 });
 
+// Shown to logged-in users who have no association membership yet.
+function NoAssociationView() {
+  return (
+    <Box sx={{ minHeight: '100vh', background: '#1D366F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Box sx={{ background: '#fff', borderRadius: 2, p: '40px 36px', maxWidth: 420, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}>
+        <img src={require('./assets/images/logo/logo-color.png')} alt="Húsfélag" style={{ width: 140, marginBottom: 24 }} />
+        <Typography variant="h5" sx={{ fontWeight: 600, color: '#1D366F', mb: 1 }}>
+          Ekki skráð/ur í húsfélag
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Þú ert ekki skráð/ur í neitt húsfélag. Hafðu samband við formann húsfélags þíns til að fá aðgang.
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
 // Renders children only after user + associations are resolved; shows spinner in place meanwhile.
+// Redirects superadmins with no association to /superadmin, regular users to a waiting view.
 function ProtectedRoute({ children }) {
-  const { user, initializing } = React.useContext(UserContext);
+  const { user, initializing, associations } = React.useContext(UserContext);
+  const location = useLocation();
+
   if (initializing) return (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <CircularProgress color="secondary" />
     </Box>
   );
   if (!user) return <Navigate to="/login" replace />;
+
+  // Routes that are valid even without an association
+  const isAdminRoute = location.pathname.startsWith('/superadmin') ||
+                       location.pathname.startsWith('/admin') ||
+                       location.pathname.startsWith('/profile');
+
+  if (!isAdminRoute && associations.length === 0) {
+    if (user.is_superadmin) return <Navigate to="/superadmin" replace />;
+    return <NoAssociationView />;
+  }
+
   return <HelpProvider>{children}</HelpProvider>;
 }
 
