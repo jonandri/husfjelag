@@ -390,7 +390,7 @@ class RegistrationRequest(models.Model):
     chair_email = models.EmailField()
     chair_phone = models.CharField(max_length=20)
     status = models.CharField(
-        max_length=10,
+        max_length=16,
         choices=RegistrationRequestStatus.choices,
         default=RegistrationRequestStatus.PENDING,
     )
