@@ -1,0 +1,29 @@
+name: Update requirements.txt
+
+on:
+  push:
+    paths:
+      - 'HusfelagPy/pyproject.toml'
+      - 'HusfelagPy/poetry.lock'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install poetry
+
+      - run: poetry export -f requirements.txt --output requirements.txt --without-hashes
+        working-directory: HusfelagPy
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: regenerate requirements.txt from poetry.lock'
+          file_pattern: 'HusfelagPy/requirements.txt'
