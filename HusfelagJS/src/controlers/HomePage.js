@@ -251,7 +251,7 @@ function FeatureGrid() {
                     Allt sem húsfélag þarfnast
                 </Typography>
                 <Typography sx={{ fontSize: 14, color: '#888', mb: 4.5 }}>
-                    9 einingar — ein lausn
+                    Áætlun, innheimta og fjárhagur — ein lausn
                 </Typography>
                 <Box sx={{
                     display: 'grid',

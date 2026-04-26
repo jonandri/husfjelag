@@ -522,7 +522,7 @@ In `HusfelagPy/.env`, replace the bank section with:
 
 ```
 # Bank integration
-BANK_FERNET_KEY=f-ofJNt7RIktpcitc-8lIb8s04nbj7RNWEcn5g0czUA=
+BANK_FERNET_KEY=YourFernetKeyGoesHere
 BANK_LANDSBANKINN_ENABLED=true
 BANK_LANDSBANKINN_API_KEY=YourApiKeyGoesHere
 BANK_LANDSBANKINN_CERT_PATH=/path/to/company.p12
@@ -538,7 +538,7 @@ In `HusfelagPy/.env.example`, replace the bank section with:
 ```
 # Bank integration
 # Generate Fernet key: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-BANK_FERNET_KEY=
+BANK_FERNET_KEY=YourFernetKeyGoesHere
 BANK_LANDSBANKINN_ENABLED=false
 BANK_LANDSBANKINN_API_KEY=
 BANK_LANDSBANKINN_CERT_PATH=/path/to/company.p12
