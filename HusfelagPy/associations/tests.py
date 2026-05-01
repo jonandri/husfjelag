@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from django.db import models as django_models
 from decimal import Decimal
 from .models import Association, HMSImportSource, Apartment, Category, BankAccount, Transaction, TransactionStatus, AssociationAccess, Budget, BudgetItem, ApartmentOwnership, Collection, CollectionStatus
-from .scraper import scrape_hms_apartments
+from .scraper import scrape_hms_apartments, HmsScrapeError
 import json
 import logging
 from users.models import User
@@ -66,12 +66,14 @@ class ScrapeHMSApartmentsTest(TestCase):
         self.assertEqual(result[0]["anr"], "01 0101")
         self.assertAlmostEqual(float(result[0]["size"]), 68.5)
 
-    def test_scrape_returns_none_on_error(self):
+    def test_scrape_raises_on_http_error(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
+        mock_resp.text = "Internal Server Error"
         with patch("associations.scraper.requests.get", return_value=mock_resp):
-            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
-        self.assertIsNone(result)
+            with self.assertRaises(HmsScrapeError) as ctx:
+                scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
+        self.assertEqual(ctx.exception.status_code, 500)
 
     def test_scrape_returns_empty_list_when_no_rows(self):
         mock_resp = MagicMock()
@@ -81,11 +83,11 @@ class ScrapeHMSApartmentsTest(TestCase):
             result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
         self.assertEqual(result, [])
 
-    def test_scrape_returns_none_on_connection_error(self):
+    def test_scrape_raises_on_connection_error(self):
         import requests as req_lib
-        with patch("associations.scraper.requests.get", side_effect=req_lib.RequestException):
-            result = scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
-        self.assertIsNone(result)
+        with patch("associations.scraper.requests.get", side_effect=req_lib.RequestException("timeout")):
+            with self.assertRaises(HmsScrapeError):
+                scrape_hms_apartments("https://hms.is/fasteignaskra/228369/1203373")
 
 
 class ImportPreviewViewTest(TestCase):
@@ -150,7 +152,7 @@ class ImportPreviewViewTest(TestCase):
 
     def test_preview_returns_502_when_hms_unreachable(self):
         # Suppress django.request logger to avoid Python 3.14/Django 4.1 debug-template crash on 5xx responses
-        with patch("associations.views.scrape_hms_apartments", return_value=None):
+        with patch("associations.views.scrape_hms_apartments", side_effect=HmsScrapeError("Connection error: timeout")):
             with self.assertLogs("django.request", level=logging.ERROR):
                 resp = self.client.post(
                     "/Apartment/import/preview",

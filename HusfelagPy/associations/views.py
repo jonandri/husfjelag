@@ -24,7 +24,7 @@ from .serializers import (
     CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer,
     AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
-from .scraper import lookup_association, scrape_hms_apartments
+from .scraper import lookup_association, scrape_hms_apartments, HmsScrapeError
 from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entity_for_association
 from .importers import BANK_PARSERS, detect_bank, detect_duplicates
 from .categoriser import build_categorisation_context, categorise_row
@@ -2281,18 +2281,19 @@ HMS_URL_RE = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
 
 
 def _scrape_urls_parallel(urls):
-    """Fetch all HMS URLs concurrently. Returns (scraped_by_fnr, failed_url).
-    scraped_by_fnr is a dict {fnr: apt_dict}. failed_url is the first URL
-    that returned None (connection error), or None if all succeeded.
+    """Fetch all HMS URLs concurrently. Returns (scraped_by_fnr, error_detail).
+    scraped_by_fnr is a dict {fnr: apt_dict}. error_detail is a string
+    describing the first failure, or None if all succeeded.
     """
     scraped_by_fnr = {}
     with ThreadPoolExecutor(max_workers=len(urls)) as executor:
         futures = {executor.submit(scrape_hms_apartments, url): url for url in urls}
         for future in as_completed(futures):
             url = futures[future]
-            result = future.result()
-            if result is None:
-                return None, url
+            try:
+                result = future.result()
+            except HmsScrapeError as exc:
+                return None, str(exc)
             for apt in result:
                 scraped_by_fnr[apt["fnr"]] = apt
     return scraped_by_fnr, None
@@ -2340,10 +2341,10 @@ class ApartmentImportPreviewView(APIView):
             return err
 
         # Scrape all URLs in parallel, deduplicate by fnr
-        scraped_by_fnr, failed = _scrape_urls_parallel(urls)
-        if failed is not None:
+        scraped_by_fnr, hms_error = _scrape_urls_parallel(urls)
+        if hms_error is not None:
             return Response(
-                {"detail": "Ekki tókst að ná sambandi við HMS. Reyndu aftur síðar."},
+                {"detail": f"Ekki tókst að ná sambandi við HMS. {hms_error}"},
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
@@ -2408,10 +2409,10 @@ class ApartmentImportConfirmView(APIView):
             return err
 
         # Re-scrape in parallel (don't trust client preview)
-        scraped_by_fnr, failed = _scrape_urls_parallel(urls)
-        if failed is not None:
+        scraped_by_fnr, hms_error = _scrape_urls_parallel(urls)
+        if hms_error is not None:
             return Response(
-                {"detail": "Ekki tókst að ná sambandi við HMS. Reyndu aftur síðar."},
+                {"detail": f"Ekki tókst að ná sambandi við HMS. {hms_error}"},
                 status=status.HTTP_502_BAD_GATEWAY
             )
 

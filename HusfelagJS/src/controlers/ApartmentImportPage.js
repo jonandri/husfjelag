@@ -45,11 +45,13 @@ function ApartmentImportPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, urls: urls.filter(u => u.trim()) }),
             });
-            const data = await resp.json();
             if (!resp.ok) {
-                setError(data.detail || 'Villa við að sækja gögn.');
+                let detail = 'Villa við að sækja gögn.';
+                try { const d = await resp.json(); detail = d.detail || detail; } catch {}
+                setError(detail);
                 return;
             }
+            const data = await resp.json();
             const allDeactivate = new Set(data.missing.map(m => m.id));
             setDeactivateIds(allDeactivate);
             setPreview(data);
@@ -77,8 +79,9 @@ function ApartmentImportPage() {
             if (resp.ok) {
                 navigate('/ibudir');
             } else {
-                const data = await resp.json();
-                setError(data.detail || 'Villa við innflutning. Reyndu aftur.');
+                let detail = 'Villa við innflutning. Reyndu aftur.';
+                try { const d = await resp.json(); detail = d.detail || detail; } catch {}
+                setError(detail);
             }
         } catch {
             setError('Ekki tókst að ná sambandi við þjón.');

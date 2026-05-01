@@ -110,7 +110,14 @@ def lookup_association(ssn: str) -> dict | None:
 HMS_URL_PATTERN = re.compile(r'^https://hms\.is/fasteignaskra/\d+/\d+$')
 
 
-def scrape_hms_apartments(url: str) -> list[dict] | None:
+class HmsScrapeError(Exception):
+    """Raised when the HMS API returns an unexpected response."""
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def scrape_hms_apartments(url: str) -> list[dict]:
     """
     Fetch apartment list from the hms.is JSON API.
     The page at hms.is/fasteignaskra is a Next.js app (client-side rendered),
@@ -119,9 +126,13 @@ def scrape_hms_apartments(url: str) -> list[dict] | None:
     URL format: https://hms.is/fasteignaskra/{landeign_id}/{stadfang_id}
     API:        GET /api/fasteignaskra/stadfang/{stadfang_id}?page=0&pageSize=200
 
-    Returns list of {fnr, anr, size} or None on HTTP/connection failure.
+    Returns list of {fnr, anr, size}.
     Returns [] if the API responds but lists no apartments.
+    Raises HmsScrapeError on connection failure or non-200 response.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Extract stadfang_id from the URL path (last segment)
     stadfang_id = url.rstrip("/").split("/")[-1]
 
@@ -132,16 +143,22 @@ def scrape_hms_apartments(url: str) -> list[dict] | None:
             timeout=15,
             headers={"User-Agent": "Mozilla/5.0", "Referer": "https://hms.is/"},
         )
-    except requests.RequestException:
-        return None
+    except requests.RequestException as exc:
+        logger.error("HMS scrape connection error for %s: %s", url, exc)
+        raise HmsScrapeError(f"Connection error: {exc}") from exc
 
     if resp.status_code != 200:
-        return None
+        logger.error("HMS scrape HTTP %s for %s — body: %.200s", resp.status_code, url, resp.text)
+        raise HmsScrapeError(
+            f"HMS returned HTTP {resp.status_code}",
+            status_code=resp.status_code,
+        )
 
     try:
         data = resp.json()
-    except ValueError:
-        return None
+    except ValueError as exc:
+        logger.error("HMS scrape JSON decode error for %s: %s", url, exc)
+        raise HmsScrapeError(f"Invalid JSON response: {exc}") from exc
 
     fasteignir = data.get("stadfangData", {}).get("fasteignir", [])
 
