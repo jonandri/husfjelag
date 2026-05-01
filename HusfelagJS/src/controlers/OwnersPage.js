@@ -1,36 +1,184 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, CircularProgress, Paper,
-    Table, TableHead, TableRow, TableCell, TableBody,
+    Box, Typography, CircularProgress,
     Button, TextField, Chip, IconButton,
     Dialog, DialogTitle, DialogContent, DialogActions,
-    Alert, Collapse, Tooltip, DialogContentText,
+    Alert, DialogContentText,
     MenuItem, Select, FormControl, InputLabel, FormHelperText,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import { useHelp } from '../ui/HelpContext';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import SearchIcon from '@mui/icons-material/Search';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtPct, fmtKennitala, fmtPhone } from '../format';
-import { useSort, HEAD_SX, HEAD_CELL_SX } from './tableUtils';
 import { primaryButtonSx, ghostButtonSx, destructiveButtonSx } from '../ui/buttons';
-import { LabelChip } from '../ui/chips';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
+
+const NAVY = '#1D366F';
+const GREEN = '#08C076';
+const GREEN_TINT = '#e8f5e9';
+const NAVY_TINT = '#eef1f8';
+const BORDER = '#e8e8e8';
+const BORDER_ROW = '#f2f2f2';
+const BG_TOOLBAR = '#fafafa';
+const TEXT_SECONDARY = '#555555';
+const TEXT_DISABLED = '#888888';
+const WARNING = '#e65100';
+const POSITIVE = '#2e7d32';
+
+const COLS = '30px 1.4fr 130px 1.4fr 110px 70px 90px 40px';
+
+function getInitials(name) {
+    if (!name) return '?';
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+}
+
+function ContactCell({ value, type }) {
+    if (!value) {
+        return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: WARNING, fontStyle: 'italic' }}>
+                <span>+</span>vantar
+            </span>
+        );
+    }
+    const href = type === 'email' ? `mailto:${value}` : `tel:${value.replace(/\s/g, '')}`;
+    return (
+        <a href={href} style={{ color: NAVY, textDecoration: 'none', fontSize: 13 }}>
+            {type === 'phone' ? fmtPhone(value) : value}
+        </a>
+    );
+}
+
+function ColHeaders() {
+    return (
+        <div style={{
+            display: 'grid', gridTemplateColumns: COLS,
+            padding: '8px 18px', fontSize: 10.5, fontWeight: 600,
+            color: TEXT_DISABLED, letterSpacing: '0.06em', textTransform: 'uppercase',
+            borderBottom: `1px solid ${BORDER_ROW}`, alignItems: 'center',
+        }}>
+            <div /><div>Nafn</div><div>Kennitala</div>
+            <div>Netfang</div><div>Sími</div>
+            <div style={{ textAlign: 'right' }}>Hlutur</div>
+            <div style={{ textAlign: 'center' }}>Greiðandi</div>
+            <div />
+        </div>
+    );
+}
+
+function OwnerGridRow({ ownership, ownerships, isLast, isDisabled, onSaved }) {
+    const [editOpen, setEditOpen] = useState(false);
+    const isPayer = ownership.is_payer;
+
+    return (
+        <>
+            <div style={{
+                display: 'grid', gridTemplateColumns: COLS,
+                padding: '12px 18px',
+                borderBottom: isLast ? 'none' : `1px solid ${BORDER_ROW}`,
+                alignItems: 'center', fontSize: 13,
+                opacity: isDisabled ? 0.55 : 1,
+            }}>
+                <div style={{
+                    width: 26, height: 26, borderRadius: '50%',
+                    background: isPayer ? GREEN_TINT : NAVY_TINT,
+                    color: isPayer ? POSITIVE : NAVY,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontWeight: 600, fontSize: 10.5,
+                }}>
+                    {getInitials(ownership.name)}
+                </div>
+                <div style={{ fontWeight: 500 }}>{ownership.name}</div>
+                <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>{fmtKennitala(ownership.kennitala)}</div>
+                <ContactCell value={ownership.email} type="email" />
+                <ContactCell value={ownership.phone} type="phone" />
+                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{ownership.share}%</div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 18, height: 18, borderRadius: '50%', border: '2px solid',
+                        borderColor: isPayer ? GREEN : BORDER,
+                        background: isPayer ? GREEN : '#fff',
+                    }}>
+                        {isPayer && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                    </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <IconButton size="small" onClick={() => setEditOpen(true)}>
+                        <EditIcon sx={{ fontSize: 17, color: TEXT_SECONDARY }} />
+                    </IconButton>
+                </div>
+            </div>
+            <EditOwnerDialog
+                open={editOpen}
+                onClose={() => setEditOpen(false)}
+                ownership={ownership}
+                ownerships={ownerships}
+                isDisabled={isDisabled}
+                onSaved={() => { setEditOpen(false); onSaved(); }}
+                onDisabled={() => { setEditOpen(false); onSaved(); }}
+            />
+        </>
+    );
+}
+
+function AptGroup({ anr, apt, owners, allOwnerships, onAddOwner, onSaved }) {
+    return (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 18px', background: BG_TOOLBAR, borderBottom: `1px solid ${BORDER}` }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>Íbúð {anr}</div>
+                {apt && (
+                    <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>
+                        {apt.size ? `${parseFloat(apt.size).toFixed(2)} m²` : ''}
+                        {apt.size && apt.share ? ' · ' : ''}
+                        {apt.share ? `${parseFloat(apt.share).toFixed(2)}% hlutfall` : ''}
+                    </div>
+                )}
+                <div style={{ flex: 1 }} />
+                <div style={{ fontSize: 12, color: TEXT_SECONDARY }}>
+                    {owners.length} {owners.length === 1 ? 'eigandi' : 'eigendur'}
+                </div>
+                <button
+                    onClick={onAddOwner}
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '4px 10px', fontSize: 12, fontWeight: 500,
+                        background: 'transparent', border: `1px solid ${BORDER}`,
+                        borderRadius: 4, cursor: 'pointer', color: TEXT_SECONDARY, minHeight: 0,
+                    }}
+                >
+                    + Skipta um eiganda
+                </button>
+            </div>
+            <ColHeaders />
+            {owners.map((o, j) => (
+                <OwnerGridRow
+                    key={o.id}
+                    ownership={o}
+                    ownerships={allOwnerships}
+                    isLast={j === owners.length - 1}
+                    onSaved={onSaved}
+                />
+            ))}
+        </div>
+    );
+}
 
 function OwnersPage() {
     const navigate = useNavigate();
     const { user, assocParam } = React.useContext(UserContext);
-    const { openHelp } = useHelp();
     const [ownerships, setOwnerships] = useState(undefined);
     const [apartments, setApartments] = useState([]);
     const [error, setError] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [defaultAptId, setDefaultAptId] = useState('');
     const [showDisabled, setShowDisabled] = useState(false);
-    const { sort, lbl } = useSort('name');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [activeFilter, setActiveFilter] = useState('all');
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -68,29 +216,126 @@ function OwnersPage() {
 
     const active = ownerships.filter(o => !o.deleted);
     const disabled = ownerships.filter(o => o.deleted);
+    const missingEmail = active.filter(o => !o.email).length;
+    const missingPhone = active.filter(o => !o.phone).length;
+
+    const filteredActive = active.filter(o => {
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            if (
+                !o.name?.toLowerCase().includes(q) &&
+                !o.kennitala?.includes(q) &&
+                !o.anr?.toLowerCase().includes(q)
+            ) return false;
+        }
+        if (activeFilter === 'payers') return o.is_payer;
+        if (activeFilter === 'no_phone') return !o.phone;
+        if (activeFilter === 'no_email') return !o.email;
+        return true;
+    });
+
+    const grouped = {};
+    filteredActive.forEach(o => {
+        const key = o.anr || '?';
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(o);
+    });
+    const aptKeys = Object.keys(grouped).sort((a, b) => a.localeCompare(b, 'is'));
+
+    const filterPills = [
+        { key: 'all', label: `Allir · ${active.length}` },
+        { key: 'payers', label: `Greiðendur · ${active.filter(o => o.is_payer).length}` },
+        ...(missingPhone > 0 ? [{ key: 'no_phone', label: `Vantar síma · ${missingPhone}`, warn: true }] : []),
+        ...(missingEmail > 0 ? [{ key: 'no_email', label: `Vantar netfang · ${missingEmail}` }] : []),
+    ];
 
     return (
         <div className="dashboard">
             <SideBar />
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
                 {/* Zone 1: Header */}
-                <Box sx={{ px: 3, py: 2, background: '#fff', borderBottom: '1px solid #e8e8e8', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <Box sx={{
+                    px: 3, py: 2, background: '#fff',
+                    borderBottom: `1px solid ${BORDER}`,
+                    display: 'flex', justifyContent: 'space-between',
+                    alignItems: 'flex-start', flexShrink: 0,
+                }}>
                     <Box>
-                        <Typography variant="h5">Eigendur</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Húsfélag</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                            <Typography variant="h5" sx={{ fontWeight: 600 }}>Eigendur</Typography>
+                            <Typography variant="h5" sx={{ fontWeight: 300, color: 'text.disabled' }}>
+                                {active.length}
+                            </Typography>
+                        </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
-                            + Bæta við eiganda
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            sx={{ ...ghostButtonSx, borderColor: BORDER, color: TEXT_SECONDARY }}
+                        >
+                            Sendu skilaboð
                         </Button>
-                        <Tooltip title="Hjálp">
-                            <IconButton size="small" onClick={() => openHelp('eigendur')}>
-                                <HelpOutlineIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
-                            </IconButton>
-                        </Tooltip>
+                        <Button
+                            variant="contained"
+                            sx={primaryButtonSx}
+                            startIcon={<PersonAddIcon sx={{ fontSize: 17 }} />}
+                            onClick={() => { setDefaultAptId(''); setShowForm(true); }}
+                        >
+                            Bæta við eiganda
+                        </Button>
                     </Box>
                 </Box>
-                {/* Zone 3: Content (no toolbar needed — no filters) */}
-                <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+
+                {/* Zone 2+3: Content */}
+                <Box sx={{ flex: 1, overflowY: 'auto', p: '16px 32px 24px' }}>
+                    {/* Toolbar */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.75, flexWrap: 'wrap' }}>
+                        <Box sx={{
+                            display: 'flex', alignItems: 'center', gap: 1,
+                            px: 1.5, py: 0.875,
+                            border: `1px solid ${BORDER}`, borderRadius: '6px',
+                            flex: '0 1 280px',
+                        }}>
+                            <SearchIcon sx={{ fontSize: 18, color: TEXT_DISABLED }} />
+                            <input
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                placeholder="Leita að nafni, kennitölu, íbúð…"
+                                style={{
+                                    border: 'none', outline: 'none', flex: 1,
+                                    fontSize: 13, fontFamily: 'inherit', background: 'transparent',
+                                }}
+                            />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                            {filterPills.map(f => (
+                                <span
+                                    key={f.key}
+                                    onClick={() => setActiveFilter(f.key)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        border: `1px solid ${activeFilter === f.key ? NAVY : BORDER}`,
+                                        color: f.warn ? WARNING : activeFilter === f.key ? NAVY : TEXT_SECONDARY,
+                                        borderRadius: 999,
+                                        background: activeFilter === f.key ? NAVY_TINT : 'transparent',
+                                        fontWeight: activeFilter === f.key ? 500 : 400,
+                                        cursor: 'pointer',
+                                        fontSize: 12.5,
+                                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    {f.label}
+                                </span>
+                            ))}
+                        </Box>
+                        <Box sx={{ flex: 1 }} />
+                        <Box sx={{ fontSize: 12, color: TEXT_SECONDARY }}>
+                            Flokka eftir: <strong style={{ color: '#111' }}>Íbúð ▾</strong>
+                        </Box>
+                    </Box>
+
                     <AddOwnerDialog
                         open={showForm}
                         onClose={() => setShowForm(false)}
@@ -98,89 +343,78 @@ function OwnersPage() {
                         assocParam={assocParam}
                         apartments={apartments}
                         ownerships={active}
+                        defaultApartmentId={defaultAptId}
                         onCreated={() => { setShowForm(false); loadAll(); }}
                     />
 
-                    {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
                     {active.length === 0 ? (
                         <Typography color="text.secondary" sx={{ mt: 4 }}>
                             Enginn eigandi skráður. Smelltu á „+ Bæta við eiganda" til að hefja skráningu.
                         </Typography>
+                    ) : aptKeys.length === 0 ? (
+                        <Typography color="text.secondary" sx={{ mt: 4 }}>
+                            Enginn eigandi fannst fyrir þessa leit.
+                        </Typography>
                     ) : (
-                        <Paper variant="outlined" sx={{ mt: 2 }}>
-                            <Table size="small">
-                                <TableHead sx={HEAD_SX}>
-                                    <TableRow>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('name', 'Nafn')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('kennitala', 'Kennitala')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('email', 'Netfang')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('phone', 'Símanúmer')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('anr', 'Íbúð')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('share', 'Hlutfall (%)')}</TableCell>
-                                        <TableCell sx={HEAD_CELL_SX}>{lbl('is_payer', 'Greiðandi')}</TableCell>
-                                        <TableCell />
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {sort(active).map(o => (
-                                        <OwnerRow
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+                            {aptKeys.map(anr => (
+                                <AptGroup
+                                    key={anr}
+                                    anr={anr}
+                                    apt={apartments.find(a => a.anr === anr)}
+                                    owners={grouped[anr]}
+                                    allOwnerships={active}
+                                    onAddOwner={() => {
+                                        const apt = apartments.find(a => a.anr === anr);
+                                        setDefaultAptId(apt?.id || '');
+                                        setShowForm(true);
+                                    }}
+                                    onSaved={loadAll}
+                                />
+                            ))}
+                        </Box>
+                    )}
+
+                    {/* Disabled owners */}
+                    {disabled.length > 0 && (
+                        <Box sx={{ mt: 3 }}>
+                            <button
+                                onClick={() => setShowDisabled(v => !v)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: TEXT_SECONDARY, padding: 0 }}
+                            >
+                                {showDisabled ? '▲' : '▼'} Óvirkir eigendur ({disabled.length})
+                            </button>
+                            {showDisabled && (
+                                <Box sx={{ mt: 1, border: `1px solid ${BORDER}`, borderRadius: '8px', overflow: 'hidden' }}>
+                                    <ColHeaders />
+                                    {disabled.map((o, j) => (
+                                        <OwnerGridRow
                                             key={o.id}
                                             ownership={o}
                                             ownerships={active}
+                                            isDisabled
+                                            isLast={j === disabled.length - 1}
                                             onSaved={loadAll}
                                         />
                                     ))}
-                                </TableBody>
-                            </Table>
-                        </Paper>
-                    )}
-
-                    {disabled.length > 0 && (
-                        <Box sx={{ mt: 3 }}>
-                            <Button
-                                size="small" sx={{ ...ghostButtonSx, p: 0, minWidth: 0 }}
-                                onClick={() => setShowDisabled(v => !v)}
-                            >
-                                {showDisabled ? '▲' : '▼'} Óvirkir eigendur ({disabled.length})
-                            </Button>
-                            <Collapse in={showDisabled}>
-                                <Paper variant="outlined" sx={{ mt: 1 }}>
-                                    <Table size="small">
-                                        <TableHead sx={HEAD_SX}>
-                                            <TableRow>
-                                                <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Kennitala</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Netfang</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Símanúmer</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Íbúð</TableCell>
-                                                <TableCell sx={HEAD_CELL_SX}>Hlutfall (%)</TableCell>
-                                                <TableCell />
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {sort(disabled).map(o => (
-                                                <OwnerRow
-                                                    key={o.id}
-                                                    ownership={o}
-                                                    ownerships={active}
-                                                    onSaved={loadAll}
-                                                    isDisabled
-                                                />
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </Paper>
-                            </Collapse>
+                                </Box>
+                            )}
                         </Box>
                     )}
+
+                    <Box sx={{ mt: 2, fontSize: 12, color: TEXT_SECONDARY, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span style={{ fontSize: 15, color: TEXT_DISABLED }}>ℹ</span>
+                        Greiðandi á sér eitt val per íbúð — sá sem fær reikninga húsfélagsins.
+                    </Box>
                 </Box>
             </Box>
         </div>
     );
 }
 
-function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownerships, onCreated }) {
+function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownerships, onCreated, defaultApartmentId = '' }) {
     const [kennitala, setKennitala] = useState('');
     const [apartmentId, setApartmentId] = useState('');
     const [share, setShare] = useState('');
@@ -189,8 +423,12 @@ function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownersh
     const [error, setError] = useState('');
 
     React.useEffect(() => {
-        if (!open) { setKennitala(''); setApartmentId(''); setShare(''); setIsPayer(false); setError(''); }
-    }, [open]);
+        if (!open) {
+            setKennitala(''); setApartmentId(''); setShare(''); setIsPayer(false); setError('');
+        } else {
+            setApartmentId(defaultApartmentId || '');
+        }
+    }, [open, defaultApartmentId]);
 
     const aptActive = ownerships.filter(o => String(o.apartment_id) === String(apartmentId));
     const existingSum = aptActive.reduce((s, o) => s + parseFloat(o.share || 0), 0);
@@ -293,53 +531,6 @@ function AddOwnerDialog({ open, onClose, userId, assocParam, apartments, ownersh
     );
 }
 
-function OwnerRow({ ownership, ownerships, onSaved, isDisabled }) {
-    const [editOpen, setEditOpen] = useState(false);
-
-    return (
-        <>
-            <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
-                <TableCell>{ownership.name}</TableCell>
-                <TableCell>{fmtKennitala(ownership.kennitala)}</TableCell>
-                <TableCell>
-                    {ownership.email
-                        ? <a href={`mailto:${ownership.email}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{ownership.email}</a>
-                        : <span style={{ color: '#bbb' }}>—</span>}
-                </TableCell>
-                <TableCell>
-                    {ownership.phone
-                        ? <a href={`tel:${ownership.phone.replace(/\s/g, '')}`} style={{ color: '#1D366F', textDecoration: 'underline' }}>{fmtPhone(ownership.phone)}</a>
-                        : <span style={{ color: '#bbb' }}>—</span>}
-                </TableCell>
-                <TableCell>{ownership.anr}</TableCell>
-                <TableCell>{ownership.share}%</TableCell>
-                {!isDisabled && (
-                    <TableCell>
-                        {ownership.is_payer && <LabelChip label="Greiðandi" />}
-                    </TableCell>
-                )}
-                <TableCell align="right" sx={{ width: 48 }}>
-                    <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
-                        <IconButton size="small" onClick={() => setEditOpen(true)}>
-                            <EditIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
-                </TableCell>
-            </TableRow>
-
-            <EditOwnerDialog
-                open={editOpen}
-                onClose={() => setEditOpen(false)}
-                ownership={ownership}
-                ownerships={ownerships}
-                isDisabled={isDisabled}
-                onSaved={() => { setEditOpen(false); onSaved(); }}
-                onDisabled={() => { setEditOpen(false); onSaved(); }}
-            />
-        </>
-    );
-}
-
 function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onSaved, onDisabled }) {
     const { user, setUser } = React.useContext(UserContext);
     const [name, setName] = useState(ownership.name || '');
@@ -367,9 +558,7 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
     const otherSum = others.reduce((s, o) => s + parseFloat(o.share || 0), 0);
     const round2 = n => Math.round(n * 100) / 100;
     const shareOver = parseFloat(share) > 0 && round2(otherSum + parseFloat(share)) > 100;
-
     const emailValid = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-    // Accepts: 7 digits as "XXX XXXX" or "XXXXXXX", or +CC then 7+ digits (spaces allowed)
     const phoneValid = !phone || /^(\+\d{1,3}[\s-]?)?\d{3}[\s]?\d{4}$/.test(phone.trim());
     const isValid = name.trim().length > 0 && parseFloat(share) > 0 && !shareOver && emailValid && phoneValid;
 
@@ -394,7 +583,6 @@ function EditOwnerDialog({ open, onClose, ownership, ownerships, isDisabled, onS
                 }),
             ]);
             if (ownerResp.ok && userResp.ok) {
-                // If editing the logged-in user's own contact info, sync context
                 if (user && ownership.user_id === user.id) {
                     const updatedUser = { ...user, name: name.trim(), email: email.trim() || null, phone: fmtPhone(phone) || null };
                     localStorage.setItem('user', JSON.stringify(updatedUser));
