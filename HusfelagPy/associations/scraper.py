@@ -152,11 +152,15 @@ def scrape_hms_apartments(url: str) -> list[dict]:
 
     resp = _fetch()
 
-    # 429 Too Many Requests — wait and retry once
-    if resp.status_code == 429:
-        retry_after = min(int(resp.headers.get("Retry-After", 2)), 10)
-        logger.warning("HMS rate-limited (429) for %s — retrying in %ss", url, retry_after)
-        time.sleep(retry_after)
+    # 429 Too Many Requests — exponential backoff, up to 3 attempts total.
+    # hms.is returns Retry-After but doesn't honour it reliably, so we use
+    # our own schedule: 10s then 20s (30s total extra, well under gunicorn's
+    # 120s timeout even with multiple parallel URLs).
+    for backoff in (10, 20):
+        if resp.status_code != 429:
+            break
+        logger.warning("HMS rate-limited (429) for %s — retrying in %ss", url, backoff)
+        time.sleep(backoff)
         resp = _fetch()
 
     if resp.status_code != 200:

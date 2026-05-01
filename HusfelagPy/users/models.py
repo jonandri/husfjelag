@@ -22,5 +22,8 @@ class User(models.Model):
     def get_short_name(self):
         return self.name.split()[0] if self.name else ""
 
+    def get_username(self):
+        return self.kennitala
+
     def __str__(self):
         return f"{self.name} ({self.kennitala})"
