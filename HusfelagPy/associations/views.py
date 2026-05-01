@@ -2362,6 +2362,7 @@ class ApartmentImportPreviewView(APIView):
 
         create_list = []
         update_list = []
+        unchanged_list = []
         scraped_fnrs = set(scraped_by_fnr.keys())
 
         for fnr, scraped in scraped_by_fnr.items():
@@ -2378,6 +2379,8 @@ class ApartmentImportPreviewView(APIView):
                         "current_anr": db_apt.anr,
                         "current_size": float(db_apt.size),
                     })
+                else:
+                    unchanged_list.append({"id": db_apt.id, "fnr": fnr, "anr": db_apt.anr, "size": float(db_apt.size)})
             else:
                 create_list.append({"fnr": fnr, "anr": scraped["anr"], "size": scraped["size"]})
 
@@ -2387,7 +2390,7 @@ class ApartmentImportPreviewView(APIView):
             if fnr not in scraped_fnrs
         ]
 
-        return Response({"create": create_list, "update": update_list, "missing": missing_list})
+        return Response({"create": create_list, "update": update_list, "unchanged": unchanged_list, "missing": missing_list})
 
 
 class ApartmentImportConfirmView(APIView):

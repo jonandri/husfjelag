@@ -272,6 +272,7 @@ function Step3({ preview, deactivateIds, setDeactivateIds, loading, error, onBac
     const STATUS_COLORS = {
         create: '#08C076',
         update: '#ffcc00',
+        unchanged: '#9e9e9e',
         missing: '#ff5050',
     };
 
@@ -329,6 +330,15 @@ function Step3({ preview, deactivateIds, setDeactivateIds, loading, error, onBac
                                 <Box component="td" sx={{ p: 1, color: 'text.secondary' }}>{apt.fnr}</Box>
                                 <Box component="td" sx={{ p: 1, color: 'text.secondary' }}>{apt.size} m²</Box>
                                 <Box component="td" sx={{ p: 1 }}><Typography variant="caption" sx={{ color: STATUS_COLORS.update }}>Uppfærsla</Typography></Box>
+                                <Box component="td" sx={{ p: 1 }}>—</Box>
+                            </Box>
+                        ))}
+                        {(preview.unchanged || []).map((apt) => (
+                            <Box component="tr" key={`n${apt.id}`} sx={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <Box component="td" sx={{ p: 1 }}>{apt.anr}</Box>
+                                <Box component="td" sx={{ p: 1, color: 'text.secondary' }}>{apt.fnr}</Box>
+                                <Box component="td" sx={{ p: 1, color: 'text.secondary' }}>{apt.size} m²</Box>
+                                <Box component="td" sx={{ p: 1 }}><Typography variant="caption" sx={{ color: STATUS_COLORS.unchanged }}>Óbreytt</Typography></Box>
                                 <Box component="td" sx={{ p: 1 }}>—</Box>
                             </Box>
                         ))}
