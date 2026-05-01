@@ -32,7 +32,7 @@ Swagger UI at `http://localhost:8010/swagger/` — ReDoc at `http://localhost:80
 
 **Production server (Digital Ocean — run command):**
 ```bash
-python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080 --workers 4
+python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application -c gunicorn.conf.py
 ```
 - DO runs on port **8080** (not 8000)
 - `createcachetable` must run before gunicorn — `DatabaseCache` is used for OIDC exchange codes (required for multi-worker setups; `LocMemCache` does not share state across workers)
@@ -159,7 +159,7 @@ Note: components live in `src/controlers/` (intentional misspelling).
 
 - **Frontend** → Vercel (set `REACT_APP_API_URL` to production API URL, e.g. `https://api.husfjelag.is`)
 - **Backend** → Digital Ocean App Platform (set `DJANGO_ENV=production` + all env vars from `.env.example`)
-  - Run command: `python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8080 --workers 4`
+  - Run command: `python manage.py createcachetable && python manage.py migrate && gunicorn config.asgi:application -c gunicorn.conf.py`
   - Migrations and cache table creation happen automatically on every deploy
 - **Database** → PostgreSQL managed DB (Digital Ocean)
 - **DNS** — Cloudflare: `api.husfjelag.is` → DO backend, `www.husfjelag.is` → Vercel frontend
