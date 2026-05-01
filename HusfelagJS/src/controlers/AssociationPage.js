@@ -113,11 +113,12 @@ function AssociationPage() {
 
     const setupSteps = [
         true,                                             // 1. Stofna húsfélag
-        !!(association.chair && association.cfo),         // 2. Bæta við stjórn
-        association.apartment_count > 0,                  // 3. Skrá íbúðir
-        bankAccounts.length > 0,                          // 4. Tengja banka
-        rules.length > 0,                                 // 5. Setja flokkunarreglur
-        collections.length > 0,                           // 6. Hefja innheimtu
+        association.apartment_count > 0,                  // 2. Skrá íbúðir
+        owners.length > 0,                                // 3. Skrá eigendur
+        !!(association.chair && association.cfo),         // 4. Bæta við stjórn
+        bankAccounts.length > 0,                          // 5. Tengja banka
+        rules.length > 0,                                 // 6. Setja flokkunarreglur
+        collections.length > 0,                           // 7. Hefja innheimtu
     ];
     const setupComplete = setupSteps.filter(Boolean).length;
     const isSetup = setupComplete >= 6;
@@ -858,12 +859,13 @@ const NAVY = '#1D366F';
 const BORDER = '#e8e8e8';
 
 const SETUP_STEP_DEFS = [
-    { icon: <BusinessIcon sx={{ fontSize: 18 }} />, title: 'Stofna húsfélag', sub: 'Heiti, kennitala, heimilisfang', navPath: null },
-    { icon: <GroupIcon sx={{ fontSize: 18 }} />, title: 'Bæta við stjórn', sub: 'Formaður og gjaldkeri', navPath: null },
-    { icon: <HomeIcon sx={{ fontSize: 18 }} />, title: 'Skrá íbúðir', sub: 'Íbúðir + eignarhlutföll', navPath: '/ibudir/innflutningur' },
-    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka', sub: 'Sjálfvirk afstemming', navPath: '/bank-settings' },
-    { icon: <RuleIcon sx={{ fontSize: 18 }} />, title: 'Setja flokkunarreglur', sub: 'Sjálfvirk flokkun bankafærslna', navPath: '/husfelag' },
-    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />, title: 'Hefja innheimtu', sub: 'Mánaðarlegar greiðslur', navPath: '/innheimta' },
+    { icon: <BusinessIcon sx={{ fontSize: 18 }} />,    title: 'Stofna húsfélag',      sub: 'Heiti, kennitala, heimilisfang',     navPath: null },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />,        title: 'Skrá íbúðir',          sub: 'Íbúðir + eignarhlutföll',           navPath: '/ibudir/innflutningur' },
+    { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,   title: 'Skrá eigendur',        sub: 'Eigendur íbúða',                    navPath: '/eigendur' },
+    { icon: <GroupIcon sx={{ fontSize: 18 }} />,       title: 'Bæta við stjórn',      sub: 'Formaður og gjaldkeri',             navPath: null },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',              navPath: '/bank-settings' },
+    { icon: <RuleIcon sx={{ fontSize: 18 }} />,        title: 'Setja flokkunarreglur', sub: 'Sjálfvirk flokkun bankafærslna',   navPath: '/husfelag' },
+    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />, title: 'Hefja innheimtu',      sub: 'Mánaðarlegar greiðslur',            navPath: '/innheimta' },
 ];
 
 function UppsetningView({ association, setupSteps, setupComplete, owners, userId, assocParam, onNavigate, onAssociationUpdated }) {
@@ -871,7 +873,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
 
     const firstIncomplete = setupSteps.findIndex(done => !done);
     const nextPath = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navPath : null;
-    const nextIsBoardStep = firstIncomplete === 1;
+    const nextIsBoardStep = firstIncomplete === 3;
 
     const chair = owners.find(o => o.role === 'CHAIR' || o.role === 'Formaður');
     const cfo   = owners.find(o => o.role === 'CFO'   || o.role === 'Gjaldkeri');
@@ -900,11 +902,11 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                     <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '8px', p: '28px 32px' }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                             <Box>
-                                <Eyebrow variant="green">UPPSETNING · {setupComplete} AF 6 LOKIÐ</Eyebrow>
+                                <Eyebrow variant="green">UPPSETNING · {setupComplete} AF 7 LOKIÐ</Eyebrow>
                                 <Typography sx={{ fontSize: 24, fontWeight: 300, mt: 0.75, mb: 0.5 }}>
                                     Settu upp húsfélagið —{' '}
                                     <Box component="span" sx={{ fontWeight: 600 }}>
-                                        {6 - setupComplete} skref eftir
+                                        {7 - setupComplete} skref eftir
                                     </Box>
                                 </Typography>
                                 <Typography sx={{ fontSize: 13.5, color: '#555' }}>
@@ -913,7 +915,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                             </Box>
                             <Box sx={{ textAlign: 'right', flexShrink: 0, ml: 4 }}>
                                 <Typography sx={{ fontSize: 28, fontWeight: 300, color: NAVY, fontFamily: '"JetBrains Mono", monospace' }}>
-                                    {Math.round(setupComplete / 6 * 100)}%
+                                    {Math.round(setupComplete / 7 * 100)}%
                                 </Typography>
                                 <Typography sx={{ fontSize: 11, color: '#888', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                                     LOKIÐ
@@ -923,7 +925,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
 
                         {/* Progress bar */}
                         <Box sx={{ height: 5, background: '#f0f0f0', borderRadius: '3px', mt: 2.5, overflow: 'hidden' }}>
-                            <Box sx={{ width: `${Math.round(setupComplete / 6 * 100)}%`, height: '100%', background: '#08C076', transition: 'width 300ms ease' }} />
+                            <Box sx={{ width: `${Math.round(setupComplete / 7 * 100)}%`, height: '100%', background: '#08C076', transition: 'width 300ms ease' }} />
                         </Box>
 
                         {/* Step grid */}
@@ -931,7 +933,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                             {SETUP_STEP_DEFS.map((def, i) => {
                                 const done = setupSteps[i];
                                 const isPrimary = !done && setupSteps.slice(0, i).every(Boolean);
-                                const isBoardStep = i === 1;
+                                const isBoardStep = i === 3;
                                 const isClickable = !done && (def.navPath || isBoardStep);
                                 return (
                                     <Box key={i}
