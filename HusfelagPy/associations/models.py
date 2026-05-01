@@ -149,9 +149,11 @@ class BankAccount(models.Model):
 
 
 class TransactionStatus(models.TextChoices):
-    IMPORTED    = "IMPORTED",   "Innflutt"
-    CATEGORISED = "CATEGORISED", "Flokkað"
-    RECONCILED  = "RECONCILED", "Jafnað"
+    IMPORTED          = "IMPORTED",          "Innflutt"
+    CATEGORISED       = "CATEGORISED",       "Flokkað"
+    RECONCILED        = "RECONCILED",        "Jafnað"
+    TRANSFER          = "TRANSFER",          "Millifærsla"
+    PENDING_TRANSFER  = "PENDING_TRANSFER",  "Bíður millifærslu"
 
 
 class TransactionSource(models.TextChoices):
@@ -164,8 +166,9 @@ class Transaction(models.Model):
     date         = models.DateField()
     amount       = models.DecimalField(max_digits=14, decimal_places=2)  # positive=in, negative=out
     description  = models.CharField(max_length=500)
-    reference    = models.CharField(max_length=255, blank=True)
-    payer_kennitala = models.CharField(max_length=20, blank=True, default="")
+    reference        = models.CharField(max_length=255, blank=True)
+    transaction_type = models.CharField(max_length=100, blank=True, default="")
+    payer_kennitala  = models.CharField(max_length=20, blank=True, default="")
     category     = models.ForeignKey(
         Category, null=True, blank=True,
         on_delete=models.SET_NULL, related_name="transactions",
@@ -187,6 +190,29 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.date} {self.description}: {self.amount}"
+
+
+class InterAccountTransfer(models.Model):
+    """Records a reconciled inter-account transfer between two bank accounts
+    belonging to the same association. Links the inbound (+) and outbound (-)
+    transaction legs. GL entry: DR inbound.bank_account.asset_account /
+    CR outbound.bank_account.asset_account."""
+    association          = models.ForeignKey(Association, on_delete=models.CASCADE, related_name="transfers")
+    date                 = models.DateField()
+    amount               = models.DecimalField(max_digits=14, decimal_places=2)
+    inbound_transaction  = models.OneToOneField(
+        Transaction, on_delete=models.CASCADE, related_name="transfer_as_inbound",
+    )
+    outbound_transaction = models.OneToOneField(
+        Transaction, on_delete=models.CASCADE, related_name="transfer_as_outbound",
+    )
+    created_at           = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "associations_interaccounttransfer"
+
+    def __str__(self):
+        return f"{self.date} transfer {self.amount} ({self.association})"
 
 
 class Budget(models.Model):

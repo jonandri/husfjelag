@@ -95,11 +95,12 @@ def parse_arion(file_obj, ext) -> dict:
         row = dict(zip(headers, raw_row))
         try:
             result.append({
-                'date':            parse_icelandic_date(row['Dagsetning']),
-                'amount':          parse_icelandic_amount(row['Upphæð']),
-                'description':     str(row.get('Skýring') or row.get('Texti') or '').strip(),
-                'reference':       str(row.get('Seðilnúmer') or '').strip(),
-                'payer_kennitala': str(row.get('Kennitala viðtakanda eða greiðanda') or '').strip().replace('-', ''),
+                'date':             parse_icelandic_date(row['Dagsetning']),
+                'amount':           parse_icelandic_amount(row['Upphæð']),
+                'description':      str(row.get('Skýring') or row.get('Texti') or '').strip(),
+                'reference':        str(row.get('Seðilnúmer') or '').strip(),
+                'payer_kennitala':  str(row.get('Kennitala viðtakanda eða greiðanda') or '').strip().replace('-', ''),
+                'transaction_type': str(row.get('Textafærslur') or '').strip(),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -131,12 +132,15 @@ def parse_landsbankinn(file_obj, ext) -> dict:
         try:
             texti = str(row.get('Texti') or '').strip()
             description = texti if texti else str(row.get('Skýring greiðslu') or '').strip()
+            # Prefer Tilvísun (counterparty reference) over Tnr/Seðilnr. (transaction number)
+            reference = str(row.get('Tilvísun') or row.get('Tnr/Seðilnr.') or '').strip()
             result.append({
-                'date':            parse_icelandic_date(row['Dags']),
-                'amount':          parse_icelandic_amount(row['Upphæð']),
-                'description':     description,
-                'reference':       str(row.get('Tnr/Seðilnr.') or '').strip(),
-                'payer_kennitala': str(row.get('Kennitala') or '').strip().replace('-', ''),
+                'date':             parse_icelandic_date(row['Dags']),
+                'amount':           parse_icelandic_amount(row['Upphæð']),
+                'description':      description,
+                'reference':        reference,
+                'payer_kennitala':  str(row.get('Kennitala') or '').strip().replace('-', ''),
+                'transaction_type': str(row.get('Textafærslur') or '').strip(),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
@@ -186,11 +190,12 @@ def parse_islandsbanki(file_obj, ext) -> dict:
         row = dict(zip(headers, raw_row))
         try:
             result.append({
-                'date':            parse_icelandic_date(row[date_col]),
-                'amount':          parse_icelandic_amount(row[amount_col]),
-                'description':     str(row.get(description_col) or '').strip(),
-                'reference':       str(row.get('Tilvísun') or '').strip(),
-                'payer_kennitala': str(row.get(kennitala_col) or '').strip().replace('-', '') if kennitala_col else '',
+                'date':             parse_icelandic_date(row[date_col]),
+                'amount':           parse_icelandic_amount(row[amount_col]),
+                'description':      str(row.get(description_col) or '').strip(),
+                'reference':        str(row.get('Tilvísun') or '').strip(),
+                'payer_kennitala':  str(row.get(kennitala_col) or '').strip().replace('-', '') if kennitala_col else '',
+                'transaction_type': str(row.get('Textafærslur') or row.get('Tegund') or '').strip(),
             })
         except (KeyError, ValueError, InvalidOperation):
             continue
