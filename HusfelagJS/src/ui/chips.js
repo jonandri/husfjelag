@@ -5,7 +5,9 @@ import { Box } from '@mui/material';
 const CHIP_STYLES = {
     CATEGORISED: { bg: '#f3f4f6', color: '#555',    label: 'Flokkað'   },
     IMPORTED:    { bg: '#fff8e1', color: '#e65100',  label: 'Óflokkað'  },
-    RECONCILED:  { bg: '#e8f4fd', color: '#1565c0',  label: 'Jafnað'    },
+    RECONCILED:       { bg: '#e8f4fd', color: '#1565c0',  label: 'Jafnað'            },
+    TRANSFER:         { bg: '#ede7f6', color: '#4527a0',  label: 'Millifærsla'       },
+    PENDING_TRANSFER: { bg: '#f3e5f5', color: '#6a1b9a',  label: 'Bíður millifærslu' },
     PAID:        { bg: '#e8f5e9', color: '#2e7d32',  label: 'Greitt'    },
     UNPAID:      { bg: '#fff3e0', color: '#e65100',  label: 'Ógreitt'   },
     CLAIM_UNPAID:    { bg: '#fff8e1', color: '#f57c00',  label: 'Sent — Ógreitt' },

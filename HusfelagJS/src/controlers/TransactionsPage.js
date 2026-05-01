@@ -184,6 +184,8 @@ function TransactionsPage() {
                                 <MenuItem value="IMPORTED">Óflokkað</MenuItem>
                                 <MenuItem value="CATEGORISED">Flokkað</MenuItem>
                                 <MenuItem value="RECONCILED">Jafnað</MenuItem>
+                                <MenuItem value="TRANSFER">Millifærsla</MenuItem>
+                                <MenuItem value="PENDING_TRANSFER">Bíður millifærslu</MenuItem>
                             </Select>
                         </FormControl>
                     </Box>
@@ -271,7 +273,9 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
                 <TableCell>
                     {tx.category
                         ? <LabelChip label={tx.category.name} />
-                        : <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Óflokkað</Typography>}
+                        : (tx.status === 'TRANSFER' || tx.status === 'PENDING_TRANSFER')
+                            ? <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Millifært</Typography>
+                            : <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>Óflokkað</Typography>}
                 </TableCell>
                 <AmountCell value={tx.amount} />
                 <TableCell>
@@ -301,6 +305,7 @@ function TransactionRow({ transaction: tx, userId, assocParam, categories, onUpd
 function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, categories, onSaved }) {
     const [categoryId, setCategoryId] = useState(tx.category?.id || '');
     const [saving, setSaving] = useState(false);
+    const [clearing, setClearing] = useState(false);
     const [error, setError] = useState('');
 
     React.useEffect(() => {
@@ -323,6 +328,24 @@ function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, 
             setError('Tenging við þjón mistókst.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleClear = async () => {
+        setError('');
+        setClearing(true);
+        try {
+            const resp = await apiFetch(`${API_URL}/Transaction/categorise/${tx.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: userId, category_id: null }),
+            });
+            if (resp.ok) onSaved();
+            else { const data = await resp.json(); setError(data.detail || 'Villa við hreinsun.'); }
+        } catch {
+            setError('Tenging við þjón mistókst.');
+        } finally {
+            setClearing(false);
         }
     };
 
@@ -350,6 +373,18 @@ function CategoriseDialog({ open, onClose, transaction: tx, userId, assocParam, 
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Box sx={{ flex: 1 }}>
+                    {tx.category && (
+                        <Button
+                            size="small"
+                            disabled={clearing || saving}
+                            onClick={handleClear}
+                            sx={{ color: 'error.main', textTransform: 'none', p: 0, minWidth: 0, '&:hover': { background: 'none', textDecoration: 'underline' } }}
+                        >
+                            {clearing ? <CircularProgress size={14} color="inherit" /> : 'Hreinsa flokkun'}
+                        </Button>
+                    )}
+                </Box>
                 <Button sx={ghostButtonSx} onClick={onClose}>Hætta við</Button>
                 <Button
                     variant="contained" sx={primaryButtonSx}

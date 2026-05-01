@@ -1034,12 +1034,9 @@ class TransactionView(APIView):
         return Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
 
     def patch(self, request, transaction_id):
-        """PATCH /Transaction/categorise/{id} — assign category. Body: {user_id, category_id}."""
+        """PATCH /Transaction/categorise/{id} — assign or clear category. Body: {user_id, category_id}."""
         user_id = request.data.get("user_id")
-        category_id = request.data.get("category_id")
-
-        if not category_id:
-            return Response({"detail": "category_id er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+        category_id = request.data.get("category_id") or None
 
         try:
             tx = Transaction.objects.select_related("bank_account").get(id=transaction_id)
@@ -1053,13 +1050,17 @@ class TransactionView(APIView):
         if err:
             return err
 
-        try:
-            category = Category.objects.get(id=category_id, deleted=False)
-        except Category.DoesNotExist:
-            return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+        if category_id is None:
+            tx.category = None
+            tx.status = TransactionStatus.IMPORTED
+        else:
+            try:
+                category = Category.objects.get(id=category_id, deleted=False)
+            except Category.DoesNotExist:
+                return Response({"detail": "Flokkur fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+            tx.category = category
+            tx.status = TransactionStatus.CATEGORISED
 
-        tx.category = category
-        tx.status = TransactionStatus.CATEGORISED
         tx.save(update_fields=["category", "status"])
         tx.refresh_from_db()
         return Response(TransactionSerializer(tx).data)
@@ -1276,21 +1277,39 @@ class ImportConfirmView(APIView):
             except (KeyError, ValueError, TypeError):
                 continue
 
-            cat = categorise_row(description, rules, history)
-            tx_status = TransactionStatus.CATEGORISED if cat else TransactionStatus.IMPORTED
             transactions.append(Transaction(
                 bank_account=bank_account,
                 date=date,
                 amount=amount,
                 description=description,
                 reference=str(row.get("reference") or ""),
+                transaction_type=str(row.get("transaction_type") or ""),
                 payer_kennitala=str(row.get("payer_kennitala") or ""),
-                category=cat,
-                status=tx_status,
+                status=TransactionStatus.IMPORTED,
             ))
 
         created_transactions = Transaction.objects.bulk_create(transactions)
-        _auto_match_collections(created_transactions, association)
+
+        # 1. Detect inter-account transfers before any categorisation.
+        from .transfer_detector import detect_transfers
+        detect_transfers(created_transactions, association)
+
+        # 2. Auto-match collection payments (income from apartment owners).
+        non_transfer = [t for t in created_transactions if t.status == TransactionStatus.IMPORTED]
+        _auto_match_collections(non_transfer, association)
+
+        # 3. Categorise whatever is still IMPORTED after the above two steps.
+        to_update = []
+        for txn in created_transactions:
+            if txn.status == TransactionStatus.IMPORTED:
+                cat = categorise_row(txn.description, rules, history)
+                if cat:
+                    txn.category = cat
+                    txn.status = TransactionStatus.CATEGORISED
+                    to_update.append(txn)
+        if to_update:
+            Transaction.objects.bulk_update(to_update, ["category", "status"])
+
         return Response({"created": len(transactions)}, status=status.HTTP_201_CREATED)
 
 
@@ -1321,6 +1340,12 @@ class ImportRecategoriseView(APIView):
         if not txs:
             return Response({"categorised": 0, "total": 0})
 
+        from .transfer_detector import detect_transfers
+        detect_transfers(txs, association)
+
+        # Re-query: only run classifier on transactions still IMPORTED after transfer detection.
+        remaining = [tx for tx in txs if tx.status == TransactionStatus.IMPORTED]
+
         try:
             rules, history = build_categorisation_context(association)
         except Exception:
@@ -1330,7 +1355,7 @@ class ImportRecategoriseView(APIView):
         owner_kennitala = _owner_kennitala_set(association)
 
         to_update = []
-        for tx in txs:
+        for tx in remaining:
             cat = categorise_row(str(tx.description or ""), rules, history)
             if not cat and husgjold_cat and tx.payer_kennitala and tx.payer_kennitala in owner_kennitala and tx.amount > 0:
                 cat = husgjold_cat
@@ -1767,7 +1792,11 @@ class CollectionView(APIView):
             date__year=year,
             date__month=month,
             amount__gt=0,
-        ).exclude(status=TransactionStatus.RECONCILED).filter(collection_payment__isnull=True)
+        ).exclude(status__in=[
+            TransactionStatus.RECONCILED,
+            TransactionStatus.TRANSFER,
+            TransactionStatus.PENDING_TRANSFER,
+        ]).filter(collection_payment__isnull=True)
 
         unmatched = [
             {
@@ -2084,7 +2113,11 @@ class CollectionCandidatesView(APIView):
                 payer_kennitala=col.payer.kennitala,
                 amount__gt=0,
             )
-            .exclude(status=TransactionStatus.RECONCILED)
+            .exclude(status__in=[
+                TransactionStatus.RECONCILED,
+                TransactionStatus.TRANSFER,
+                TransactionStatus.PENDING_TRANSFER,
+            ])
             .exclude(collection_payment__isnull=False)
             .select_related("bank_account")
             .order_by("-date")
@@ -2554,6 +2587,8 @@ def _build_annual_statement_data(association, year):
     txn_qs = Transaction.objects.filter(
         bank_account__association=association,
         date__year=year,
+    ).exclude(
+        status__in=[TransactionStatus.TRANSFER, TransactionStatus.PENDING_TRANSFER],
     ).select_related("category__income_account", "category__expense_account")
 
     income_by_key = {}   # (number, name) -> Decimal

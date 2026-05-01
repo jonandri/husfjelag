@@ -1067,6 +1067,7 @@ const IS_MONTHS = ['janúar','febrúar','mars','apríl','maí','júní','júlí'
 function AthugasemdarPanel({ collections, userId, assocParam }) {
     const [unclassifiedCount, setUnclassifiedCount] = React.useState(0);
     const [missingMonths, setMissingMonths] = React.useState([]);
+    const [overdueCount, setOverdueCount] = React.useState(0);
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth() + 1;
@@ -1084,13 +1085,22 @@ function AthugasemdarPanel({ collections, userId, assocParam }) {
                 const qs = assocParam ? `${assocParam}&month=${m}&year=${year}` : `?month=${m}&year=${year}`;
                 return apiFetch(`${API_URL}/Collection/${userId}${qs}`)
                     .then(r => r.ok ? r.json() : { rows: [] })
-                    .then(data => ({ month: m, has: (data?.rows?.length ?? 0) > 0 }));
+                    .then(data => {
+                        const rows = data?.rows ?? [];
+                        const pending = rows.filter(r => r.status === 'PENDING' || r.status === 'UNPAID').length;
+                        return { month: m, has: rows.length > 0, pendingCount: pending };
+                    });
             })
-        ).then(results => setMissingMonths(results.filter(r => !r.has).map(r => r.month)))
-         .catch(() => {});
+        ).then(results => {
+            setMissingMonths(results.filter(r => !r.has).map(r => r.month));
+            const overdue = results
+                .filter(r => r.month < month && r.has)
+                .reduce((sum, r) => sum + r.pendingCount, 0);
+            setOverdueCount(overdue);
+        }).catch(() => {});
     }, [userId, assocParam, year, month]);
 
-    const pendingCount = collections.filter(r => r.status === 'PENDING' || r.status === 'UNPAID').length;
+    const currentUnpaid = collections.filter(r => r.status === 'PENDING' || r.status === 'UNPAID').length;
     const currentMonthMissing = missingMonths.includes(month);
     const prevMissingMonths = missingMonths.filter(m => m !== month);
 
@@ -1113,10 +1123,18 @@ function AthugasemdarPanel({ collections, userId, assocParam }) {
         });
     }
 
-    if (pendingCount > 0) {
+    if (overdueCount > 0) {
+        notifications.push({
+            icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#c62828', mt: '1px' }} />,
+            text: `${overdueCount} íbúð${overdueCount === 1 ? '' : 'ir'} í vanskilum`,
+            cta: { label: 'Senda áminningar →', href: '/innheimta' },
+        });
+    }
+
+    if (currentUnpaid > 0) {
         notifications.push({
             icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#e65100', mt: '1px' }} />,
-            text: `${pendingCount} íbúð${pendingCount === 1 ? '' : 'ir'} í vanskilum`,
+            text: `${currentUnpaid} íbúð${currentUnpaid === 1 ? '' : 'ir'} ógreiddar í ${IS_MONTHS[month - 1]}`,
             cta: { label: 'Senda áminningar →', href: '/innheimta' },
         });
     }
