@@ -30,6 +30,27 @@ class User(models.Model):
         return f"{self.name} ({self.kennitala})"
 
 
+class AuditLog(models.Model):
+    ACTIONS = [
+        ('login', 'Login'),
+        ('chair_changed', 'Chair changed'),
+        ('cfo_changed', 'CFO changed'),
+        ('association_new', 'Association created'),
+    ]
+
+    created_at = models.DateTimeField(default=timezone.now)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='audit_logs')
+    action = models.CharField(max_length=32, choices=ACTIONS)
+    value = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        db_table = 'users_auditlog'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.action} — user_id={self.user_id} at {self.created_at}"
+
+
 class TermsAcceptance(models.Model):
     """Audit log of user terms acceptance. Never updated — only created."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='terms_acceptance')

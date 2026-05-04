@@ -24,6 +24,7 @@ from .serializers import (
     CategorySerializer, BudgetSerializer, BudgetItemSerializer, AssociationAccessSerializer,
     AccountingKeySerializer, BankAccountSerializer, TransactionSerializer,
 )
+from users.models import AuditLog
 from .scraper import lookup_association, scrape_hms_apartments, HmsScrapeError
 from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entity_for_association
 from .importers import BANK_PARSERS, detect_bank, detect_duplicates
@@ -206,6 +207,7 @@ class AssociationView(APIView):
                 return Response({"detail": "Þetta húsfélag er þegar skráð í kerfið."}, status=status.HTTP_409_CONFLICT)
             raise
 
+        AuditLog.objects.create(user=user, action='association_new', value=association.ssn)
         return Response(AssociationSerializer(association).data, status=status.HTTP_201_CREATED)
 
 
@@ -254,10 +256,12 @@ class AssociationRoleView(APIView):
             err = _assign_role(chair_kt, AssociationRole.CHAIR)
             if err:
                 return err
+            AuditLog.objects.create(user=request.user, action='chair_changed', value=chair_kt)
         if cfo_kt:
             err = _assign_role(cfo_kt, AssociationRole.CFO)
             if err:
                 return err
+            AuditLog.objects.create(user=request.user, action='cfo_changed', value=cfo_kt)
 
         association.board_changed_at = timezone.now()
         association.board_changed_by = request.user

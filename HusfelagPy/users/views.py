@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
-from .models import User, TermsAcceptance
+from .models import User, TermsAcceptance, AuditLog
 from .serializers import UserSerializer
 
 
@@ -190,6 +190,7 @@ class OIDCCallbackView(APIView):
                 user.phone = phone
                 updated_fields.append("phone")
         user.save(update_fields=updated_fields)
+        AuditLog.objects.create(user=user, action='login')
 
         jwt_token = create_access_token(user.id)
 
