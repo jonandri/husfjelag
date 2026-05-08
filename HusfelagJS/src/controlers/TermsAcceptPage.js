@@ -109,7 +109,7 @@ export default function TermsAcceptPage() {
                             Þetta er stutta samantektin á skilmálum.
                         </Typography>
                         <Typography sx={{ fontSize: 12.5, color: '#555' }}>
-                            Ef þú ert í stuði, eða hefur spurninga, lestu þá endilega {' '}
+                            Ef þú ert í stuði, eða langar að vita meira, lestu þá endilega {' '}
                             <Link to="/skilmalar" target="_blank" style={{ color: '#1D366F', fontWeight: 600 }}>
                                 alla notendaskilmálana.
                             </Link>

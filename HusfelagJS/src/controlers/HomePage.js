@@ -205,7 +205,7 @@ function Stories() {
         {
             label: 'Innheimta',
             title: 'Mánaðarleg innheimta á húsgjöldum',
-            body: 'Mánaðarleg innheimta er reiknuð út frá áætlun á hverja íbúð — kerfið sér um rest. Sjáðu hverjir hafa greitt og hverjir eru í vanskilum.',
+            body: 'Mánaðarleg innheimta er reiknuð út frá áætlun á hverja íbúð — kerfið sér um rest. Sjáðu hverjir hafa greitt, hvað er útistandani og hverjir eru í vanskilum.',
             img: '/images/collection.png',
             imgAlt: 'Innheimtukröfur með stöðu hverrar íbúðar',
             reverse: true,
@@ -213,7 +213,7 @@ function Stories() {
         {
             label: 'Yfirlit',
             title: 'Fjárhagsleg yfirsýn yfir allt árið',
-            body: 'Sjálfvirkar skýrslur sýna tekjur og gjöld eftir mánuðum og flokkum. Alltaf uppfært. Alltaf aðgengilegt.',
+            body: 'Sjálfvirkar skýrslur sýna tekjur og gjöld eftir mánuðum og flokkum. Alltaf uppfært svo þú hafir góða yfirsýn yfir reksturinn. Alltaf aðgengilegt.',
             img: '/images/overview.png',
             imgAlt: 'Mánaðarlegar og árlegar fjárhagsskýrslur',
             reverse: false,
@@ -233,13 +233,13 @@ function Stories() {
 
 function FeatureGrid() {
     const features = [
-        { icon: BusinessOutlinedIcon,        title: 'Húsfélag',          desc: 'Skrá og stjórna upplýsingum um húsfélagið, formann og gjaldkera.' },
-        { icon: HomeOutlinedIcon,            title: 'Íbúðir',            desc: 'Skrá íbúðir, eignarhlutfall og greiðsluskyldu hverrar einingar.' },
-        { icon: GroupOutlinedIcon,           title: 'Eigendur',          desc: 'Tengja eigendur og greiðendur við íbúðir, með öruggri aðgangsstýringu.' },
-        { icon: ReceiptLongOutlinedIcon,     title: 'Innheimta',         desc: 'Mánaðarleg innheimta á húsgjöldum með yfirlit yfir stöðu hverrar íbúðar.' },
+        { icon: BusinessOutlinedIcon,        title: 'Húsfélag',          desc: 'Skrá upplýsingar um húsfélagið, formann og gjaldkera, sem hafa aðgang til að framkvæma aðgerðir.' },
+        { icon: HomeOutlinedIcon,            title: 'Íbúðir',            desc: 'Skrá íbúðir, eignarhlutfall og hlutfall kostnaðar sem fellur á hverja íbúð.' },
+        { icon: GroupOutlinedIcon,           title: 'Eigendur',          desc: 'Tengja eigendur og greiðendur við íbúðir - örugg rafræn auðkenning fyrir aðgang að kerfinu.' },
         { icon: AssessmentOutlinedIcon,      title: 'Áætlun',            desc: 'Árleg fjárhagsáætlun eftir flokkum með samanburði við raunveruleg útgjöld.' },
-        { icon: CreditCardOutlinedIcon,      title: 'Færslur',           desc: 'Flytja inn bankafærslur og flokka þær sjálfvirkt með á útgjaldaflokka.' },
-        { icon: BarChartOutlinedIcon,        title: 'Yfirlit',           desc: 'Mánaðarlegar og árlegar fjárhagsskýrslur — alltaf uppfærðar.' },
+        { icon: ReceiptLongOutlinedIcon,     title: 'Innheimta',         desc: 'Mánaðarleg innheimta á húsgjöldum með yfirlit yfir stöðu hverrar íbúðar.' },        
+        { icon: CreditCardOutlinedIcon,      title: 'Færslur',           desc: 'Flytja inn bankafærslur og flokka þær sjálfvirkt með á útgjaldaflokka til að sjá raunverulegan kostnað.' },
+        { icon: BarChartOutlinedIcon,        title: 'Yfirlit',           desc: 'Fjárhagslegt yfirlit yfir rekstur húsfélagsins aðgengilegt fyrir alla eigendur íbúða.' },
         { icon: AccountBalanceOutlinedIcon,  title: 'Bankareikningar',   desc: 'Fylgjast með bankareikningum húsfélagsins, tekjum og útgjöldum félagsins.' },
         { icon: LabelOutlinedIcon,           title: 'Flokkunarreglur',   desc: 'Sjálfvirk flokkun færslna af bankareikningnum á útgjaldaflokka og bókhaldslykla — sparar tíma.' },
     ];
@@ -324,9 +324,9 @@ function FaqItem({ question, answer }) {
 function Pitch() {
     const points = [
         { kw: 'Sjálfvirkni',           txt: 'Settu upp reksturinn einu sinni — kerfið sér um að reikna greiðslur í hússjóðinn, innheimtu og bókhaldið sjálfkrafa.' },
-        { kw: '24/7 aðgangur',         txt: 'Eigendur íbúða fá aðgang að einföldu yfirliti um húsfélagið og ársskýrslu fyrir aðalfund.' },
+        { kw: 'Aðgangur fyrir alla',   txt: 'Eigendur íbúða fá aðgang að einföldu yfirliti um húsfélagið og ársskýrslu fyrir aðalfund. Formaður og gjaldkeri hafa meiri aðgang og stýra húsfélaginu þínu.' },
         { kw: 'Fullt af sparnaði',     txt: 'Húsfjelagið er miklu ódýrara en hefðbundin húsfélagaþjónusta — og krefst engrar sérþekkingar.' },
-        { kw: 'Einfaldleiki',          txt: 'Ef eitthvað þarfnast athygli færðu tilkynningu í tölvupósti — þú þarft ekki að fylgjast stöðugt með.' },
+        { kw: 'Einfaldleiki',          txt: 'Ef eitthvað þarfnast athygli færðu tilkynningu frá kerfinu — þú þarft ekki að fylgjast stöðugt með.' },
     ];
 
     return (
@@ -359,7 +359,7 @@ function Pitch() {
                     fontSize: { xs: 15, md: 17 }, color: '#666',
                     mb: { xs: 5, md: 7 }, maxWidth: 540, lineHeight: 1.6,
                 }}>
-                    Einfaldaðu reksturinn — láttu kerfið sjá um restina.
+                    Einfaldaðu reksturinn — ekki eyða óþarfa tíma í sjálfboðavinnu.
                 </Typography>
 
                 {/* 4-point grid */}
@@ -396,9 +396,9 @@ function Pitch() {
 
 function Pricing({ onSignup }) {
     const perks = [
-        { title: 'Frítt í 30 daga', sub: 'Ekkert kreditkort þarf við skráningu' },
-        { title: '50% kynningarafsláttur', sub: 'Fyrstu 6 mánuðina eftir prufutíma' },
-        { title: 'Enginn uppsagnarfrestur', sub: 'Segðu upp hvenær sem er innan kerfisins' },
+        { title: 'Frítt í 30 daga', sub: 'Ekkert kreditkort þarf við skráningu - reikningur kemur í netbanka' },
+        { title: '50% kynningarafsláttur', sub: 'Fyrstu 6 mánuðina eftir prufutímann' },
+        { title: 'Enginn uppsagnarfrestur', sub: 'Segðu upp hvenær sem er, engin óþarfa binding' },
         { title: 'Fullur aðgangur frá fyrsta degi', sub: 'Allir eiginleikar í boði strax' },
     ];
 
@@ -492,7 +492,7 @@ function Faq() {
         },
         {
             question: 'Þarf ég að setja upp eitthvað til að byrja?',
-            answer: 'Já, þú skráir þig inn, stofnar húsfélagið þitt með kennitölu ásamt upplýsingum um formann og byrjar að nota kerfið stuttu síðar þegar við höfum staðfest húsfélagið.',
+            answer: 'Þú skráir þig inn, stofnar húsfélagið þitt með kennitölu ásamt upplýsingum um formann og gjaldkera. Svo byrjar þú að nota kerfið stuttu síðar þegar við höfum staðfest að þú ert í forsvari fyrir húsfélagið.',
         },
         {
             question: 'Get ég flutt inn gögn frá banka?',
@@ -506,6 +506,10 @@ function Faq() {
             question: 'Er hægt að hafa fleiri en einn notanda?',
             answer: 'Já. Hægt er að veita fleiri notendum aðgang að húsfélaginu með mismunandi réttindum — stjórnanda, gjaldkera eða venjulegum notanda.',
         },
+        {
+            question: 'Sjáið þið um húsfundi?',
+            answer: 'Nei, húsfjelagið er hugbúnaður sem einfaldar þér reksturinn. Kerfið getur sent fundarboð á alla eigendur íbúða, en við mætum ekki á staðinn til að sjá um húsfundinn.',
+        },        
         {
             question: 'Eru gögnin mín örugg?',
             answer: 'Við leggjum mikla áherslu á öryggi og persónuvernd. Við tryggjum að gögn séu geymd innan Evrópu og í samræmi við íslenskar og evrópskar reglur (GDPR).',
