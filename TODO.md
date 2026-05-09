@@ -31,6 +31,16 @@ Outstanding tasks to revisit. Remove items when completed.
 
 ---
 
+## Help & Onboarding
+
+- [ ] **Rewrite all help drawer content to be more human and practical**
+  The current help text in `HusfelagJS/src/ui/helpContent.js` is technically correct but reads like documentation. Rewrite each entry to explain _how to think about_ the feature in plain language — from the perspective of a building association chair who has never used software like this before.
+  - Explain the mental model first (e.g. "think of the budget as an annual plan you vote on at the AGM"), then the practical steps
+  - All 9 keys need updating: `husfelag`, `ibudir`, `eigendur`, `aaetlun`, `aaetlun-wizard`, `innheimta`, `innheimta-tengja`, `faerslur`, `yfirlit`
+  - Tone: conversational Icelandic, like a knowledgeable colleague explaining over coffee — not a manual
+
+---
+
 ## Backend
 
 ### Owner / User data

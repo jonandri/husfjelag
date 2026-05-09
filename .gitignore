@@ -24,3 +24,4 @@ HusfelagJS/build/
 # Git worktrees
 .worktrees/
 ca-certificate.crt
+.env
