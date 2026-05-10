@@ -926,6 +926,7 @@ const SETUP_STEP_DEFS = [
 
 function UppsetningView({ association, setupSteps, setupComplete, owners, userId, assocParam, onNavigate, onAssociationUpdated }) {
     const [boardDialogOpen, setBoardDialogOpen] = React.useState(false);
+    const { openHelp } = useHelp();
 
     const firstIncomplete = setupSteps.findIndex(done => !done);
     const nextPath = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navPath : null;
@@ -954,7 +955,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                         <Typography variant="h5">{association.name}</Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{subtitle}</Typography>
                     </Box>
-                    <Button sx={ghostButtonSx} startIcon={<HelpOutlineIcon sx={{ fontSize: 17 }} />}>
+                    <Button sx={ghostButtonSx} startIcon={<HelpOutlineIcon sx={{ fontSize: 17 }} />} onClick={() => openHelp('uppsetning')}>
                         Leiðbeiningar
                     </Button>
                 </Box>
@@ -974,7 +975,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                     </Box>
                                 </Typography>
                                 <Typography sx={{ fontSize: 13.5, color: '#555' }}>
-                                    Þú þarft að klára þessi 6 skref áður en kerfið getur sent út fyrsta gjaldseðilinn.
+                                    Þú þarft að klára þessi 6 skref til að kerfið nái að halda utan um rekstur húsfélagsins þíns og auðvelda þér sjálfboðavinnuna.
                                 </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'right', flexShrink: 0, ml: 4 }}>

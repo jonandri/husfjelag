@@ -1,6 +1,37 @@
 // src/ui/helpContent.js
 
 export const HELP = {
+    uppsetning: {
+        title: 'Uppsetning húsfélags',
+        intro: 'Þessi leiðarvísir hjálpar þér að koma húsfélaginu í gang í sex skrefum. Eftir að öll skref eru lokið sér kerfið sjálfkrafa um innheimtu, afstemmingu bankafærslna og ársskýrslu.',
+        items: [
+            {
+                heading: '1. Stofna húsfélag',
+                body: 'Þú þarft kennitölu húsfélagsins. Við sækjum nafn, heimilisfang og þinglýstar upplýsingar sjálfkrafa úr Þjóðskrá. Þetta skref er þegar lokið þegar þú ert kominn hingað.',
+            },
+            {
+                heading: '2. Skrá íbúðir',
+                body: 'Skráðu allar íbúðir húsfélagsins ásamt eignarhlutfalli hverrar íbúðar. Eignarhlutföllin ráðast af eignaskiptasamningi — þetta skjal fæst hjá sýslumanni eða í Þinglýsingarbók. Heildarhlutfall allra íbúða þarf að vera nákvæmlega 100% áður en hægt er að búa til innheimtu.',
+            },
+            {
+                heading: '3. Skrá eigendur',
+                body: 'Skráðu einn eiganda á hverja íbúð sem greiðanda. Greiðandinn fær innheimtukröfurnar á hverjum mánuði. Fleiri eigendur geta verið tengdir sömu íbúð en einungis einn er greiðandi í einu. Til að skrá eiganda þarftu kennitölu hans — nafn sækjum við sjálfkrafa úr Þjóðskrá.',
+            },
+            {
+                heading: '4. Bæta við stjórn',
+                body: 'Skráðu formann og gjaldkera húsfélagsins. Þessir aðilar fá fullan aðgang að stjórnunarverkfærum: áætlanagerð, innheimtu, bankatenginingu og ársskýrslu. Formaður og gjaldkeri þurfa að vera skráðir eigendur íbúðar í húsfélaginu.',
+            },
+            {
+                heading: '5. Setja upp áætlun',
+                body: 'Búðu til árslega fjárhagsáætlun. Áætlunin sundurliðar áætlaðan kostnað í flokka (hitaveita, rafmagn, tryggingar, framkvæmdasjóður o.fl.) og reiknar sjálfkrafa mánaðarlega húsgjaldakröfu hverrar íbúðar miðað við eignarhlutfall. Þegar áætlun er virkjuð er hægt að hefja innheimtu.',
+            },
+            {
+                heading: '6. Tengja banka',
+                body: 'Tengdu bankareikning húsfélagsins til að fá bankafærslur sjálfkrafa inn í kerfið. Kerfið reynir þá að para greiðslur við innheimtukröfur og merkja þær greiddar. Við styðjum Landsbanka, Íslandsbanka og Arion banka.',
+            },
+        ],
+    },
+
     husfelag: {
         title: 'Húsfélag',
         intro: 'Húsfélag er lögaðili sem annast rekstur fjöleignarhúss. Hér eru skráðar grunnupplýsingar um félagið.',
