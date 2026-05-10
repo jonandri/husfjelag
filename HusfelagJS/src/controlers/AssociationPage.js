@@ -21,6 +21,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -915,12 +916,12 @@ const NAVY = '#1D366F';
 const BORDER = '#e8e8e8';
 
 const SETUP_STEP_DEFS = [
-    { icon: <BusinessIcon sx={{ fontSize: 18 }} />,       title: 'Stofna húsfélag',   sub: 'Grunnupplýsingar um Heiti, kennitala, heimilisfang húsfélagins',                        time: '~2 mín.', navPath: null },
-    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir & eignarhlutföll stýra hvernig kostnaði er skipt á íbúðir',                               time: '~15 mín.', navPath: '/ibudir', navState: { openAdd: true } },
-    { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,      title: 'Skrá eigendur',     sub: 'Eigendur íbúða hafa aðgang að yfirliti húsfélagsins og einn eigandi er greiðandi fyrir íbúð',                                        time: '~10 mín.', navPath: '/eigendur' },
-    { icon: <GroupIcon sx={{ fontSize: 18 }} />,          title: 'Bæta við stjórn',   sub: 'Formaður og gjaldkeri stýra ',                                 time: '~3 mín.', navPath: null },
-    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />,    title: 'Setja upp áætlun',  sub: 'Setja upp áætlun fyrir húsfélagið og hefja innheimtu',  time: '~10 mín.', navPath: '/aaetlun' },
-    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',                                  time: '~10 mín.', navPath: '/bank-settings' },
+    { icon: <BusinessIcon sx={{ fontSize: 18 }} />,       title: 'Stofna húsfélag',   sub: 'Grunnupplýsingar um Heiti, kennitala, heimilisfang húsfélagins',                                time: '~2 mín.', navPath: null },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir & eignarhlutföll stýra hvernig kostnaði er skipt á íbúðir',                              time: '~15 mín.', navPath: '/ibudir', navState: { openAdd: true } },
+    { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,      title: 'Skrá eigendur',     sub: 'Eigendur íbúða hafa aðgang að yfirliti húsfélagsins og einn eigandi er greiðandi fyrir íbúð',   time: '~10 mín.', navPath: '/eigendur' },
+    { icon: <GroupIcon sx={{ fontSize: 18 }} />,          title: 'Bæta við stjórn',   sub: 'Formaður og gjaldkeri stýra áætlanagerð og innheimtu, ásamt öðrum aðgerðum í kerfinu',          time: '~3 mín.', navPath: null },
+    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />,    title: 'Setja upp áætlun',  sub: 'Setja upp áætlun fyrir húsfélagið og hefja innheimtu',                                          time: '~10 mín.', navPath: '/aaetlun' },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sækir færslur af bankareikningum og sendir inn innheimtukröfur fyrir hússjóðinn',               time: '~10 mín.', navPath: '/bank-settings' },
 ];
 
 function UppsetningView({ association, setupSteps, setupComplete, owners, userId, assocParam, onNavigate, onAssociationUpdated }) {
@@ -1020,9 +1021,12 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                             {def.sub}
                                         </Typography>
                                         {!done && (
-                                            <Typography sx={{ fontSize: 11, color: '#aaa', mt: 0.75, textAlign: 'right' }}>
-                                                {def.time}
-                                            </Typography>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.4, mt: 0.75 }}>
+                                                <AccessTimeIcon sx={{ fontSize: 11, color: '#bbb' }} />
+                                                <Typography sx={{ fontSize: 11, color: '#aaa' }}>
+                                                    {def.time}
+                                                </Typography>
+                                            </Box>
                                         )}
                                     </Box>
                                 );
