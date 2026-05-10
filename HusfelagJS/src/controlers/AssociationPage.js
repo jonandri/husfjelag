@@ -1025,61 +1025,43 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                         )}
                     </Box>
 
-                    {/* Stjórn + Íbúðir strip */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 3.5 }}>
+                    {/* Stjórn + Eignarhald strip — mirrors the full dashboard identity strip */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 2, mt: 3.5 }}>
                         <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                            <Box sx={{ mb: 1.5 }}>
                                 <Eyebrow variant="navy">STJÓRN</Eyebrow>
                             </Box>
-                            {[
-                                { person: chair, roleLabel: 'Formaður', initColor: { bg: '#e8f5e9', color: '#2e7d32' } },
-                                { person: cfo,   roleLabel: 'Gjaldkeri', initColor: { bg: '#eef1f8', color: NAVY } },
-                            ].map(({ person, roleLabel, initColor }) =>
-                                person ? (
-                                    <Box key={roleLabel} sx={{ display: 'flex', gap: 1.75, alignItems: 'center', py: 1 }}>
-                                        <Box sx={{ width: 38, height: 38, borderRadius: '50%', background: initColor.bg, color: initColor.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 13, flexShrink: 0 }}>
-                                            {person.name.split(' ').map(w => w[0]).slice(0, 2).join('')}
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                                {[
+                                    { person: chair, roleLabel: 'Formaður',  initBg: '#e8f5e9', initColor: '#2e7d32' },
+                                    { person: cfo,   roleLabel: 'Gjaldkeri', initBg: '#eef1f8', initColor: NAVY },
+                                ].map(({ person, roleLabel, initBg, initColor }) => (
+                                    <Box key={roleLabel} sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                        <Box sx={{ width: 42, height: 42, borderRadius: '50%', background: initBg, color: initColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: 14, flexShrink: 0 }}>
+                                            {person ? person.name.split(' ').map(w => w[0]).slice(0, 2).join('') : '—'}
                                         </Box>
                                         <Box>
-                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{person.name}</Typography>
+                                            <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{person ? person.name : '—'}</Typography>
                                             <Typography sx={{ fontSize: 11.5, color: '#555' }}>{roleLabel}</Typography>
                                         </Box>
                                     </Box>
-                                ) : (
-                                    <Typography key={roleLabel} sx={{ fontSize: 12.5, color: '#888', py: 0.5 }}>
-                                        {roleLabel}: —
-                                    </Typography>
-                                )
-                            )}
+                                ))}
+                            </Box>
                         </Box>
 
-                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '18px 20px', background: '#fafbfd', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                            <Eyebrow variant="navy">ÍBÚÐIR · NÆSTA SKREF</Eyebrow>
-                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 0.75, mb: 0.5 }}>
-                                {association.apartment_count > 0 ? `${association.apartment_count} íbúðir skráðar` : 'Engar íbúðir skráðar enn'}
-                            </Typography>
-                            {association.apartment_count === 0 && (
-                                <>
-                                    <Typography sx={{ fontSize: 12.5, color: '#555', mb: 1.75 }}>
-                                        Skráðu íbúðirnar svo eignarhlutföllin reiknist sjálfkrafa.
-                                    </Typography>
-                                    <Button variant="contained" sx={primaryButtonSx} onClick={() => onNavigate('/ibudir', { openAdd: true })} startIcon={<HomeIcon />}>
-                                        Skrá íbúðir
-                                    </Button>
-                                </>
-                            )}
-                        </Box>
-                    </Box>
-
-                    {/* Bank placeholder */}
-                    <Box sx={{ mt: 2 }}>
-                        <Box sx={{ border: '1.5px dashed #c5cfe8', borderRadius: '6px', p: '22px', background: '#fafbfd', textAlign: 'center' }}>
-                            <AccountBalanceIcon sx={{ fontSize: 32, color: NAVY }} />
-                            <Typography sx={{ fontSize: 14.5, fontWeight: 500, mt: 1 }}>Tengja banka</Typography>
-                            <Typography sx={{ fontSize: 12, color: '#555', mt: 0.5, mb: 1.75 }}>Bankafærslur birtast sjálfkrafa og afstemmast við innheimtur</Typography>
-                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => onNavigate('/bank-settings')}>
-                                Tengja banka
-                            </Button>
+                        <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', p: '18px 20px' }}>
+                            <Eyebrow variant="navy">EIGNARHALD</Eyebrow>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1.25 }}>
+                                {[
+                                    { value: association.apartment_count, label: 'Íbúðir' },
+                                    { value: owners.length, label: 'Eigendur' },
+                                ].map(({ value, label }) => (
+                                    <Box key={label}>
+                                        <Typography sx={{ fontSize: 24, fontWeight: 300 }}>{value}</Typography>
+                                        <Typography sx={{ fontSize: 11.5, color: '#555' }}>{label}</Typography>
+                                    </Box>
+                                ))}
+                            </Box>
                         </Box>
                     </Box>
 
