@@ -84,7 +84,7 @@ function NavItem({ path, label, icon, collapsed, active, onClick }) {
     );
 }
 
-function BottomItem({ label, icon, collapsed, onClick, hoverColor }) {
+function BottomItem({ label, sub, icon, collapsed, onClick, hoverColor }) {
     return (
         <Tooltip title={collapsed ? label : ''} placement="right" arrow>
             <Box
@@ -110,13 +110,26 @@ function BottomItem({ label, icon, collapsed, onClick, hoverColor }) {
                     {icon}
                 </Box>
                 {!collapsed && (
-                    <Typography sx={{ color: TEXT, fontFamily: '"Inter", sans-serif', fontWeight: 400, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-                        {label}
-                    </Typography>
+                    <Box sx={{ overflow: 'hidden' }}>
+                        <Typography sx={{ color: TEXT, fontFamily: '"Inter", sans-serif', fontWeight: 400, fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                            {label}
+                        </Typography>
+                        {sub && (
+                            <Typography sx={{ color: 'rgba(255,255,255,0.45)', fontFamily: '"Inter", sans-serif', fontSize: '0.72rem', whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                                {sub}
+                            </Typography>
+                        )}
+                    </Box>
                 )}
             </Box>
         </Tooltip>
     );
+}
+
+function shortName(name) {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 3 ? `${parts[0]} ${parts[1]}` : parts[0];
 }
 
 function SideBar() {
@@ -302,6 +315,7 @@ function SideBar() {
                 )}
                 <BottomItem
                     label="Stillingar"
+                    sub={shortName(user?.name)}
                     icon={<AccountCircleOutlinedIcon sx={{ fontSize: 20 }} />}
                     collapsed={collapsed}
                     onClick={() => setSettingsOpen(true)}

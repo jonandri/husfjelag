@@ -256,7 +256,7 @@ function ApartmentsPage() {
                                             : <ErrorOutlineIcon sx={{ fontSize: 15, color: '#c62828' }} />
                                         }
                                         <Typography sx={{ fontSize: 12, color: ratiosOk ? '#2e7d32' : '#c62828' }}>
-                                            {ratiosOk ? 'Allir lyklar = 100,00%' : 'Súlur stemma ekki'}
+                                            {ratiosOk ? 'Allir lyklar = 100,00%' : 'Hlutföll eiga að vera 100%'}
                                         </Typography>
                                     </Box>
                                 </Box>
