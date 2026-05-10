@@ -133,7 +133,7 @@ function AssociationPage() {
             owners={owners}
             userId={user.id}
             assocParam={assocParam}
-            onNavigate={(path) => navigate(path)}
+            onNavigate={(path, state) => navigate(path, { state })}
             onAssociationUpdated={(updated) => setAssociation(updated)}
         />;
     }
@@ -896,7 +896,7 @@ const BORDER = '#e8e8e8';
 
 const SETUP_STEP_DEFS = [
     { icon: <BusinessIcon sx={{ fontSize: 18 }} />,    title: 'Stofna húsfélag',      sub: 'Heiti, kennitala, heimilisfang',     navPath: null },
-    { icon: <HomeIcon sx={{ fontSize: 18 }} />,        title: 'Skrá íbúðir',          sub: 'Íbúðir + eignarhlutföll',           navPath: '/ibudir/innflutningur' },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />,        title: 'Skrá íbúðir',          sub: 'Íbúðir + eignarhlutföll',           navPath: '/ibudir', navState: { openAdd: true } },
     { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,   title: 'Skrá eigendur',        sub: 'Eigendur íbúða',                    navPath: '/eigendur' },
     { icon: <GroupIcon sx={{ fontSize: 18 }} />,       title: 'Bæta við stjórn',      sub: 'Formaður og gjaldkeri',             navPath: null },
     { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',              navPath: '/bank-settings' },
@@ -909,6 +909,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
 
     const firstIncomplete = setupSteps.findIndex(done => !done);
     const nextPath = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navPath : null;
+    const nextState = firstIncomplete >= 0 ? SETUP_STEP_DEFS[firstIncomplete].navState : null;
     const nextIsBoardStep = firstIncomplete === 3;
 
     const chair = owners.find(o => o.role === 'CHAIR' || o.role === 'Formaður');
@@ -976,7 +977,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                         onClick={() => {
                                             if (done) return;
                                             if (isBoardStep) setBoardDialogOpen(true);
-                                            else if (def.navPath) onNavigate(def.navPath);
+                                            else if (def.navPath) onNavigate(def.navPath, def.navState);
                                         }}
                                         sx={{
                                             border: isPrimary ? `1.5px solid ${NAVY}` : `1px solid ${BORDER}`,
@@ -1010,7 +1011,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                 <Button
                                     variant="contained"
                                     sx={primaryButtonSx}
-                                    onClick={() => nextIsBoardStep ? setBoardDialogOpen(true) : onNavigate(nextPath)}
+                                    onClick={() => nextIsBoardStep ? setBoardDialogOpen(true) : onNavigate(nextPath, nextState)}
                                 >
                                     Halda áfram með uppsetningu →
                                 </Button>
@@ -1056,7 +1057,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                     <Typography sx={{ fontSize: 12.5, color: '#555', mb: 1.75 }}>
                                         Skráðu íbúðirnar svo eignarhlutföllin reiknist sjálfkrafa.
                                     </Typography>
-                                    <Button variant="contained" sx={primaryButtonSx} onClick={() => onNavigate('/ibudir/innflutningur')} startIcon={<HomeIcon />}>
+                                    <Button variant="contained" sx={primaryButtonSx} onClick={() => onNavigate('/ibudir', { openAdd: true })} startIcon={<HomeIcon />}>
                                         Skrá íbúðir
                                     </Button>
                                 </>

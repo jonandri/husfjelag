@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Typography, CircularProgress, Paper,
     Button, TextField, Collapse, IconButton,
@@ -105,6 +105,7 @@ function TableHeader({ cols, showOwners = true }) {
 
 function ApartmentsPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user, assocParam } = React.useContext(UserContext);
     const { openHelp } = useHelp();
     const [apartments, setApartments] = useState(undefined);
@@ -114,6 +115,10 @@ function ApartmentsPage() {
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
+        if (location.state?.openAdd) {
+            setShowForm(true);
+            navigate(location.pathname, { replace: true, state: {} });
+        }
         loadApartments();
     }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -175,9 +180,11 @@ function ApartmentsPage() {
                         </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <Button variant="outlined" sx={secondaryButtonSx} onClick={() => navigate('/ibudir/innflutningur')}>
-                            ⬇ Innflutningur
-                        </Button>
+                        {user.is_superadmin && (
+                            <Button variant="outlined" sx={secondaryButtonSx} onClick={() => navigate('/ibudir/innflutningur')}>
+                                ⬇ Innflutningur
+                            </Button>
+                        )}
                         <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
                             + Bæta við íbúð
                         </Button>
@@ -205,14 +212,21 @@ function ApartmentsPage() {
                     {active.length === 0 ? (
                         <Paper variant="outlined" sx={{ p: 3, borderColor: 'secondary.main', bgcolor: 'rgba(8,192,118,0.05)' }}>
                             <Typography variant="subtitle1" color="secondary" sx={{ mb: 0.5 }}>
-                                Setja upp íbúðir sjálfkrafa
+                                Skrá íbúðir
                             </Typography>
                             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                                Enginn búinn að skrá íbúðir. Notaðu HMS fasteignaskrána til að flytja inn lista yfir íbúðir sjálfkrafa.
+                                Enginn búinn að skrá íbúðir. Bættu við íbúðum handvirkt til að byrja.
                             </Typography>
-                            <Button variant="contained" sx={primaryButtonSx} onClick={() => navigate('/ibudir/innflutningur')}>
-                                Flytja inn frá HMS →
-                            </Button>
+                            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                                <Button variant="contained" sx={primaryButtonSx} onClick={() => setShowForm(true)}>
+                                    + Bæta við íbúð
+                                </Button>
+                                {user.is_superadmin && (
+                                    <Button variant="outlined" sx={secondaryButtonSx} onClick={() => navigate('/ibudir/innflutningur')}>
+                                        ⬇ Flytja inn frá HMS
+                                    </Button>
+                                )}
+                            </Box>
                         </Paper>
                     ) : (
                         <>
