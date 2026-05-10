@@ -126,8 +126,8 @@ function AssociationPage() {
         association.apartment_count > 0,                  // 2. Skrá íbúðir
         owners.length > 0,                                // 3. Skrá eigendur
         !!(association.chair && association.cfo),         // 4. Bæta við stjórn
-        bankConfigured,                                   // 5. Tengja banka
-        collections.length > 0,                           // 6. Setja upp áætlun
+        collections.length > 0,                           // 5. Setja upp áætlun
+        bankConfigured,                                   // 6. Tengja banka
     ];
     const setupComplete = setupSteps.filter(Boolean).length;
     const isSetup = setupComplete >= 5;
@@ -903,11 +903,11 @@ const BORDER = '#e8e8e8';
 
 const SETUP_STEP_DEFS = [
     { icon: <BusinessIcon sx={{ fontSize: 18 }} />,       title: 'Stofna húsfélag',   sub: 'Heiti, kennitala, heimilisfang',                        navPath: null },
-    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir + eignarhlutföll',                              navPath: '/ibudir', navState: { openAdd: true } },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir + eignarhlutföll',                               navPath: '/ibudir', navState: { openAdd: true } },
     { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,      title: 'Skrá eigendur',     sub: 'Eigendur íbúða',                                        navPath: '/eigendur' },
     { icon: <GroupIcon sx={{ fontSize: 18 }} />,          title: 'Bæta við stjórn',   sub: 'Formaður og gjaldkeri',                                 navPath: null },
-    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',                                  navPath: '/bank-settings' },
     { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />,    title: 'Setja upp áætlun',  sub: 'Setja upp áætlun fyrir húsfélagið og hefja innheimtu',  navPath: '/aaetlun' },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',                                  navPath: '/bank-settings' },
 ];
 
 function UppsetningView({ association, setupSteps, setupComplete, owners, userId, assocParam, onNavigate, onAssociationUpdated }) {
