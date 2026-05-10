@@ -916,12 +916,12 @@ const NAVY = '#1D366F';
 const BORDER = '#e8e8e8';
 
 const SETUP_STEP_DEFS = [
-    { icon: <BusinessIcon sx={{ fontSize: 18 }} />,       title: 'Stofna húsfélag',   sub: 'Heiti, kennitala, heimilisfang',                       time: '~2 mín.', navPath: null },
-    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir + eignarhlutföll',                              time: '~15 mín.', navPath: '/ibudir', navState: { openAdd: true } },
-    { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,      title: 'Skrá eigendur',     sub: 'Eigendur íbúða',                                       time: '~10 mín.', navPath: '/eigendur' },
-    { icon: <GroupIcon sx={{ fontSize: 18 }} />,          title: 'Bæta við stjórn',   sub: 'Formaður og gjaldkeri',                                time: '~3 mín.', navPath: null },
-    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />,    title: 'Setja upp áætlun',  sub: 'Setja upp áætlun fyrir húsfélagið og hefja innheimtu', time: '~10 mín.', navPath: '/aaetlun' },
-    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Sjálfvirk afstemming',                                 time: '~10 mín.', navPath: '/bank-settings' },
+    { icon: <BusinessIcon sx={{ fontSize: 18 }} />,       title: 'Stofna húsfélag',   sub: 'Byrjaðu á að setja inn kennitölu húsfélagsins og við sækjum heiti, heimilsfang ofl.',                          time: '~2 mín.',  navPath: null },
+    { icon: <HomeIcon sx={{ fontSize: 18 }} />,           title: 'Skrá íbúðir',       sub: 'Íbúðir & eignarhlutföll (sem má finna í eignaskiptasamningi) stýra hvernig kostnaði er skipt á íbúðir',        time: '~15 mín.', navPath: '/ibudir', navState: { openAdd: true } },
+    { icon: <PersonAddIcon sx={{ fontSize: 18 }} />,      title: 'Skrá eigendur',     sub: 'Eigendur íbúða hafa aðgang að yfirliti húsfélagsins og einn eigandi er greiðandi fyrir hverja íbúð',           time: '~10 mín.', navPath: '/eigendur' },
+    { icon: <GroupIcon sx={{ fontSize: 18 }} />,          title: 'Bæta við stjórn',   sub: 'Formaður og gjaldkeri fá aðgang til að stýra áætlanagerð og innheimtu, ásamt öllum öðrum aðgerðum í kerfinu',  time: '~3 mín.',  navPath: null },
+    { icon: <EventRepeatIcon sx={{ fontSize: 18 }} />,    title: 'Setja upp áætlun',  sub: 'Húsfélög byggja sinn rekstur í kringum kostnaðráætlun fyrir árið og svo þarf að hefja innheimtu á húsgjöldum', time: '~10 mín.', navPath: '/aaetlun' },
+    { icon: <AccountBalanceIcon sx={{ fontSize: 18 }} />, title: 'Tengja banka',      sub: 'Tenging við banka sér um að sækja stöðuna og færslur af bankareikningum, ásamt því að sjá um innheimtukröfur', time: '~10 mín.', navPath: '/bank-settings' },
 ];
 
 function UppsetningView({ association, setupSteps, setupComplete, owners, userId, assocParam, onNavigate, onAssociationUpdated }) {
@@ -974,7 +974,7 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
                                     </Box>
                                 </Typography>
                                 <Typography sx={{ fontSize: 13.5, color: '#555' }}>
-                                    Eftir uppsetningu sér kerfið um innheimtu, afstemmingu og ársskýrslu.
+                                    Þú þarft að klára þessi 6 skref áður en kerfið getur sent út fyrsta gjaldseðilinn.
                                 </Typography>
                             </Box>
                             <Box sx={{ textAlign: 'right', flexShrink: 0, ml: 4 }}>
