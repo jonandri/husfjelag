@@ -5,6 +5,9 @@ import { UserContext } from './UserContext';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8003';
 
+// TODO: Consider bypassing this page for returning users ("Innskráning" button on homepage
+// redirects directly to Kenni). Keep this page for first-timers arriving via "Skráðu þig frítt"
+// so they understand the Kenni/Auðkennisapp redirect before it happens.
 function LoginForm() {
     const navigate = useNavigate();
     const location = useLocation();

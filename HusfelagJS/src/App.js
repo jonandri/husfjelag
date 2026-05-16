@@ -178,6 +178,7 @@ function App() {
       setImpersonating(false);
       return;
     }
+    setInitializing(true);
     apiFetch(`${API_URL}/Association/list/${user.id}`)
       .then(r => r.ok ? r.json() : [])
       .then(list => {

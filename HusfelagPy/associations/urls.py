@@ -10,7 +10,7 @@ from .views import (
     BudgetView, BudgetItemView, BudgetWizardView, CollectionView,
     CollectionGenerateView, CollectionMatchView, CollectionUnmatchView, CollectionCandidatesView,
     ApartmentImportSourcesView, ApartmentImportPreviewView, ApartmentImportConfirmView,
-    ReportView, AnnualStatementView,
+    ReportView, ReportYearsView, AnnualStatementView,
     RegistrationRequestView, AdminRegistrationRequestView,
 )
 from .banks.views import (
@@ -79,6 +79,7 @@ urlpatterns = [
     path("Collection/unmatch", CollectionUnmatchView.as_view(), name="collection-unmatch"),
     path("Collection/candidates/<int:collection_id>", CollectionCandidatesView.as_view(), name="collection-candidates"),
     path("Collection/<int:user_id>", CollectionView.as_view(), name="collection-list"),
+    path("Report/<int:user_id>/years", ReportYearsView.as_view(), name="report-years"),
     path("Report/<int:user_id>", ReportView.as_view(), name="report"),
     path("AnnualStatement/<int:user_id>", AnnualStatementView.as_view(), name="annual-statement"),
     # Bank integration

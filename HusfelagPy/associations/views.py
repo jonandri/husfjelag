@@ -2605,6 +2605,27 @@ class ReportView(APIView):
                 exp = row.get("expenses") or Decimal("0")
                 monthly.append({"month": m, "income": str(inc), "expenses": str(abs(exp))})
 
+        # --- Year-end bank balance (sum of all transactions up to Dec 31 of year) ---
+        end_of_year = datetime.date(year, 12, 31)
+        year_end_bank_balance = (
+            Transaction.objects
+            .filter(bank_account__association=association, date__lte=end_of_year)
+            .aggregate(total=django_models.Sum("amount"))["total"]
+            or Decimal("0")
+        )
+
+        # --- Unpaid collections for the full year ---
+        unpaid_qs = Collection.objects.filter(
+            budget__association=association,
+            budget__year=year,
+            budget__is_active=True,
+        ).exclude(status=CollectionStatus.PAID)
+        year_unpaid_amount = (
+            unpaid_qs.aggregate(total=django_models.Sum("amount_total"))["total"]
+            or Decimal("0")
+        )
+        year_unpaid_count = unpaid_qs.count()
+
         return Response({
             "year": year,
             "income": income,
@@ -2612,7 +2633,31 @@ class ReportView(APIView):
             "expenses": expenses,
             "expenses_uncategorised": str(abs(expenses_uncategorised)),
             "monthly": monthly,
+            "year_end_bank_balance": str(year_end_bank_balance),
+            "year_unpaid_amount": str(year_unpaid_amount),
+            "year_unpaid_count": year_unpaid_count,
         })
+
+
+class ReportYearsView(APIView):
+    def get(self, request, user_id):
+        """GET /Report/{user_id}/years — sorted desc list of years that have transactions"""
+        association = _resolve_assoc(user_id, request)
+        if not association:
+            return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+        year_dates = (
+            Transaction.objects
+            .filter(bank_account__association=association)
+            .dates("date", "year")
+        )
+        years = sorted([d.year for d in year_dates], reverse=True)
+        current = datetime.date.today().year
+        if current not in years:
+            years.insert(0, current)
+        return Response({"years": years})
 
 
 def _build_annual_statement_data(association, year):

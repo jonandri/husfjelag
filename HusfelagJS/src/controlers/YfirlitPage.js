@@ -2,12 +2,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Typography, CircularProgress, Button, IconButton, Tooltip,
+    Box, Typography, CircularProgress, Button, IconButton, Tooltip, Menu, MenuItem,
 } from '@mui/material';
 import DownloadIcon from '@mui/icons-material/Download';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -37,8 +39,12 @@ export default function YfirlitPage() {
     const { openHelp } = useHelp();
 
     const today = new Date();
-    const year = today.getFullYear();
+    const currentYear = today.getFullYear();
     const month = today.getMonth() + 1;
+
+    const [selectedYear, setSelectedYear] = useState(currentYear);
+    const [availableYears, setAvailableYears] = useState([currentYear]);
+    const [yearAnchor, setYearAnchor] = useState(null);
 
     const [loading, setLoading] = useState(true);
     const [bankAccounts, setBankAccounts] = useState([]);
@@ -51,10 +57,9 @@ export default function YfirlitPage() {
         if (!user) return;
         setLoading(true);
         setError('');
-        // assocParam already starts with '?' when set (e.g. '?as=5')
-        const bankQs  = assocParam || '';
-        const collQs  = assocParam ? `${assocParam}&month=${month}&year=${year}` : `?month=${month}&year=${year}`;
-        const repQs   = assocParam ? `${assocParam}&year=${year}` : `?year=${year}`;
+        const bankQs = assocParam || '';
+        const collQs = assocParam ? `${assocParam}&month=${month}&year=${currentYear}` : `?month=${month}&year=${currentYear}`;
+        const repQs  = assocParam ? `${assocParam}&year=${selectedYear}` : `?year=${selectedYear}`;
 
         Promise.all([
             apiFetch(`${API_URL}/BankAccount/${user.id}${bankQs}`).then(r => r.ok ? r.json() : []),
@@ -66,12 +71,17 @@ export default function YfirlitPage() {
             setReportData(report);
         }).catch(() => setError('Villa við að sækja gögn.'))
         .finally(() => setLoading(false));
-    }, [user, assocParam, month, year]);
+    }, [user, assocParam, selectedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
+        const yearsQs = assocParam || '';
+        apiFetch(`${API_URL}/Report/${user.id}/years${yearsQs}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.years?.length) setAvailableYears(data.years); })
+            .catch(() => {});
         load();
-    }, [user, load, navigate]);
+    }, [user, load, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (loading) {
         return (
@@ -85,11 +95,18 @@ export default function YfirlitPage() {
     }
 
     // ── Derived KPIs ──────────────────────────────────────────────────────────
+    const isPastYear = selectedYear !== currentYear;
+
     const totalBankBalance = bankAccounts.reduce((s, a) => s + parseFloat(a.current_balance || 0), 0);
     const unpaidRows = collections.filter(r => r.status !== 'PAID');
     const unpaidAmount = unpaidRows.reduce((s, r) => s + parseFloat(r.amount_total || 0), 0);
     const unpaidCount = unpaidRows.length;
     const totalMonthly = collections.reduce((s, r) => s + parseFloat(r.amount_total || 0), 0);
+
+    // Past-year values come from reportData (computed server-side for the selected year)
+    const displayBankBalance = isPastYear ? parseFloat(reportData?.year_end_bank_balance || 0) : totalBankBalance;
+    const displayUnpaidAmount = isPastYear ? parseFloat(reportData?.year_unpaid_amount || 0) : unpaidAmount;
+    const displayUnpaidCount = isPastYear ? (reportData?.year_unpaid_count ?? 0) : unpaidCount;
 
     const expenses = reportData?.expenses || [];
     const totalBudget = expenses.reduce((s, e) => s + parseFloat(e.budgeted || 0), 0);
@@ -128,11 +145,49 @@ export default function YfirlitPage() {
                         <Typography variant="h5">Yfirlit</Typography>
                         {assocName && (
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                                {assocName} · {year}
+                                {assocName} · {selectedYear}
                             </Typography>
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        {/* Year picker */}
+                        <Button
+                            onClick={e => setYearAnchor(e.currentTarget)}
+                            sx={{
+                                textTransform: 'none',
+                                color: '#555',
+                                fontSize: 13,
+                                fontWeight: 400,
+                                px: 1,
+                                py: 0.5,
+                                minWidth: 0,
+                                gap: 0.5,
+                                border: 'none',
+                                background: 'transparent',
+                                '&:hover': { background: '#f5f5f5' },
+                            }}
+                            startIcon={<CalendarTodayIcon sx={{ fontSize: 14, color: '#888' }} />}
+                            endIcon={<ArrowDropDownIcon sx={{ fontSize: 16, color: '#888' }} />}
+                        >
+                            {selectedYear}
+                        </Button>
+                        <Menu
+                            anchorEl={yearAnchor}
+                            open={Boolean(yearAnchor)}
+                            onClose={() => setYearAnchor(null)}
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                        >
+                            {availableYears.map(y => (
+                                <MenuItem
+                                    key={y}
+                                    selected={y === selectedYear}
+                                    onClick={() => { setSelectedYear(y); setYearAnchor(null); }}
+                                    sx={{ fontSize: 14, minWidth: 100 }}
+                                >
+                                    {y}
+                                </MenuItem>
+                            ))}
+                        </Menu>
                         <Button variant="outlined" sx={{ ...secondaryButtonSx, gap: 0.5 }}
                             onClick={() => setAnnualOpen(true)}
                             startIcon={<DownloadIcon sx={{ fontSize: 17 }} />}
@@ -160,26 +215,34 @@ export default function YfirlitPage() {
                         <Box sx={{ p: '22px 24px', background: 'linear-gradient(135deg, #1D366F 0%, #0d2154 100%)', color: '#fff' }}>
                             <Eyebrow variant="muted" sx={{ color: 'rgba(255,255,255,0.7)' }}>STAÐA Í BÖNKUM</Eyebrow>
                             <Typography sx={{ ...monoSx, fontSize: 30, fontWeight: 500, mt: 1, color: '#fff' }}>
-                                {fmtAmount(totalBankBalance)}
+                                {fmtAmount(displayBankBalance)}
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', mt: 0.75, display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <span style={{ color: '#7ed8b1' }}>▲</span> síðustu 30 daga
+                                {isPastYear
+                                    ? `Staða 31. des ${selectedYear}`
+                                    : <><span style={{ color: '#7ed8b1' }}>▲</span> síðustu 30 daga</>}
                             </Typography>
-                            {/* Static sparkline */}
-                            <Box component="svg" viewBox="0 0 200 40" sx={{ width: '100%', height: 36, mt: 1.5, display: 'block' }}>
-                                <path d="M0,30 L20,28 L40,25 L60,26 L80,22 L100,24 L120,18 L140,15 L160,12 L180,10 L200,8" stroke="#08C076" strokeWidth="2" fill="none" />
-                                <path d="M0,30 L20,28 L40,25 L60,26 L80,22 L100,24 L120,18 L140,15 L160,12 L180,10 L200,8 L200,40 L0,40 Z" fill="rgba(8,192,118,0.15)" />
-                            </Box>
+                            {/* Static sparkline — only meaningful for current year */}
+                            {!isPastYear && (
+                                <Box component="svg" viewBox="0 0 200 40" sx={{ width: '100%', height: 36, mt: 1.5, display: 'block' }}>
+                                    <path d="M0,30 L20,28 L40,25 L60,26 L80,22 L100,24 L120,18 L140,15 L160,12 L180,10 L200,8" stroke="#08C076" strokeWidth="2" fill="none" />
+                                    <path d="M0,30 L20,28 L40,25 L60,26 L80,22 L100,24 L120,18 L140,15 L160,12 L180,10 L200,8 L200,40 L0,40 Z" fill="rgba(8,192,118,0.15)" />
+                                </Box>
+                            )}
                         </Box>
 
                         {/* Cell 2: Unpaid */}
                         <Box sx={{ p: '22px 24px', borderLeft: `1px solid ${BORDER}` }}>
                             <Eyebrow variant="muted">ÓGREIDD INNHEIMTA</Eyebrow>
-                            <Typography sx={{ ...monoSx, fontSize: 24, fontWeight: 500, mt: 1, color: NEGATIVE }}>
-                                {fmtAmount(unpaidAmount)}
+                            <Typography sx={{ ...monoSx, fontSize: 24, fontWeight: 500, mt: 1, color: displayUnpaidAmount > 0 ? NEGATIVE : 'text.primary' }}>
+                                {fmtAmount(displayUnpaidAmount)}
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: '#555', mt: 0.75 }}>
-                                {unpaidCount} íbúð{unpaidCount === 1 ? '' : 'ir'} eru með ógreidda reikninga
+                                {isPastYear
+                                    ? (displayUnpaidCount > 0
+                                        ? `${displayUnpaidCount} ógreidd húsgjöld við lok ${selectedYear}`
+                                        : `Allt greitt við lok ${selectedYear}`)
+                                    : `${unpaidCount} íbúð${unpaidCount === 1 ? '' : 'ir'} eru með ógreidda reikninga`}
                             </Typography>
                         </Box>
 
@@ -202,7 +265,7 @@ export default function YfirlitPage() {
                                 {fmtAmount(totalBudget)}
                             </Typography>
                             <Typography sx={{ fontSize: 12, color: '#555', mt: 0.75 }}>
-                                Virk áætlun {year}
+                                Virk áætlun {selectedYear}
                             </Typography>
                         </Box>
                     </Box>
@@ -220,7 +283,7 @@ export default function YfirlitPage() {
                                     <Box key={i} sx={{
                                         display: 'flex', gap: 1.75, p: '14px 16px', alignItems: 'center',
                                         borderBottom: i < upcoming.length - 1 ? `1px solid ${BORDER_ROW}` : 'none',
-                                    }}>
+                                    }}>                                        
                                         <Box sx={{ width: 42, textAlign: 'center', flexShrink: 0 }}>
                                             <Typography sx={{ fontSize: 11, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1.2 }}>
                                                 {u.dateMon}
@@ -231,11 +294,11 @@ export default function YfirlitPage() {
                                         </Box>
                                         <Box sx={{ width: 32, height: 32, borderRadius: '8px', background: u.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             {u.icon}
-                                        </Box>
+                                        </Box>                                        
                                         <Box sx={{ flex: 1, minWidth: 0 }}>
                                             <Typography sx={{ fontSize: 13.5, fontWeight: 500 }}>{u.title}</Typography>
                                             <Typography sx={{ fontSize: 12, color: '#555', mt: 0.25 }}>{u.meta}</Typography>
-                                        </Box>
+                                        </Box>                                        
                                     </Box>
                                 ))}
                             </Box>
@@ -244,7 +307,7 @@ export default function YfirlitPage() {
                         {/* Áætlun vs raun — variance bars */}
                         <Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1.5 }}>
-                                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Raun vs áætlun · {year}</Typography>
+                                <Typography sx={{ fontSize: 14, fontWeight: 600 }}>Raun vs áætlun · {selectedYear}</Typography>
                                 <Typography sx={{ fontSize: 12, color: '#888' }}>Eftir flokki</Typography>
                             </Box>
                             <Box sx={{ border: `1px solid ${BORDER}`, borderRadius: '6px', py: 0.75 }}>
@@ -302,7 +365,7 @@ export default function YfirlitPage() {
             <AnnualStatementDialog
                 open={annualOpen}
                 onClose={() => setAnnualOpen(false)}
-                year={year - 1}
+                year={currentYear - 1}
                 userId={user?.id}
                 assocParam={assocParam}
             />
