@@ -5,9 +5,10 @@ import {
     CircularProgress, Alert, Grid,
     Dialog, DialogTitle, DialogContent, DialogActions,
     RadioGroup, FormControlLabel, Radio,
-    MenuItem, Select, FormControl,
+    MenuItem, Select, FormControl, Chip, Tooltip, IconButton,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -55,6 +56,7 @@ function SuperAdminPage() {
                     </Button>
                 </Box>
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <SystemHealthPanel />
                     <PendingRequestsPanel user={user} onReview={handleReview} refreshKey={pendingRefreshKey} />
                     <KpiPanel user={user} />
                     <ImpersonatePanel user={user} onSelect={(assoc) => setCurrentAssociation(assoc)} />
@@ -183,7 +185,7 @@ const CUSTOM_CHAIR = '__custom__';
 function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocSsn = '', initialChairSsn = '' }) {
     const [assocSsn, setAssocSsn] = useState('');
     const [looking, setLooking] = useState(false);
-    const [lookupError, setLookupError] = useState('');
+    const [lookupError, setLookupError] = useState(null); // { text, severity }
     const [preview, setPreview] = useState(null);       // verify response
     const [chairSelection, setChairSelection] = useState(''); // national_id of selected prokuruhafi, or CUSTOM_CHAIR
     const [customChairSsn, setCustomChairSsn] = useState('');
@@ -191,7 +193,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
     const [saveError, setSaveError] = useState('');
 
     const reset = () => {
-        setAssocSsn(''); setPreview(null); setLookupError('');
+        setAssocSsn(''); setPreview(null); setLookupError(null);
         setChairSelection(''); setCustomChairSsn(''); setSaveError('');
     };
 
@@ -214,7 +216,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
     }, [assocSsn]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleLookup = async () => {
-        setLookupError(''); setPreview(null); setChairSelection('');
+        setLookupError(null); setPreview(null); setChairSelection('');
         if (!initialChairSsn) setCustomChairSsn('');
         setLooking(true);
         try {
@@ -222,7 +224,10 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
             const resp = await apiFetch(`${API_URL}/Association/verify?ssn=${ssn}`);
             const data = await resp.json();
             if (!resp.ok) {
-                setLookupError(data.detail || 'Villa við leit.');
+                setLookupError({
+                    text: data.detail || 'Villa við leit.',
+                    severity: resp.status === 404 ? 'warning' : 'error',
+                });
                 return;
             }
             setPreview(data);
@@ -238,7 +243,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
                 }
             }
         } catch {
-            setLookupError('Tenging við þjón mistókst.');
+            setLookupError({ text: 'Tenging við þjón mistókst.', severity: 'error' });
         } finally {
             setLooking(false);
         }
@@ -280,7 +285,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
             <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '20px !important' }}>
 
                 <Typography variant="body2" color="text.secondary">
-                    Upplýsingar húsfélags eru sóttar sjálfkrafa úr þjóðskrá fyrirtækja (Skattur Cloud).
+                    Upplýsingar húsfélags eru sóttar sjálfkrafa úr Fyrirtækjaskrá (RSK).
                 </Typography>
 
 
@@ -305,7 +310,7 @@ function CreateAssociationDialog({ open, onClose, user, onCreated, initialAssocS
                     </Button>
                 </Box>
 
-                {lookupError && <Alert severity="error">{lookupError}</Alert>}
+                {lookupError && <Alert severity={lookupError.severity}>{lookupError.text}</Alert>}
 
                 {/* Step 2 — Association info + chair selection */}
                 {preview && (
@@ -533,6 +538,105 @@ function ImpersonatePanel({ user, onSelect }) {
                     <Typography variant="body2" color="text.secondary">Ekkert húsfélag fannst.</Typography>
                 )}
             </Box>
+        </Paper>
+    );
+}
+
+const API_URL_HEALTH = process.env.REACT_APP_API_URL || 'http://localhost:8010';
+
+function SystemHealthPanel() {
+    const [health, setHealth] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+    const [lastChecked, setLastChecked] = React.useState(null);
+
+    async function load() {
+        setLoading(true);
+        try {
+            const resp = await fetch(`${API_URL_HEALTH}/health/`);
+            const data = await resp.json();
+            setHealth(data);
+        } catch {
+            setHealth({ ok: false, redis: { ok: false, error: 'Unreachable' }, celery: { ok: false, error: 'Unreachable' }, cert: { ok: false } });
+        } finally {
+            setLoading(false);
+            setLastChecked(new Date());
+        }
+    }
+
+    React.useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const chip = (label, ok, extra) => (
+        <Tooltip title={ok ? (extra || 'OK') : (extra || 'Niður')} arrow>
+            <Chip
+                label={label}
+                size="small"
+                sx={{
+                    fontWeight: 600,
+                    fontSize: 12,
+                    background: ok ? '#e8f5e9' : '#fdecea',
+                    color: ok ? '#2e7d32' : '#c62828',
+                    border: `1px solid ${ok ? '#a5d6a7' : '#ef9a9a'}`,
+                }}
+            />
+        </Tooltip>
+    );
+
+    const certOk    = health?.cert?.ok;
+    const certWarn  = health?.cert?.warning && certOk;
+    const certLabel = health?.cert?.days_remaining != null
+        ? `Cert · ${health.cert.days_remaining}d`
+        : 'Cert';
+    const certChip  = (
+        <Tooltip title={health?.cert?.expires_at ? `Rennur út ${health.cert.expires_at}` : (health?.cert?.error || '')} arrow>
+            <Chip
+                label={certLabel}
+                size="small"
+                sx={{
+                    fontWeight: 600,
+                    fontSize: 12,
+                    background: certOk ? (certWarn ? '#fff8e1' : '#e8f5e9') : '#fdecea',
+                    color: certOk ? (certWarn ? '#e65100' : '#2e7d32') : '#c62828',
+                    border: `1px solid ${certOk ? (certWarn ? '#ffe082' : '#a5d6a7') : '#ef9a9a'}`,
+                }}
+            />
+        </Tooltip>
+    );
+
+    return (
+        <Paper variant="outlined" sx={{ p: 2.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="h6" sx={{ fontSize: 15, fontWeight: 600 }}>Kerfisstjórn</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {lastChecked && (
+                        <Typography variant="caption" color="text.secondary">
+                            {lastChecked.toLocaleTimeString('is-IS')}
+                        </Typography>
+                    )}
+                    <Tooltip title="Endurhlaða">
+                        <IconButton size="small" onClick={load} disabled={loading}>
+                            <RefreshIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+            </Box>
+            {loading && !health ? (
+                <CircularProgress size={18} />
+            ) : (
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {chip('Redis', health?.redis?.ok, health?.redis?.ok ? `Redis tengt` : health?.redis?.error)}
+                    {chip(
+                        health?.celery?.ok ? `Celery · ${health.celery.workers} vinnuþræð${health.celery.workers === 1 ? 'ur' : 'ir'}` : 'Celery',
+                        health?.celery?.ok,
+                        health?.celery?.ok ? undefined : health?.celery?.error,
+                    )}
+                    {certChip}
+                </Box>
+            )}
+            {health && !health.ok && (
+                <Alert severity="error" sx={{ mt: 1.5, py: 0.5 }}>
+                    Einn eða fleiri þjónustur eru niðri. Athugaðu Redis og Celery.
+                </Alert>
+            )}
         </Paper>
     );
 }

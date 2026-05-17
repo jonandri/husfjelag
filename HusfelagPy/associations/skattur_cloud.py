@@ -14,11 +14,17 @@ logger = logging.getLogger(__name__)
 _BASE_URL = "https://api.skattur.cloud/legalentities/v2.1/{kennitala}"
 
 
+class SkatturNotFound(Exception):
+    """Raised when Skattur Cloud returns 404 — kennitala not in the registry."""
+
+
 def fetch_legal_entity(kennitala: str) -> dict | None:
     """
     Fetch company registry data for the given kennitala.
-    Returns the parsed JSON dict on success, or None on any error
-    (connection failure, non-200 status, malformed JSON).
+
+    Returns the parsed JSON dict on success.
+    Raises SkatturNotFound if the kennitala is not in the registry (404).
+    Returns None on connection failure or unexpected error.
     """
     url = _BASE_URL.format(kennitala=kennitala)
     try:
@@ -34,6 +40,9 @@ def fetch_legal_entity(kennitala: str) -> dict | None:
     except requests.RequestException:
         logger.exception("Skattur Cloud request failed for kennitala %s", kennitala)
         return None
+
+    if resp.status_code == 404:
+        raise SkatturNotFound(kennitala)
 
     if resp.status_code != 200:
         logger.warning(

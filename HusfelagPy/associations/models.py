@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import models
 
 
@@ -140,6 +142,10 @@ class BankAccount(models.Model):
     )
     description    = models.CharField(max_length=255, blank=True)
     deleted        = models.BooleanField(default=False)
+    is_connected        = models.BooleanField(default=False)
+    bank_status         = models.CharField(max_length=20, blank=True, default='')
+    opening_balance     = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
+    opening_balance_date = models.DateField(null=True, blank=True)
 
     class Meta:
         db_table = "associations_bankaccount"

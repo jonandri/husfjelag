@@ -49,6 +49,7 @@ function AssociationPage() {
     const [bankConfigured, setBankConfigured] = useState(false);
     const [rules, setRules] = useState([]);
     const [collections, setCollections] = useState([]);
+    const [hasBudget, setHasBudget] = useState(false);
     const [ratiosOk, setRatiosOk] = useState(true);
 
     useEffect(() => {
@@ -70,13 +71,14 @@ function AssociationPage() {
         const year  = today.getFullYear();
         const collQs = assocParam ? `${assocParam}&month=${month}&year=${year}` : `?month=${month}&year=${year}`;
         try {
-            const [assocResp, ownersResp, banksResp, rulesResp, collResp, aptsResp] = await Promise.all([
+            const [assocResp, ownersResp, banksResp, rulesResp, collResp, aptsResp, budgetResp] = await Promise.all([
                 apiFetch(`${API_URL}/Association/${user.id}${assocParam}`),
                 apiFetch(`${API_URL}/Owner/${user.id}${assocParam}`),
                 apiFetch(`${API_URL}/BankAccount/${user.id}${assocParam}`),
                 apiFetch(`${API_URL}/CategoryRule/${user.id}${assocParam}`),
                 apiFetch(`${API_URL}/Collection/${user.id}${collQs}`),
                 apiFetch(`${API_URL}/Apartment/${user.id}${assocParam}`),
+                apiFetch(`${API_URL}/Budget/${user.id}${assocParam}`),
             ]);
 
             if (assocResp.ok) setAssociation(await assocResp.json());
@@ -108,6 +110,8 @@ function AssociationPage() {
                     setRatiosOk(true);
                 }
             }
+
+            setHasBudget(budgetResp.ok);
         } catch {
             setError('Tenging við þjón mistókst.');
             setAssociation(null);
@@ -139,11 +143,11 @@ function AssociationPage() {
         association.apartment_count > 0,                  // 2. Skrá íbúðir
         owners.length > 0,                                // 3. Skrá eigendur
         !!(association.chair && association.cfo),         // 4. Bæta við stjórn
-        collections.length > 0,                           // 5. Setja upp áætlun
-        bankConfigured,                                   // 6. Tengja banka
+        hasBudget,                                        // 5. Setja upp áætlun
+        bankConfigured || bankAccounts.length > 0,       // 6. Tengja banka
     ];
     const setupComplete = setupSteps.filter(Boolean).length;
-    const isSetup = setupComplete >= 5;
+    const isSetup = setupComplete >= 6;
 
     if (!isSetup) {
         return <UppsetningView
@@ -154,7 +158,7 @@ function AssociationPage() {
             userId={user.id}
             assocParam={assocParam}
             onNavigate={(path, state) => navigate(path, { state })}
-            onAssociationUpdated={(updated) => setAssociation(updated)}
+            onAssociationUpdated={() => loadAll()}
         />;
     }
 
@@ -343,7 +347,10 @@ function BoardDialog({ open, association, owners, userId, assocParam, onClose, o
         }
     };
 
-    const canSave = (newChair || newCfo) && !saving;
+    const chairFilled = !!(newChair || association.chair);
+    const cfoFilled   = !!(newCfo   || association.cfo);
+    const samePersonSelected = !!(newChair && newCfo && newChair.kennitala === newCfo.kennitala);
+    const canSave = chairFilled && cfoFilled && (newChair || newCfo) && !saving && !samePersonSelected;
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
@@ -385,6 +392,7 @@ function BoardDialog({ open, association, owners, userId, assocParam, onClose, o
                         noOptionsText="Enginn eigandi fannst"
                     />
                 </Box>
+                {samePersonSelected && <Alert severity="warning">Sama manneskja getur ekki verið bæði formaður og gjaldkeri.</Alert>}
                 {error && <Alert severity="error">{error}</Alert>}
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 2 }}>

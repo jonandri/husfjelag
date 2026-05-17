@@ -19,6 +19,7 @@ from .banks.views import (
     AssociationBankSettingsView, SendClaimView, SendAllClaimsView,
     CertHealthView,
 )
+from .banks.health import SystemHealthView
 
 urlpatterns = [
     path("Apartment/import/sources", ApartmentImportSourcesView.as_view(), name="apartment-import-sources"),
@@ -91,6 +92,7 @@ urlpatterns = [
     path("Collection/<int:collection_id>/send-claim", SendClaimView.as_view(), name="collection-send-claim"),
     path("associations/<int:association_id>/bank/send-all-claims", SendAllClaimsView.as_view(), name="bank-send-all-claims"),
     path("health/cert", CertHealthView.as_view(), name="cert-health"),
+    path("health/", SystemHealthView.as_view(), name="system-health"),
     path("RegistrationRequest", RegistrationRequestView.as_view(), name="registration-request-create"),
     path("admin/RegistrationRequest", AdminRegistrationRequestView.as_view(), name="admin-registration-request-list"),
     path("admin/RegistrationRequest/<int:req_id>", AdminRegistrationRequestView.as_view(), name="admin-registration-request-update"),

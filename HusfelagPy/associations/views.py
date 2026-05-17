@@ -26,7 +26,7 @@ from .serializers import (
 )
 from users.models import AuditLog
 from .scraper import lookup_association, scrape_hms_apartments, HmsScrapeError
-from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entity_for_association
+from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entity_for_association, SkatturNotFound
 from .importers import BANK_PARSERS, detect_bank, detect_duplicates
 from .categoriser import build_categorisation_context, categorise_row
 from users.models import User
@@ -227,6 +227,12 @@ class AssociationRoleView(APIView):
         if not chair_kt and not cfo_kt:
             return Response({"detail": "chair_kennitala eða cfo_kennitala er nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
 
+        if chair_kt and cfo_kt and chair_kt == cfo_kt:
+            return Response(
+                {"detail": "Sama manneskja getur ekki verið bæði formaður og gjaldkeri."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         association = _resolve_assoc(user_id, request)
         if not association:
             return Response({"detail": "Association not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -240,6 +246,13 @@ class AssociationRoleView(APIView):
                 new_user = User.objects.get(kennitala=kennitala)
             except User.DoesNotExist:
                 return Response({"detail": f"Notandi með kennitöluna {kennitala} fannst ekki."}, status=status.HTTP_404_NOT_FOUND)
+            other_role = AssociationRole.CFO if role == AssociationRole.CHAIR else AssociationRole.CHAIR
+            if AssociationAccess.objects.filter(user=new_user, association=association, role=other_role, active=True).exists():
+                other_name = "formaður" if other_role == AssociationRole.CHAIR else "gjaldkeri"
+                return Response(
+                    {"detail": f"Þessi manneskja er þegar {other_name} þessa húsfélags."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             AssociationAccess.objects.filter(
                 association=association, role=role, active=True
             ).exclude(user=new_user).update(role=AssociationRole.MEMBER)
@@ -319,7 +332,13 @@ class AssociationVerifyView(APIView):
 
         already_registered = Association.objects.filter(ssn=ssn).exists()
 
-        entity = fetch_legal_entity(ssn)
+        try:
+            entity = fetch_legal_entity(ssn)
+        except SkatturNotFound:
+            return Response(
+                {"detail": "Húsfélag með þessa kennitölu fannst ekki í Fyrirtækjaskrá."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         if entity is None:
             return Response(
                 {"detail": "Ekki tókst að ná sambandi við Skattur Cloud. Reyndu aftur síðar."},
@@ -856,7 +875,13 @@ class BankAccountView(APIView):
             association.bank_accounts
             .filter(deleted=False)
             .select_related("asset_account")
-            .annotate(current_balance=django_models.Sum("transactions__amount"))
+            .annotate(current_balance=django_models.ExpressionWrapper(
+                django_models.functions.Coalesce(
+                    django_models.Sum("transactions__amount"),
+                    django_models.Value(Decimal("0")),
+                ) + django_models.F("opening_balance"),
+                output_field=django_models.DecimalField(),
+            ))
         )
         return Response(BankAccountSerializer(bank_accounts, many=True).data)
 

@@ -13,6 +13,7 @@ import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { primaryButtonSx, secondaryButtonSx, ghostButtonSx } from '../ui/buttons';
 import { useHelp } from '../ui/HelpContext';
+import { notifyError } from '../bugsnag';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 const NAVY = '#1D366F';
@@ -25,7 +26,7 @@ const BANKS = [
 ];
 
 export default function BankSettingsPage() {
-  const { user, currentAssociation } = useContext(UserContext);
+  const { currentAssociation } = useContext(UserContext);
   const { openHelp } = useHelp();
 
   const [bankSettings, setBankSettings] = useState(null);  // null = no row in DB
@@ -70,6 +71,15 @@ export default function BankSettingsPage() {
     }
   }
 
+  async function _parseErrorDetail(resp, fallback) {
+    try {
+      const body = await resp.json();
+      return body.detail || fallback;
+    } catch {
+      return `${fallback} (${resp.status})`;
+    }
+  }
+
   async function postSettings(data) {
     setSaving(true);
     setMessage(null);
@@ -85,10 +95,12 @@ export default function BankSettingsPage() {
         setTemplateIdInput(s.template_id || '');
         return true;
       }
-      const err = await resp.json();
-      setMessage({ type: 'error', text: err.detail || 'Villa við vistun.' });
+      const text = await _parseErrorDetail(resp, 'Villa við vistun.');
+      notifyError(new Error(text), 'bank_settings:postSettings', { assocId, status: resp.status, data });
+      setMessage({ type: 'error', text });
       return false;
-    } catch {
+    } catch (exc) {
+      notifyError(exc, 'bank_settings:postSettings:network', { assocId });
       setMessage({ type: 'error', text: 'Tenging við þjón mistókst.' });
       return false;
     } finally {
@@ -109,10 +121,12 @@ export default function BankSettingsPage() {
         setShowTemplateInput(false);
         return true;
       }
-      const err = await resp.json();
-      setMessage({ type: 'error', text: err.detail || 'Villa við endurstillingu.' });
+      const text = await _parseErrorDetail(resp, 'Villa við endurstillingu.');
+      notifyError(new Error(text), 'bank_settings:disconnectBank', { assocId, status: resp.status });
+      setMessage({ type: 'error', text });
       return false;
-    } catch {
+    } catch (exc) {
+      notifyError(exc, 'bank_settings:disconnectBank:network', { assocId });
       setMessage({ type: 'error', text: 'Tenging við þjón mistókst.' });
       return false;
     } finally {
@@ -163,7 +177,8 @@ export default function BankSettingsPage() {
         const data = await resp.json().catch(() => ({}));
         setMessage({ type: 'error', text: data.detail || `Villa við samstillingu (${resp.status}).` });
       }
-    } catch {
+    } catch (exc) {
+      notifyError(exc, 'bank_settings:handleManualSync:network', { assocId });
       setMessage({ type: 'error', text: 'Tenging við þjón mistókst. Athugaðu nettengingu.' });
     } finally {
       setSyncing(false);
@@ -252,11 +267,31 @@ export default function BankSettingsPage() {
                       </Box>
                     ) : canManage ? (
                       <>
-                        {/* TODO: Replace with actual Landsbankinn API key request instructions once confirmed */}
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>
-                          Til að tengjast Landsbankanum þarftu API lykil. Hafðu samband við Landsbankann
-                          og biddu um API lykil fyrir húsfélagið þitt.
-                        </Typography>
+                        <Box sx={{ mt: 1.5, mb: 2.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                          {[
+                            <>Sæktu <Box component="a" href="/documents/0846-umsokn-fyllt.pdf" target="_blank" rel="noopener noreferrer" sx={{ color: '#1D366F', fontWeight: 500 }}>umsóknareyðublað Landsbankans (PDF)</Box> og fylltu það út.</>,
+                            <>Á eyðublaðinu þarftu að skrá húsfélagið þitt sem heiti félags og <strong>Húsfjelagið</strong> sem Þjónustuaðila, ásamt því að haka við aðgang að bankareikningum.</>,
+                            <>Sendu útfyllt eyðublað á <Box component="a" href="mailto:ft@landsbankinn.is" sx={{ color: '#1D366F', fontWeight: 500 }}>ft@landsbankinn.is</Box> ásamt kennitölunni þinni — það þarf ekki að vera undirritað, Landsbankinn sendir þér það í rafræna undirritun.</>,
+                            <>Þegar API lykill berst frá Landsbankanum, límdu hann inn hér að neðan og vistaðu. Kerfið mun þá sannreyna tenginguna við Landsbankann og lesaðgang að bankareikningum.</>,
+                          ].map((step, i) => (
+                            <Box key={i} sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                              <Box sx={{
+                                flexShrink: 0, width: 22, height: 22, borderRadius: '50%',
+                                background: '#eef1f8', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                mt: '1px',
+                              }}>
+                                <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#1D366F' }}>{i + 1}</Typography>
+                              </Box>
+                              <Typography variant="body2" color="text.secondary" sx={{ pt: '2px' }}>{step}</Typography>
+                            </Box>
+                          ))}
+                          <Box sx={{ mt: 0.5, p: '10px 14px', background: '#f5f7fc', borderRadius: 1.5, borderLeft: '3px solid #c5cfe8' }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
+                              <Box component="span" sx={{ fontWeight: 600, color: '#1D366F' }}>ATH: </Box>
+                              Húsfjelagið fær aðeins lesréttindi til að flokka færslurnar á rétta kostnaðarliði, kerfið hefur engin réttindi til að millifæra eða eiga við bankareikningana að öðru leiti.
+                            </Typography>
+                          </Box>
+                        </Box>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                           <TextField
                             label="API lykill"
@@ -373,8 +408,8 @@ export default function BankSettingsPage() {
                   Síðast uppfært: {new Date(bankSettings.updated_at).toLocaleString('is-IS')}
                 </Typography>
               )}
-              {user?.is_superadmin && (
-                <Box sx={{ mt: 1.5 }}>
+              {canManage && (
+                <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   <Button
                     variant="outlined"
                     size="small"
@@ -385,6 +420,15 @@ export default function BankSettingsPage() {
                   >
                     {syncing ? 'Samstilli...' : 'Samstilla núna'}
                   </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    sx={{ ...ghostButtonSx, color: '#c62828', borderColor: '#e8c4c4', '&:hover': { background: '#fff5f5', borderColor: '#c62828' } }}
+                    onClick={() => requestBankChange(null)}
+                    disabled={saving}
+                  >
+                    Aftengja banka
+                  </Button>
                 </Box>
               )}
             </SectionCard>
@@ -393,20 +437,20 @@ export default function BankSettingsPage() {
         </Box>
       </Box>
 
-      {/* ── Confirmation dialog: change bank ──────────────────────── */}
+      {/* ── Confirmation dialog: change or disconnect bank ────────── */}
       <Dialog open={changeBankOpen} onClose={() => setChangeBankOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Velja annan banka</DialogTitle>
+        <DialogTitle>{pendingBank ? 'Skipta um banka' : 'Aftengja banka'}</DialogTitle>
         <DialogContent>
           <DialogContentText>
             {pendingBank
               ? `Viltu skipta yfir í ${BANKS.find(b => b.id === pendingBank)?.label}? Allar vistaðar stillingar (API lykill, innheimtusniðmát) verða eyðar.`
-              : 'Viltu velja annan banka? Allar vistaðar stillingar (API lykill, innheimtusniðmát) verða eyðar.'}
+              : 'Viltu aftengja bankann? Allar vistaðar stillingar (API lykill, innheimtusniðmát) verða eyðar og þú getur valið banka að nýju.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button sx={ghostButtonSx} onClick={() => setChangeBankOpen(false)}>Hætta við</Button>
           <Button variant="contained" sx={primaryButtonSx} disabled={saving} onClick={confirmBankChange}>
-            {saving ? <CircularProgress size={18} color="inherit" /> : 'Já, skipta um banka'}
+            {saving ? <CircularProgress size={18} color="inherit" /> : pendingBank ? 'Já, skipta um banka' : 'Já, aftengja'}
           </Button>
         </DialogActions>
       </Dialog>

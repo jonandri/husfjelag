@@ -5,7 +5,7 @@ import bugsnag
 from celery import shared_task
 from django.utils.timezone import now as tz_now
 
-from associations.banks.landsbankinn import sync_account_transactions
+from associations.banks.landsbankinn import discover_and_sync_accounts, sync_account_transactions
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,30 @@ def sync_transactions(association_id: int) -> dict:
     if not api_key:
         return {"skipped": True, "reason": "api_key_missing"}
 
+    # Step 1: discover bank accounts from Landsbankinn, create missing ones,
+    # update is_connected/bank_status on existing ones.
+    try:
+        discovery = discover_and_sync_accounts(association, api_key)
+        logger.info(
+            "sync_transactions: account discovery assoc=%s created=%s connected=%s disconnected=%s",
+            association_id, discovery["created"], discovery["connected"], discovery["disconnected"],
+        )
+    except Exception as exc:
+        logger.error(
+            "sync_transactions: account discovery failed for assoc %s: %s",
+            association_id, exc,
+        )
+        bugsnag.notify(
+            exc,
+            context="celery:sync_transactions:discovery",
+            extra_data={"association_id": association_id},
+        )
+
     total_created = 0
     total_skipped = 0
 
-    for account in BankAccount.objects.filter(association=association, deleted=False):
+    # Step 2: sync transactions for connected accounts only
+    for account in BankAccount.objects.filter(association=association, deleted=False, is_connected=True):
         last_date = (
             Transaction.objects
             .filter(bank_account=account)

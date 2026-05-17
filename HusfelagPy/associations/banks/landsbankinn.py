@@ -81,12 +81,16 @@ def get_access_token(api_key: str) -> str:
     return plaintext
 
 
+def _headers(token: str, api_key: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "apikey": api_key}
+
+
 def _get(path: str, api_key: str, **params) -> dict:
     """Authenticated GET to Landsbankinn API. Returns parsed JSON."""
     token = get_access_token(api_key)
     resp = requests.get(
         f"{settings.BANK_LANDSBANKINN_API_BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token, api_key),
         params=params,
         timeout=30,
     )
@@ -99,7 +103,7 @@ def _get_raw(path: str, api_key: str, **params):
     token = get_access_token(api_key)
     resp = requests.get(
         f"{settings.BANK_LANDSBANKINN_API_BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token, api_key),
         params=params,
         timeout=30,
     )
@@ -112,12 +116,110 @@ def _post(path: str, api_key: str, body: dict) -> dict:
     token = get_access_token(api_key)
     resp = requests.post(
         f"{settings.BANK_LANDSBANKINN_API_BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_headers(token, api_key),
         json=body,
         timeout=30,
     )
     resp.raise_for_status()
     return resp.json()
+
+
+def fetch_opening_balance(api_key: str, bban: str, owner_ssn: str, as_of_date: date) -> Decimal | None:
+    """
+    Fetch the end-of-day balance for a specific account on a given date.
+
+    Calls GET /Accounts/Accounts/v1/EndOfDayFinancials with date, ownerNationalId, and id (bban).
+    Returns the balance as a Decimal, or None on any failure.
+    """
+    try:
+        data = _get(
+            "/Accounts/Accounts/v1/EndOfDayFinancials",
+            api_key,
+            date=as_of_date.isoformat(),
+            ownerNationalId=owner_ssn,
+            id=bban,
+        )
+        logger.debug("EndOfDayFinancials for bban=%s date=%s: %s", bban, as_of_date, data)
+        entries = data.get("data", [])
+        payload = next((e for e in entries if e.get("id") == bban), None)
+        if payload is None:
+            logger.warning("EndOfDayFinancials: bban=%s not found in response", bban)
+            return None
+        amount = payload.get("balance", {}).get("amount")
+        if amount is not None:
+            return Decimal(str(amount))
+        logger.warning("EndOfDayFinancials: no balance.amount in entry: %s", payload)
+    except Exception:
+        logger.exception("fetch_opening_balance failed for bban=%s date=%s", bban, as_of_date)
+    return None
+
+
+def _set_opening_balance(bank_account, api_key: str, bban: str, owner_ssn: str, ref_date: date) -> None:
+    balance = fetch_opening_balance(api_key, bban, owner_ssn, ref_date)
+    if balance is not None:
+        bank_account.opening_balance = balance
+        bank_account.opening_balance_date = ref_date
+        bank_account.save(update_fields=["opening_balance", "opening_balance_date"])
+
+
+def discover_and_sync_accounts(association, api_key: str) -> dict:
+    """
+    Fetch all accounts from Landsbankinn and create/update BankAccount records.
+
+    For each account returned by GET /Accounts/Accounts/v1/Accounts:
+    - Converts bban (12 digits) to formatted account_number (XXXX-XX-XXXXXX)
+    - Creates a new BankAccount if ownerNationalId matches association SSN and status=open
+    - Updates is_connected and bank_status on existing accounts
+
+    Returns {"created": int, "connected": int, "disconnected": int}.
+    """
+    from associations.models import BankAccount
+
+    data = _get("/Accounts/Accounts/v1/Accounts", api_key)
+    accounts = data.get("data", [])
+
+    today = date.today()
+    ref_date = date(today.year - 1, 12, 31)
+
+    created = connected = disconnected = 0
+
+    for acc in accounts:
+        bban = acc.get("bban", "")
+        if not bban or len(bban) != 12:
+            continue
+
+        account_number = f"{bban[0:4]}-{bban[4:6]}-{bban[6:]}"
+        owner_match = acc.get("ownerNationalId", "") == association.ssn
+        status_open = acc.get("status", "") == "open"
+        is_valid = owner_match and status_open
+
+        existing = BankAccount.objects.filter(
+            association=association, account_number=account_number
+        ).first()
+
+        if existing is None:
+            if is_valid:
+                bank_account = BankAccount.objects.create(
+                    association=association,
+                    account_number=account_number,
+                    name=acc.get("product", {}).get("name", account_number),
+                    is_connected=True,
+                    bank_status=acc.get("status", ""),
+                )
+                _set_opening_balance(bank_account, api_key, bban, association.ssn, ref_date)
+                created += 1
+        else:
+            existing.is_connected = is_valid
+            existing.bank_status = acc.get("status", "")
+            existing.save(update_fields=["is_connected", "bank_status"])
+            if is_valid:
+                connected += 1
+                if existing.opening_balance_date is None:
+                    _set_opening_balance(existing, api_key, bban, association.ssn, ref_date)
+            else:
+                disconnected += 1
+
+    return {"created": created, "connected": connected, "disconnected": disconnected}
 
 
 def sync_account_transactions(
@@ -133,13 +235,16 @@ def sync_account_transactions(
     """
     from associations.models import Transaction, TransactionSource
 
+    # API expects bban (12 digits) — strip formatting dashes from account_number
+    bban = account.account_number.replace("-", "")
+
     created = 0
     skipped = 0
     page = 1
 
     while True:
         resp = _get_raw(
-            f"/Accounts/Accounts/v1/Accounts/{account.account_number}/Transactions",
+            f"/Accounts/Accounts/v1/Accounts/{bban}/Transactions",
             api_key,
             bookingDateFrom=from_date.isoformat(),
             bookingDateTo=to_date.isoformat(),
@@ -163,7 +268,7 @@ def sync_account_transactions(
                 external_id=external_id,
                 date=tx["bookingDate"],
                 amount=Decimal(str(tx["amount"])),
-                description=tx.get("actionLabel", "") or "",
+                description=tx.get("creditorName", "") or "",
                 reference=tx.get("reference", "") or "",
                 payer_kennitala=(
                     tx.get("debtorNationalId", "")

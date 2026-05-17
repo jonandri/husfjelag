@@ -1,9 +1,15 @@
+import logging
+
+import bugsnag
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
 from django.utils.timezone import now as tz_now
+
+logger = logging.getLogger(__name__)
+
 from associations.models import (
     Association, AssociationAccess, AssociationRole,
     AssociationBankSettings, BankProvider, BankClaim, BankClaimStatus, Collection,
@@ -85,15 +91,26 @@ class BankDisconnectView(APIView):
 
 
 class AdminBankSyncView(APIView):
-    """POST /admin/associations/{id}/bank/sync — superadmin only"""
+    """POST /admin/associations/{id}/bank/sync — chair, CFO, or superadmin"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request, association_id):
-        if not request.user.is_superadmin:
-            return Response({"detail": "Aðeins kerfisstjórar hafa aðgang."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
 
-        from associations.banks.tasks import sync_transactions
-        sync_transactions.delay(association_id)
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        try:
+            from associations.banks.tasks import sync_transactions
+            sync_transactions.delay(association_id)
+        except Exception as exc:
+            logger.error("Failed to enqueue sync for association %s: %s", association_id, exc)
+            bugsnag.notify(exc, context="admin_bank_sync", extra_data={"association_id": association_id})
+            return Response({"detail": f"Gat ekki ræst samstillingu: {exc}"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({"detail": "Samstilling hafin."}, status=status.HTTP_202_ACCEPTED)
 
 
@@ -198,6 +215,16 @@ class AssociationBankSettingsView(APIView):
             association=association,
             defaults=defaults,
         )
+
+        # Kick off a sync whenever the API key is set or updated
+        if "api_key" in request.data and request.data["api_key"].strip():
+            try:
+                from associations.banks.tasks import sync_transactions
+                sync_transactions.delay(association.id)
+            except Exception as exc:
+                logger.error("Failed to enqueue sync for association %s: %s", association.id, exc)
+                bugsnag.notify(exc, context="bank_settings:auto_sync", extra_data={"association_id": association.id})
+
         return Response({
             "bank": bs.bank,
             "api_key_set": bool(bs.api_key),
