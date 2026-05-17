@@ -270,7 +270,7 @@ function CollectionPage() {
                                                     {row.claim_status === 'CANCELLED' && (
                                                         <StatusChip status="CLAIM_CANCELLED" />
                                                     )}
-                                                    {!row.claim_status && (
+                                                    {!row.claim_status && row.status !== 'PAID' && (
                                                         <Tooltip title={
                                                             !bankConfigured
                                                                 ? 'Þú þarft að stilla Landsbankinn sniðmát áður en hægt er að senda kröfur.'

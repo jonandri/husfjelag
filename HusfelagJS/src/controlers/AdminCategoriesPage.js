@@ -11,6 +11,8 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
@@ -127,6 +129,7 @@ function GlobalCategoriesPanel({ user }) {
                                 <TableCell sx={HEAD_CELL_SX}>Nafn</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Tegund</TableCell>
                                 <TableCell sx={HEAD_CELL_SX}>Bókhaldsreikningur</TableCell>
+                                <TableCell sx={{ ...HEAD_CELL_SX, width: 90 }}>Sjálfgefið</TableCell>
                                 <TableCell />
                             </TableRow>
                         </TableHead>
@@ -262,12 +265,40 @@ function GlobalCategoryRow({ category, userId, onSaved, onUpdated, isDisabled })
         : category.income_account_number
             ? `${category.income_account_number} · ${category.income_account_name}`
             : '—';
+
+    const toggleDefault = async () => {
+        try {
+            const resp = await apiFetch(`${API_URL}/Category/update/${category.id}?user_id=${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: category.name,
+                    type: category.type,
+                    expense_account_id: category.expense_account_id || null,
+                    income_account_id: category.income_account_id || null,
+                    is_default: !category.is_default,
+                }),
+            });
+            if (resp.ok) { const updated = await resp.json(); onUpdated(updated); }
+        } catch {}
+    };
+
     return (
         <>
             <TableRow hover sx={isDisabled ? { opacity: 0.55 } : {}}>
                 <TableCell>{category.name}</TableCell>
                 <TableCell><LabelChip label={typeLabel(category.type)} /></TableCell>
                 <TableCell>{accountLabel !== '—' ? <LabelChip label={accountLabel} /> : <Typography variant="body2" color="text.disabled">—</Typography>}</TableCell>
+                {!isDisabled && (
+                    <TableCell sx={{ width: 90 }}>
+                        <Tooltip title={category.is_default ? 'Sjálfgefinn flokkur' : 'Merkja sem sjálfgefinn'}>
+                            <IconButton size="small" onClick={toggleDefault} sx={{ color: category.is_default ? '#f59e0b' : '#bbb' }}>
+                                {category.is_default ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                            </IconButton>
+                        </Tooltip>
+                    </TableCell>
+                )}
+                {isDisabled && <TableCell />}
                 <TableCell align="right" sx={{ width: 48 }}>
                     <Tooltip title={isDisabled ? 'Virkja / breyta' : 'Breyta'}>
                         <IconButton size="small" onClick={() => setEditOpen(true)}>
