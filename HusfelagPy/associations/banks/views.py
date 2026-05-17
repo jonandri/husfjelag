@@ -414,3 +414,44 @@ class CertHealthView(APIView):
                 "warning": True,
                 "error": str(exc),
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class IncomingClaimsView(APIView):
+    """GET /associations/{id}/bank/incoming-claims — unpaid claims where this association is the payor."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, association_id):
+        from datetime import date, timedelta
+        from associations.banks.landsbankinn import fetch_incoming_claims
+
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        try:
+            settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response({"claims": [], "configured": False})
+
+        if not settings.api_key:
+            return Response({"claims": [], "configured": False})
+
+        today = date.today()
+        year_ago = today - timedelta(days=365)
+        if association.registered and association.registered > year_ago:
+            due_date_from = association.registered
+        else:
+            due_date_from = year_ago
+
+        try:
+            claims = fetch_incoming_claims(settings.api_key, association.ssn, due_date_from)
+            return Response({"claims": claims, "configured": True})
+        except Exception as exc:
+            logger.exception("fetch_incoming_claims failed for association %s", association_id)
+            bugsnag.notify(exc, context="incoming_claims", extra_data={"association_id": association_id})
+            return Response({"claims": [], "configured": True, "error": True})

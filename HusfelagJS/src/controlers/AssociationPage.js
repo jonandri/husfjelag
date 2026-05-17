@@ -51,6 +51,7 @@ function AssociationPage() {
     const [collections, setCollections] = useState([]);
     const [hasBudget, setHasBudget] = useState(false);
     const [ratiosOk, setRatiosOk] = useState(true);
+    const [incomingClaims, setIncomingClaims] = useState([]);
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
@@ -62,6 +63,14 @@ function AssociationPage() {
         apiFetch(`${API_URL}/associations/${currentAssociation.id}/bank/status`)
             .then(r => r.ok ? r.json() : null)
             .then(data => setBankConfigured(data?.configured ?? false))
+            .catch(() => {});
+    }, [currentAssociation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (!currentAssociation?.id) return;
+        apiFetch(`${API_URL}/associations/${currentAssociation.id}/bank/incoming-claims`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.claims) setIncomingClaims(data.claims); })
             .catch(() => {});
     }, [currentAssociation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -283,13 +292,19 @@ function AssociationPage() {
                         />
                     </Box>
 
-                    {/* RIGHT column: sticky Athugasemdir */}
-                    <AthugasemdarPanel
-                        collections={collections}
-                        userId={user.id}
-                        assocParam={assocParam}
-                        ratiosOk={ratiosOk}
-                    />
+                    {/* RIGHT column */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <AthugasemdarPanel
+                            collections={collections}
+                            userId={user.id}
+                            assocParam={assocParam}
+                            ratiosOk={ratiosOk}
+                            overdueIncomingClaims={incomingClaims.filter(c => c.is_overdue).length}
+                        />
+                        {incomingClaims.length > 0 && (
+                            <IncomingClaimsPanel claims={incomingClaims} />
+                        )}
+                    </Box>
 
 
                 </Box>
@@ -1136,7 +1151,49 @@ function UppsetningView({ association, setupSteps, setupComplete, owners, userId
 
 const IS_MONTHS = ['janúar','febrúar','mars','apríl','maí','júní','júlí','ágúst','september','október','nóvember','desember'];
 
-function AthugasemdarPanel({ collections, userId, assocParam, ratiosOk }) {
+function IncomingClaimsPanel({ claims }) {
+    const today = new Date().toISOString().slice(0, 10);
+    const fmtDate = iso => {
+        const [y, m, d] = iso.split('-');
+        return `${d}. ${IS_MONTHS[parseInt(m, 10) - 1]} ${y}`;
+    };
+    return (
+        <Box sx={{ border: '1px solid #e8e8e8', borderRadius: '8px', p: '18px 20px' }}>
+            <Eyebrow variant="navy" sx={{ mb: 1.75 }}>ÓGREIDDAR KRÖFUR</Eyebrow>
+            {claims.map((c, i) => {
+                const overdue = c.due_date < today;
+                const secondary = c.collection_status === 'secondaryCollection';
+                return (
+                    <Box key={c.id} sx={{
+                        display: 'flex', gap: 1.5, py: 1.5, alignItems: 'flex-start',
+                        borderBottom: i < claims.length - 1 ? '1px solid #f2f2f2' : 'none',
+                    }}>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontSize: 13.5, fontWeight: 500, lineHeight: 1.3 }}>
+                                {c.claimant_name || '—'}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.4, flexWrap: 'wrap' }}>
+                                <Typography sx={{ fontSize: 12, color: overdue ? '#c62828' : '#666' }}>
+                                    Gjalddagi {fmtDate(c.due_date)}
+                                </Typography>
+                                {secondary && (
+                                    <Box sx={{ fontSize: 10, fontWeight: 600, color: '#c62828', background: '#fdecea', px: 0.75, py: 0.2, borderRadius: '4px', letterSpacing: '0.04em' }}>
+                                        INNHEIMTA
+                                    </Box>
+                                )}
+                            </Box>
+                        </Box>
+                        <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: overdue ? '#c62828' : 'text.primary', whiteSpace: 'nowrap' }}>
+                            {c.amount.toLocaleString('is-IS')} kr.
+                        </Typography>
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+function AthugasemdarPanel({ collections, userId, assocParam, ratiosOk, overdueIncomingClaims = 0 }) {
     const [unclassifiedCount, setUnclassifiedCount] = React.useState(0);
     const [missingMonths, setMissingMonths] = React.useState([]);
     const [overdueCount, setOverdueCount] = React.useState(0);
@@ -1211,6 +1268,14 @@ function AthugasemdarPanel({ collections, userId, assocParam, ratiosOk }) {
         });
     }
 
+    if (overdueIncomingClaims > 0) {
+        notifications.push({
+            icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#c62828', mt: '1px' }} />,
+            text: `${overdueIncomingClaims} gjaldfallen${overdueIncomingClaims === 1 ? '' : 'ar'} krafa${overdueIncomingClaims === 1 ? '' : 'r'} í vanskilum`,
+            cta: null,
+        });
+    }
+
     if (currentUnpaid > 0) {
         notifications.push({
             icon: <WarningAmberIcon sx={{ fontSize: 22, color: '#e65100', mt: '1px' }} />,
@@ -1241,7 +1306,7 @@ function AthugasemdarPanel({ collections, userId, assocParam, ratiosOk }) {
                         {n.icon}
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography sx={{ fontSize: 13.5, lineHeight: 1.4 }}>{n.text}</Typography>
-                            <AthugasemdarLink href={n.cta.href} label={n.cta.label} />
+                            {n.cta && <AthugasemdarLink href={n.cta.href} label={n.cta.label} />}
                         </Box>
                     </Box>
                 ))

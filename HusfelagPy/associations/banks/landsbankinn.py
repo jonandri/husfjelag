@@ -343,6 +343,42 @@ def create_claim(collection, settings_obj) -> dict:
     return _post("/Claims/Claims/v1/Claims", api_key, body)
 
 
+def fetch_incoming_claims(api_key: str, payor_ssn: str, due_date_from: date) -> list[dict]:
+    """
+    Fetch unpaid claims where the association is the payor (bills the association owes).
+
+    Calls GET /Claims/Claims/v1/Claims with payorNationalId, status=unpaid, and dueDateFrom.
+    Returns a list of simplified claim dicts, sorted by dueDate ascending.
+    Raises requests.HTTPError on failure.
+    """
+    today = date.today()
+    data = _get(
+        "/Claims/Claims/v1/Claims",
+        api_key,
+        payorNationalId=payor_ssn,
+        status="unpaid",
+        dueDateFrom=due_date_from.isoformat(),
+    )
+    results = []
+    for c in data.get("data", []):
+        due = c.get("dueDate", "")
+        total = c.get("totalAmountDue") or 0
+        principal_amount = (c.get("principal") or {}).get("amount") or 0
+        amount = total if total > 0 else principal_amount
+        results.append({
+            "id": c.get("id", ""),
+            "claimant_name": c.get("claimantName", ""),
+            "due_date": due,
+            "amount": amount,
+            "is_overdue": bool(due and due < today.isoformat()),
+            "collection_status": c.get("collectionStatus", "primaryCollection"),
+            "bill_number": c.get("billNumber", ""),
+            "description": c.get("description", ""),
+        })
+    results.sort(key=lambda x: x["due_date"])
+    return results
+
+
 def get_claim_status(claim_id: str, api_key: str) -> str:
     """
     Fetch the current status of a claim from Landsbankinn.
