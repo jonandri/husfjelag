@@ -32,10 +32,11 @@ All stored in Doppler, never on disk.
 ```
 BANK_LANDSBANKINN_API_BASE = https://apisandbox.landsbankinn.is/api
 
-Accounts list:    GET  {base}/Accounts/Accounts/v1/Accounts
-Transactions:     GET  {base}/Accounts/Accounts/v1/Accounts/{bban}/Transactions
-Claims:           POST {base}/Claims/Claims/v1/Claims
-Claim status:     GET  {base}/Claims/Claims/v1/Claims/{claim_id}
+Accounts list:      GET  {base}/Accounts/Accounts/v1/Accounts
+End-of-day balance: GET  {base}/Accounts/Accounts/v1/EndOfDayFinancials
+Transactions:       GET  {base}/Accounts/Accounts/v1/Accounts/{bban}/Transactions
+Claims:             POST {base}/Claims/Claims/v1/Claims
+Claim status:       GET  {base}/Claims/Claims/v1/Claims/{claim_id}
 ```
 
 ### Authentication — `POST {authUrl}/connect/token`
@@ -99,6 +100,48 @@ apikey: <association api_key (client_id)>
 - `bban` — 12-digit account number without formatting. Maps to our `account_number` field after formatting: `010126000001` → `0101-26-000001`
 - `ownerNationalId` — kennitala of the account owner. Must match the association's SSN to be considered valid
 - `status` — `"open"` or `"closed"`. Only open accounts are connected
+
+### End-of-Day Balance — `GET /Accounts/Accounts/v1/EndOfDayFinancials`
+
+Returns end-of-day balances for all accounts belonging to an owner on a given date. Used to fetch the Dec 31 opening balance when a new account is connected.
+
+**Query parameters:**
+- `date` — ISO date, e.g. `2025-12-31`
+- `ownerNationalId` — kennitala of the account owner
+- `id` — bban (12 digits) of the specific account
+
+Despite the `id` filter, the API returns **all accounts** for the `ownerNationalId`. Filter the response list by `id == bban` to get the right entry.
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "010126000001",
+      "ownerNationalId": "0101302989",
+      "productName": "Einkareikningur",
+      "date": "2025-12-31",
+      "balance": {
+        "amount": 1000,
+        "currency": "ISK"
+      },
+      "accruedDepositInterest": { "amount": 100, "currency": "ISK" },
+      "balanceInLocalCurrency": { "amount": 1000, "currency": "ISK" },
+      "accruedDepositInterestInLocalCurrency": { "amount": 100, "currency": "ISK" }
+    }
+  ],
+  "page": 1,
+  "perPage": 100,
+  "totalItems": 2,
+  "totalPages": 1
+}
+```
+
+**Key fields:**
+- `balance.amount` — the closing balance for the day in the account's native currency. This is what we store as `opening_balance`.
+- `id` — the bban; use this to find the right entry in the list
+
+**How we use it:** `fetch_opening_balance()` in `landsbankinn.py` calls this for Dec 31 of last year whenever a new `BankAccount` is created (or an existing account is re-connected with no opening balance set).
 
 ### Transactions — `GET /Accounts/Accounts/v1/Accounts/{bban}/Transactions`
 
@@ -181,8 +224,15 @@ Chair/CFO enters the API key in Settings → Bankastillingar. It is stored on `A
 - For each account returned:
   - Converts `bban` (12 digits) → formatted `account_number` (`XXXX-XX-XXXXXX`)
   - Checks `ownerNationalId == association.ssn` AND `status == "open"`
-  - If valid and not in DB: creates a new `BankAccount` with `is_connected=True`
-  - If already in DB: updates `is_connected` and `bank_status`
+  - If valid and not in DB: creates a new `BankAccount` with `is_connected=True`, then fetches opening balance (see 2a.1)
+  - If already in DB: updates `is_connected` and `bank_status`; fetches opening balance if not yet set
+
+**2a.1. Opening balance** (`fetch_opening_balance` → `_set_opening_balance`):
+- Calls `GET /Accounts/Accounts/v1/EndOfDayFinancials?date=<dec31_last_year>&ownerNationalId=<ssn>&id=<bban>`
+- Finds the matching entry in the response list by `id == bban`
+- Stores `balance.amount` as `BankAccount.opening_balance` and the reference date as `BankAccount.opening_balance_date`
+- Current balance displayed in the UI = `opening_balance + sum(all synced transactions)`
+- If the fetch fails (network error, account not in response), `opening_balance` stays at `0` and `opening_balance_date` stays `null` — the account is still usable, just without a historical starting point
 
 **2b. Transaction sync** (`sync_account_transactions` per connected account):
 - Only runs for accounts where `is_connected=True`
@@ -214,8 +264,9 @@ When a collection month is generated and the association has Landsbankinn config
 ```
 Association
   └── AssociationBankSettings   (bank, api_key, template_id, last_sync_at)
-  └── BankAccount               (account_number, is_connected, bank_status)
+  └── BankAccount               (account_number, is_connected, bank_status, opening_balance, opening_balance_date)
         └── Transaction         (date, amount, description, external_id, payer_kennitala)
+        -- current_balance = opening_balance + sum(transactions.amount)
   └── Budget
         └── Collection
               └── BankClaim     (claim_id, status, due_date, sent_at)
