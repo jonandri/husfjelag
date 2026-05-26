@@ -35,7 +35,7 @@ function Dashboard() {
         };
 
         fetchAssociation();
-    }, [user, assocParam]);
+    }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className='dashboard'>

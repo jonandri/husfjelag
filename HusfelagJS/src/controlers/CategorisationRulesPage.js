@@ -59,7 +59,7 @@ export default function CategorisationRulesPage() {
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         load();
-    }, [user, assocParam, navigate]);
+    }, [user, assocParam, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const openCreate = (isGlobal = false) => {
         setEditRule(null);

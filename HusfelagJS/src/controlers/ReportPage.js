@@ -119,7 +119,7 @@ function ReportPage() {
                 setError('Villa við að sækja skýrslugögn.');
                 setData(null);
             });
-    }, [user, assocParam, year]);
+    }, [user, assocParam, year]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const openDrill = (month) => {
         if (!user) return;
