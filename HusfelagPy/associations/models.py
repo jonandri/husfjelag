@@ -384,6 +384,11 @@ class BankTokenCache(models.Model):
         return f"{self.bank}/{self.association_id} token (expires {self.expires_at})"
 
 
+class ClaimMode(models.TextChoices):
+    DIRECT_API   = "DIRECT_API",   "Stofna innheimtukröfur frá husfjelag.is"
+    BANK_SERVICE = "BANK_SERVICE", "Nota húsfélagaþjónustu bankans"
+
+
 class AssociationBankSettings(models.Model):
     """Per-association bank connection. One active bank per association for now."""
     association = models.OneToOneField(
@@ -394,6 +399,9 @@ class AssociationBankSettings(models.Model):
     )
     api_key     = models.TextField(blank=True)  # Fernet-encrypted per-association Landsbankinn client_id
     template_id = models.CharField(max_length=64, blank=True)   # Landsbankinn claims template
+    claim_mode  = models.CharField(
+        max_length=16, choices=ClaimMode.choices, default=ClaimMode.DIRECT_API
+    )
     last_sync_at = models.DateTimeField(null=True, blank=True)
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)

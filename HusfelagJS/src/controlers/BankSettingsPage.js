@@ -40,6 +40,7 @@ export default function BankSettingsPage() {
   const [templateIdInput, setTemplateIdInput]     = useState('');
   const [showApiKeyInput, setShowApiKeyInput]     = useState(false);
   const [showTemplateInput, setShowTemplateInput] = useState(false);
+  const [claimModeInput, setClaimModeInput]       = useState('DIRECT_API');
 
   // Bank-change confirmation dialog
   const [changeBankOpen, setChangeBankOpen] = useState(false);
@@ -47,9 +48,10 @@ export default function BankSettingsPage() {
 
   const assocId      = currentAssociation?.id;
   const canManage    = ['Formaður', 'Gjaldkeri', 'Kerfisstjóri'].includes(currentAssociation?.role);
+  const isDirectApi  = (bankSettings?.claim_mode || 'DIRECT_API') === 'DIRECT_API';
   const isConfigured = bankSettings?.bank === 'landsbankinn'
                     && bankSettings?.api_key_set
-                    && !!bankSettings?.template_id;
+                    && (isDirectApi ? !!bankSettings?.template_id : true);
 
   useEffect(() => {
     if (!assocId) return;
@@ -64,6 +66,7 @@ export default function BankSettingsPage() {
         const s = await resp.json();
         setBankSettings(s);
         setTemplateIdInput(s.template_id || '');
+        setClaimModeInput(s.claim_mode || 'DIRECT_API');
       }
       // 404 → no row yet, bankSettings stays null
     } catch { /* leave defaults */ } finally {
@@ -93,6 +96,7 @@ export default function BankSettingsPage() {
         const s = await resp.json();
         setBankSettings(s);
         setTemplateIdInput(s.template_id || '');
+        setClaimModeInput(s.claim_mode || 'DIRECT_API');
         return true;
       }
       const text = await _parseErrorDetail(resp, 'Villa við vistun.');
@@ -164,6 +168,12 @@ export default function BankSettingsPage() {
   async function handleSaveTemplate() {
     const ok = await postSettings({ template_id: templateIdInput.trim() });
     if (ok) setShowTemplateInput(false);
+  }
+
+  async function handleClaimModeChange(mode) {
+    if (mode === bankSettings?.claim_mode) return;
+    setClaimModeInput(mode);
+    await postSettings({ claim_mode: mode });
   }
 
   async function handleManualSync() {
@@ -323,8 +333,57 @@ export default function BankSettingsPage() {
                     )}
                   </SectionCard>
 
-                  {/* 2b: Innheimtusniðmát — only once API key is set */}
+                  {/* 2b: Claim mode toggle — only once API key is set */}
                   {bankSettings.api_key_set && (
+                    <SectionCard title="Innheimtuaðferð" sx={{ mt: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>
+                        Veldu hvernig húsfélagsgjöld eru innheimt í gegnum Landsbankann.
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {[
+                          { value: 'DIRECT_API', label: 'Stofna innheimtukröfur frá husfjelag.is', sub: 'Kröfur eru sendar beint í gegnum Landsbankinn API. Þarfnast innheimtusniðmáts.' },
+                          { value: 'BANK_SERVICE', label: 'Nota húsfélagaþjónustu bankans', sub: 'Landsbankinn sér um innheimtuna. Þú sendir áætlun til bankans í tölvupósti.' },
+                        ].map(opt => {
+                          const selected = claimModeInput === opt.value;
+                          return (
+                            <Box
+                              key={opt.value}
+                              onClick={canManage && !saving ? () => handleClaimModeChange(opt.value) : undefined}
+                              sx={{
+                                border: `1.5px solid ${selected ? NAVY : BORDER}`,
+                                borderRadius: 1.5,
+                                p: 1.5,
+                                cursor: canManage && !saving ? 'pointer' : 'default',
+                                background: selected ? '#f0f3fa' : '#fff',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 1.5,
+                                transition: 'border-color 0.15s',
+                              }}
+                            >
+                              <Box sx={{
+                                flexShrink: 0, width: 18, height: 18, borderRadius: '50%', mt: '2px',
+                                border: `2px solid ${selected ? NAVY : '#bbb'}`,
+                                background: selected ? NAVY : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              }}>
+                                {selected && <Box sx={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+                              </Box>
+                              <Box>
+                                <Typography variant="body2" sx={{ fontWeight: selected ? 600 : 400, color: selected ? NAVY : 'text.primary' }}>
+                                  {opt.label}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">{opt.sub}</Typography>
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </SectionCard>
+                  )}
+
+                  {/* 2c: Innheimtusniðmát — only in DIRECT_API mode */}
+                  {bankSettings.api_key_set && isDirectApi && (
                     <SectionCard title="Innheimtusniðmát" sx={{ mt: 2 }}>
                       {bankSettings.template_id && !showTemplateInput ? (
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.5 }}>
@@ -342,6 +401,7 @@ export default function BankSettingsPage() {
                         <>
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 2 }}>
                             Auðkenni innheimtusniðmáts frá Landsbankanum þarf að vera stillt til að geta sent inn kröfur.
+                            Þú stofnar innheimtusniðmát í <a href="https://www.fbl.is/innheimta/snidmat">netbanka Landsbankans</a>
                           </Typography>
                           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                             <TextField

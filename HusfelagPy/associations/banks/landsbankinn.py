@@ -363,6 +363,8 @@ def fetch_incoming_claims(association_id: int, api_key: str, payor_ssn: str, due
     )
     results = []
     for c in data.get("data", []):
+        if c.get("status", "").lower() in ("paid", "cancelled"):
+            continue
         due = c.get("dueDate", "")
         total = c.get("totalAmountDue") or 0
         principal_amount = (c.get("principal") or {}).get("amount") or 0

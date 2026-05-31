@@ -18,7 +18,7 @@ from .banks.views import (
     BankStatusView,
     BankDisconnectView, AdminBankSyncView, AdminBankHealthView,
     AssociationBankSettingsView, SendClaimView, SendAllClaimsView,
-    CertHealthView, IncomingClaimsView,
+    NotifyBudgetView, CertHealthView, IncomingClaimsView,
 )
 from .banks.health import SystemHealthView
 
@@ -92,6 +92,7 @@ urlpatterns = [
     path("associations/<int:association_id>/bank/settings", AssociationBankSettingsView.as_view(), name="bank-settings"),
     path("Collection/<int:collection_id>/send-claim", SendClaimView.as_view(), name="collection-send-claim"),
     path("associations/<int:association_id>/bank/send-all-claims", SendAllClaimsView.as_view(), name="bank-send-all-claims"),
+    path("associations/<int:association_id>/bank/notify-budget", NotifyBudgetView.as_view(), name="bank-notify-budget"),
     path("associations/<int:association_id>/bank/incoming-claims", IncomingClaimsView.as_view(), name="bank-incoming-claims"),
     path("health/cert", CertHealthView.as_view(), name="cert-health"),
     path("health/", SystemHealthView.as_view(), name="system-health"),

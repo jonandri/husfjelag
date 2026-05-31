@@ -12,7 +12,7 @@ import { UserContext } from './UserContext';
 import { apiFetch } from '../api';
 import SideBar from './Sidebar';
 import { fmtAmount } from '../format';
-import { primaryButtonSx, ghostButtonSx } from '../ui/buttons';
+import { primaryButtonSx, ghostButtonSx, secondaryButtonSx } from '../ui/buttons';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
@@ -39,15 +39,19 @@ function TegundChip({ type }) {
 
 function BudgetPage() {
     const navigate = useNavigate();
-    const { user, assocParam } = React.useContext(UserContext);
+    const { user, assocParam, currentAssociation } = React.useContext(UserContext);
     const { openHelp } = useHelp();
     const [budget, setBudget] = useState(undefined);
     const [error, setError] = useState('');
+    const [bankClaimMode, setBankClaimMode] = useState(null);
+    const [notifyBudgetSending, setNotifyBudgetSending] = useState(false);
+    const [notifyMessage, setNotifyMessage] = useState(null);
     const year = new Date().getFullYear();
 
     useEffect(() => {
         if (!user) { navigate('/login'); return; }
         loadBudget();
+        loadBankSettings();
     }, [user, assocParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadBudget = async () => {
@@ -57,6 +61,39 @@ function BudgetPage() {
             else if (resp.status === 404) setBudget(null);
             else { setError('Villa við að sækja áætlun.'); setBudget(null); }
         } catch { setError('Tenging við þjón mistókst.'); setBudget(null); }
+    };
+
+    const loadBankSettings = async () => {
+        if (!currentAssociation?.id) return;
+        try {
+            const resp = await apiFetch(`${API_URL}/associations/${currentAssociation.id}/bank/settings`);
+            if (resp.ok) {
+                const s = await resp.json();
+                setBankClaimMode(s.claim_mode || null);
+            }
+        } catch { /* bank settings are optional */ }
+    };
+
+    const handleNotifyBudget = async () => {
+        if (!currentAssociation?.id || !budget?.year) return;
+        setNotifyBudgetSending(true);
+        setNotifyMessage(null);
+        try {
+            const resp = await apiFetch(
+                `${API_URL}/associations/${currentAssociation.id}/bank/notify-budget?year=${budget.year}`,
+                { method: 'POST' },
+            );
+            const d = await resp.json().catch(() => ({}));
+            if (resp.ok) {
+                setNotifyMessage({ type: 'success', text: d.detail || 'Áætlun send til Landsbankans.' });
+            } else {
+                setNotifyMessage({ type: 'error', text: d.detail || `Villa við sendingu (${resp.status}).` });
+            }
+        } catch {
+            setNotifyMessage({ type: 'error', text: 'Tenging við þjón mistókst.' });
+        } finally {
+            setNotifyBudgetSending(false);
+        }
     };
 
     const groups = useMemo(() => {
@@ -120,6 +157,17 @@ function BudgetPage() {
                         )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        {budget?.is_active && bankClaimMode === 'BANK_SERVICE' && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                sx={secondaryButtonSx}
+                                onClick={handleNotifyBudget}
+                                disabled={notifyBudgetSending}
+                            >
+                                {notifyBudgetSending ? 'Sendir...' : 'Senda áætlun til Landsbankans'}
+                            </Button>
+                        )}
                         <Button variant="contained" sx={primaryButtonSx} onClick={() => navigate('/aaetlun/nyr')}>
                             + Ný áætlun
                         </Button>
@@ -134,6 +182,11 @@ function BudgetPage() {
                 {/* Content */}
                 <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
                     {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+                    {notifyMessage && (
+                        <Alert severity={notifyMessage.type} sx={{ mb: 2 }} onClose={() => setNotifyMessage(null)}>
+                            {notifyMessage.text}
+                        </Alert>
+                    )}
 
                     {budget === null && !error && (
                         <Box sx={{ mt: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

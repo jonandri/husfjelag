@@ -41,6 +41,7 @@ function CollectionPage() {
     const [matchError, setMatchError] = useState('');
     const [matchTarget, setMatchTarget] = useState(null);
     const [bankConfigured, setBankConfigured] = useState(false);
+    const [bankClaimMode, setBankClaimMode] = useState(null);
     const [claimMessage, setClaimMessage] = useState(null);
     const [sendingAll, setSendingAll] = useState(false);
 
@@ -59,6 +60,7 @@ function CollectionPage() {
             .then(d => {
                 setData(d);
                 setBankConfigured(d.bank_settings_configured ?? false);
+                setBankClaimMode(d.bank_claim_mode ?? null);
             })
             .catch(() => { setError('Villa við að sækja innheimtugögn.'); setData({ rows: [], unmatched: [] }); });
     }, [user, assocParam, month, year]);
@@ -157,6 +159,7 @@ function CollectionPage() {
     const hasItems = rows.length > 0;
     const paidCount = rows.filter(r => r.status === 'PAID').length;
     const totalAmount = rows.reduce((s, r) => s + parseFloat(r.amount_total || 0), 0);
+    const showClaimButtons = bankConfigured && bankClaimMode !== 'BANK_SERVICE';
 
     // Pending collection items available for manual matching
     const pendingRows = rows.filter(r => r.status === 'PENDING');
@@ -177,7 +180,7 @@ function CollectionPage() {
                         >
                             {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
                         </Button>
-                        {hasItems && bankConfigured && (
+                        {hasItems && showClaimButtons && (
                             <Button
                                 variant="outlined"
                                 size="small"
@@ -273,18 +276,13 @@ function CollectionPage() {
                                                     {row.claim_status === 'CANCELLED' && (
                                                         <StatusChip status="CLAIM_CANCELLED" />
                                                     )}
-                                                    {!row.claim_status && row.status !== 'PAID' && (
-                                                        <Tooltip title={
-                                                            !bankConfigured
-                                                                ? 'Þú þarft að stilla Landsbankinn sniðmát áður en hægt er að senda kröfur.'
-                                                                : 'Senda kröfu'
-                                                        }>
+                                                    {!row.claim_status && row.status !== 'PAID' && showClaimButtons && (
+                                                        <Tooltip title="Senda kröfu">
                                                             <span>
                                                                 <Button
                                                                     size="small"
                                                                     sx={{ ...secondaryButtonSx, fontSize: 11, py: 0.25, px: 1 }}
                                                                     onClick={() => handleSendClaim(row.collection_id)}
-                                                                    disabled={!bankConfigured}
                                                                 >
                                                                     Senda kröfu
                                                                 </Button>

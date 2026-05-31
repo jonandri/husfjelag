@@ -1924,8 +1924,10 @@ class CollectionView(APIView):
             for tx in unmatched_qs.order_by("date")
         ]
 
-        bank_settings_configured = AssociationBankSettings.objects.filter(association=association).exists()
-        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched, "bank_settings_configured": bank_settings_configured})
+        bank_settings = AssociationBankSettings.objects.filter(association=association).first()
+        bank_settings_configured = bank_settings is not None
+        bank_claim_mode = bank_settings.claim_mode if bank_settings else None
+        return Response({"month": month, "year": year, "rows": rows, "unmatched": unmatched, "bank_settings_configured": bank_settings_configured, "bank_claim_mode": bank_claim_mode})
 
     def _summary_mode(self, association):
         """Computed-on-the-fly annual/monthly amounts per apartment (legacy behaviour)."""

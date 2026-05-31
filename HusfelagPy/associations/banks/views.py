@@ -10,10 +10,31 @@ from django.utils.timezone import now as tz_now
 
 logger = logging.getLogger(__name__)
 
+import requests
+
 from associations.models import (
     Association, AssociationAccess, AssociationRole,
-    AssociationBankSettings, BankProvider, BankClaim, BankClaimStatus, Collection,
+    AssociationBankSettings, BankProvider, ClaimMode,
+    BankClaim, BankClaimStatus, Collection,
 )
+
+
+def _parse_landsbankinn_error(exc) -> str:
+    """Extract a human-readable error message from a Landsbankinn HTTPError response."""
+    try:
+        body = exc.response.json()
+        errors = body.get("errors") or {}
+        if errors:
+            msgs = []
+            for field_errors in errors.values():
+                if isinstance(field_errors, list):
+                    msgs.extend(field_errors)
+                else:
+                    msgs.append(str(field_errors))
+            return " ".join(msgs)
+        return body.get("detail") or body.get("message") or str(exc)
+    except Exception:
+        return str(exc)
 
 
 def _require_chair_or_cfo(request, association):
@@ -184,6 +205,7 @@ class AssociationBankSettingsView(APIView):
             "bank": bs.bank,
             "api_key_set": bool(bs.api_key),
             "template_id": bs.template_id,
+            "claim_mode": bs.claim_mode,
             "last_sync_at": bs.last_sync_at.isoformat() if bs.last_sync_at else None,
             "updated_at": bs.updated_at.isoformat(),
         })
@@ -208,6 +230,14 @@ class AssociationBankSettingsView(APIView):
         defaults = {"bank": bank}
         if "template_id" in request.data:
             defaults["template_id"] = request.data["template_id"].strip()
+        if "claim_mode" in request.data:
+            claim_mode = request.data["claim_mode"].strip()
+            if claim_mode not in ClaimMode.values:
+                return Response(
+                    {"detail": f"Ógildur greiðslumáti. Veldu: {', '.join(ClaimMode.values)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            defaults["claim_mode"] = claim_mode
 
         bs, _ = AssociationBankSettings.objects.update_or_create(
             association=association,
@@ -231,6 +261,7 @@ class AssociationBankSettingsView(APIView):
             "bank": bs.bank,
             "api_key_set": bool(bs.api_key),
             "template_id": bs.template_id,
+            "claim_mode": bs.claim_mode,
             "last_sync_at": bs.last_sync_at.isoformat() if bs.last_sync_at else None,
             "updated_at": bs.updated_at.isoformat(),
         })
@@ -270,7 +301,6 @@ class SendClaimView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        # Load template settings
         try:
             bank_settings = AssociationBankSettings.objects.get(association=association)
         except AssociationBankSettings.DoesNotExist:
@@ -279,14 +309,27 @@ class SendClaimView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
+        if bank_settings.claim_mode == ClaimMode.BANK_SERVICE:
+            return Response(
+                {"detail": "Ekki hægt að senda kröfu beint — félagið notar húsfélagaþjónustu bankans."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         from associations.banks.landsbankinn import create_claim, _last_day_of_month
         try:
             api_response = create_claim(collection, bank_settings)
-        except Exception as exc:
-            return Response(
-                {"detail": f"Villa við sendingu kröfu: {exc}"},
-                status=status.HTTP_502_BAD_GATEWAY,
+        except requests.HTTPError as exc:
+            detail = _parse_landsbankinn_error(exc)
+            logger.error(
+                "SendClaimView: Landsbankinn error for collection %s: %s — %s",
+                collection_id, exc.response.status_code if exc.response is not None else "?", detail,
             )
+            bugsnag.notify(exc, context="send_claim", extra_data={"collection_id": collection_id, "detail": detail})
+            return Response({"detail": detail}, status=status.HTTP_502_BAD_GATEWAY)
+        except Exception as exc:
+            logger.error("SendClaimView: unexpected error for collection %s: %s", collection_id, exc)
+            bugsnag.notify(exc, context="send_claim", extra_data={"collection_id": collection_id})
+            return Response({"detail": f"Villa við sendingu kröfu: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
 
         due_date = _last_day_of_month(collection.budget.year, collection.month)
         claim = BankClaim.objects.create(
@@ -337,6 +380,12 @@ class SendAllClaimsView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
+        if bank_settings.claim_mode == ClaimMode.BANK_SERVICE:
+            return Response(
+                {"detail": "Ekki hægt að senda kröfur beint — félagið notar húsfélagaþjónustu bankans."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
         collections = (
             Collection.objects
             .select_related("budget", "payer", "apartment")
@@ -361,7 +410,26 @@ class SendAllClaimsView(APIView):
 
             try:
                 api_response = create_claim(collection, bank_settings)
+            except requests.HTTPError as exc:
+                detail = _parse_landsbankinn_error(exc)
+                logger.error(
+                    "SendAllClaimsView: Landsbankinn error for apt %s (assoc %s): %s",
+                    collection.apartment.anr, association_id, detail,
+                )
+                bugsnag.notify(exc, context="send_all_claims", extra_data={
+                    "association_id": association_id, "apartment": collection.apartment.anr, "detail": detail,
+                })
+                errors.append(f"Íbúð {collection.apartment.anr}: {detail}")
+                skipped += 1
+                continue
             except Exception as exc:
+                logger.error(
+                    "SendAllClaimsView: unexpected error for apt %s (assoc %s): %s",
+                    collection.apartment.anr, association_id, exc,
+                )
+                bugsnag.notify(exc, context="send_all_claims", extra_data={
+                    "association_id": association_id, "apartment": collection.apartment.anr,
+                })
                 errors.append(f"Íbúð {collection.apartment.anr}: {exc}")
                 skipped += 1
                 continue
@@ -382,6 +450,91 @@ class SendAllClaimsView(APIView):
         if errors:
             response_data["errors"] = errors
         return Response(response_data)
+
+
+class NotifyBudgetView(APIView):
+    """POST /associations/{id}/bank/notify-budget?year=2026 — send budget summary email to Landsbankinn."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, association_id):
+        import resend
+        from django.conf import settings as django_settings
+        from associations.models import Budget, BudgetItem, Apartment
+
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        year = request.query_params.get("year")
+        if not year:
+            return Response({"detail": "year er nauðsynlegt."}, status=status.HTTP_400_BAD_REQUEST)
+        year = int(year)
+
+        try:
+            bank_settings = AssociationBankSettings.objects.get(association=association)
+        except AssociationBankSettings.DoesNotExist:
+            return Response(
+                {"detail": "Bankastillingar eru ekki stilltar."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        if bank_settings.claim_mode != ClaimMode.BANK_SERVICE:
+            return Response(
+                {"detail": "Þessi aðgerð er eingöngu fyrir félög sem nota húsfélagaþjónustu bankans."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        try:
+            budget = Budget.objects.get(association=association, year=year, is_active=True)
+        except Budget.DoesNotExist:
+            return Response(
+                {"detail": f"Engin virk áætlun fannst fyrir árið {year}."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        bank_email = django_settings.BANK_LANDSBANKINN_EMAIL
+        if not bank_email:
+            return Response(
+                {"detail": "Netfang Landsbankans (BANK_LANDSBANKINN_EMAIL) er ekki stillt."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        items = BudgetItem.objects.filter(budget=budget).select_related("category").order_by("category__name")
+        apartments = Apartment.objects.filter(association=association, deleted=False).count()
+
+        lines = [f"<h2>Áætlun {year} — {association.name}</h2>"]
+        lines.append(f"<p>Kennitala: {association.ssn}<br>Fjöldi íbúða: {apartments}</p>")
+        lines.append("<table border='1' cellpadding='4' cellspacing='0'><tr><th>Flokkur</th><th>Upphæð</th></tr>")
+        total = 0
+        for item in items:
+            lines.append(f"<tr><td>{item.category.name}</td><td>{item.amount:,.0f} kr.</td></tr>")
+            total += item.amount
+        lines.append(f"<tr><td><strong>Samtals</strong></td><td><strong>{total:,.0f} kr.</strong></td></tr>")
+        lines.append("</table>")
+        html_body = "\n".join(lines)
+
+        try:
+            resend.api_key = django_settings.RESEND_API_KEY
+            resend.Emails.send({
+                "from": django_settings.DEFAULT_FROM_EMAIL,
+                "to": [bank_email],
+                "subject": f"Húsfélagsáætlun {year} — {association.name} ({association.ssn})",
+                "html": html_body,
+            })
+        except Exception as exc:
+            logger.error("NotifyBudgetView: failed to send email for assoc %s: %s", association_id, exc)
+            bugsnag.notify(exc, context="notify_budget", extra_data={"association_id": association_id, "year": year})
+            return Response(
+                {"detail": f"Villa við sendingu tölvupósts: {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"detail": "Áætlun send til Landsbankans."}, status=status.HTTP_200_OK)
 
 
 class CertHealthView(APIView):
