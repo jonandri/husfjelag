@@ -1,3 +1,4 @@
+import logging
 import re
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,6 +34,8 @@ from .skattur_cloud import fetch_legal_entity, extract_prokuruhafar, parse_entit
 from .importers import BANK_PARSERS, detect_bank, detect_duplicates
 from .categoriser import build_categorisation_context, categorise_row
 from users.models import User
+
+logger = logging.getLogger(__name__)
 
 
 def _norm(s):
@@ -2250,6 +2253,154 @@ class CollectionCandidatesView(APIView):
             }
             for tx in txs
         ])
+
+
+def _payer_unpaid_items(association, payer):
+    """All unpaid (PENDING) collections for a payer in an association, oldest first.
+
+    Returns a list of dicts (anr, year, month, amount) ready for the reminder
+    email — so older outstanding invoices are listed alongside the current one.
+    """
+    cols = (
+        Collection.objects
+        .filter(budget__association=association, payer=payer, status=CollectionStatus.PENDING)
+        .select_related("apartment", "budget")
+        .order_by("budget__year", "month")
+    )
+    return [
+        {"anr": c.apartment.anr, "year": c.budget.year, "month": c.month, "amount": c.amount_total}
+        for c in cols
+    ]
+
+
+class SendCollectionReminderView(APIView):
+    """POST /Collection/{collection_id}/send-reminder — email one payer about their unpaid húsgjöld."""
+
+    def post(self, request, collection_id):
+        from .notifications import send_email, build_payment_reminder_email
+
+        try:
+            collection = Collection.objects.select_related(
+                "budget__association", "payer", "apartment"
+            ).get(id=collection_id)
+        except Collection.DoesNotExist:
+            return Response({"detail": "Innheimtufærsla ekki fundin."}, status=status.HTTP_404_NOT_FOUND)
+
+        association = collection.budget.association
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        if collection.status == CollectionStatus.PAID:
+            return Response({"detail": "Þessi færsla er þegar greidd."}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if not collection.payer:
+            return Response({"detail": "Innheimtufærslan hefur engan greiðanda."}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        if not collection.payer.email:
+            return Response({"detail": "Greiðandi hefur ekkert netfang skráð."}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        items = _payer_unpaid_items(association, collection.payer)
+        html = build_payment_reminder_email(
+            association, collection.payer.name, collection.payer.kennitala, items
+        )
+        subject = f"Áminning um húsgjöld — {association.name}"
+
+        try:
+            sent = send_email(to=collection.payer.email, subject=subject, html=html)
+        except Exception as exc:
+            logger.error("SendCollectionReminderView: failed for collection %s: %s", collection_id, exc)
+            return Response({"detail": f"Villa við sendingu tölvupósts: {exc}"}, status=status.HTTP_502_BAD_GATEWAY)
+
+        if not sent:
+            return Response(
+                {"detail": "Tölvupóstur var ekki sendur — RESEND_API_KEY er ekki stillt á þessum þjóni."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({"detail": "Áminning send.", "count": len(items)}, status=status.HTTP_200_OK)
+
+
+class SendAllCollectionRemindersView(APIView):
+    """POST /associations/{id}/collections/send-reminders?month=M&year=Y
+
+    Emails every payer with an unpaid collection in the given month — one email
+    per payer, listing all their outstanding invoices (current + older).
+    """
+
+    def post(self, request, association_id):
+        from .notifications import send_email, build_payment_reminder_email
+
+        try:
+            association = Association.objects.get(id=association_id)
+        except Association.DoesNotExist:
+            return Response({"detail": "Félag ekki fundið."}, status=status.HTTP_404_NOT_FOUND)
+
+        err = _require_chair_or_cfo(request, association)
+        if err:
+            return err
+
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        if not month or not year:
+            return Response({"detail": "month og year eru nauðsynleg."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            month, year = int(month), int(year)
+        except ValueError:
+            return Response({"detail": "month og year verða að vera tölur."}, status=status.HTTP_400_BAD_REQUEST)
+
+        unpaid = (
+            Collection.objects
+            .filter(
+                budget__association=association, budget__year=year, budget__is_active=True,
+                month=month, status=CollectionStatus.PENDING,
+            )
+            .select_related("payer", "apartment")
+            .order_by("apartment__anr")
+        )
+
+        sent = 0
+        skipped = 0
+        errors = []
+        email_disabled = False
+        seen_payers = set()
+
+        for collection in unpaid:
+            payer = collection.payer
+            if not payer or payer.id in seen_payers:
+                if not payer:
+                    skipped += 1
+                continue
+            seen_payers.add(payer.id)
+
+            if not payer.email:
+                skipped += 1
+                errors.append(f"Íbúð {collection.apartment.anr}: greiðandi hefur ekkert netfang.")
+                continue
+
+            items = _payer_unpaid_items(association, payer)
+            html = build_payment_reminder_email(association, payer.name, payer.kennitala, items)
+            subject = f"Áminning um húsgjöld — {association.name}"
+            try:
+                ok = send_email(to=payer.email, subject=subject, html=html)
+            except Exception as exc:
+                logger.error("SendAllCollectionRemindersView: failed for payer %s (assoc %s): %s", payer.id, association_id, exc)
+                errors.append(f"Íbúð {collection.apartment.anr}: {exc}")
+                skipped += 1
+                continue
+            if not ok:
+                email_disabled = True
+                skipped += 1
+                continue
+            sent += 1
+
+        if sent == 0 and email_disabled:
+            return Response(
+                {"detail": "Tölvupóstur var ekki sendur — RESEND_API_KEY er ekki stillt á þessum þjóni."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        response_data = {"sent": sent, "skipped": skipped}
+        if errors:
+            response_data["errors"] = errors
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class AssociationListView(APIView):

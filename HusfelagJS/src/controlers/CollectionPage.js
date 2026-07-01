@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import AddLinkIcon from '@mui/icons-material/AddLink';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useHelp } from '../ui/HelpContext';
 import HelpDialogTitle from '../ui/HelpDialogTitle';
@@ -44,12 +45,16 @@ function CollectionPage() {
     const [bankClaimMode, setBankClaimMode] = useState(null);
     const [claimMessage, setClaimMessage] = useState(null);
     const [sendingAll, setSendingAll] = useState(false);
+    const [reminderMessage, setReminderMessage] = useState(null);
+    const [sendingReminders, setSendingReminders] = useState(false);
+    const [remindingId, setRemindingId] = useState(null);
 
     const load = useCallback(() => {
         if (!user) return;
         setData(null);
         setError('');
         setClaimMessage(null);
+        setReminderMessage(null);
         // assocParam starts with '?' when set (e.g. '?as=5'), so build:
         // /Collection/{id}?as=5&month=M&year=Y  or  /Collection/{id}?month=M&year=Y
         const qs = assocParam
@@ -130,6 +135,34 @@ function CollectionPage() {
             .finally(() => setSendingAll(false));
     };
 
+    const handleSendReminder = (collectionId) => {
+        setReminderMessage(null);
+        setRemindingId(collectionId);
+        apiFetch(`${API_URL}/Collection/${collectionId}/send-reminder`, { method: 'POST' })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(d => {
+                const extra = d.count > 1 ? ` (${d.count} ógreidd tímabil)` : '';
+                setReminderMessage({ type: 'success', text: `Áminning send.${extra}` });
+            })
+            .catch(err => setReminderMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu áminningar.' }))
+            .finally(() => setRemindingId(null));
+    };
+
+    const handleSendAllReminders = () => {
+        setReminderMessage(null);
+        setSendingReminders(true);
+        apiFetch(`${API_URL}/associations/${currentAssociation?.id}/collections/send-reminders?month=${month}&year=${year}`, {
+            method: 'POST',
+        })
+            .then(r => r.ok ? r.json() : r.json().then(d => Promise.reject(d.detail || 'Villa')))
+            .then(d => {
+                const errs = d.errors?.length ? ` — ${d.errors.join(' ')}` : '';
+                setReminderMessage({ type: d.sent > 0 ? 'success' : 'warning', text: `${d.sent} áminningar sendar, ${d.skipped} sleppt.${errs}` });
+            })
+            .catch(err => setReminderMessage({ type: 'error', text: typeof err === 'string' ? err : 'Villa við sendingu áminninga.' }))
+            .finally(() => setSendingReminders(false));
+    };
+
     const handleMatch = (collectionId, transactionId) => {
         if (!collectionId || !transactionId) return;
         setMatchError('');
@@ -158,6 +191,7 @@ function CollectionPage() {
     const unmatched = data.unmatched ?? [];
     const hasItems = rows.length > 0;
     const paidCount = rows.filter(r => r.status === 'PAID').length;
+    const unpaidCount = rows.filter(r => r.status !== 'PAID').length;
     const totalAmount = rows.reduce((s, r) => s + parseFloat(r.amount_total || 0), 0);
     const showClaimButtons = bankConfigured && bankClaimMode !== 'BANK_SERVICE';
 
@@ -180,6 +214,18 @@ function CollectionPage() {
                         >
                             {hasItems ? 'Til staðar' : `+ Búa til ${MONTH_NAMES[month]}`}
                         </Button>
+                        {hasItems && unpaidCount > 0 && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<MailOutlineIcon />}
+                                sx={secondaryButtonSx}
+                                onClick={handleSendAllReminders}
+                                disabled={sendingReminders}
+                            >
+                                {sendingReminders ? 'Sendi…' : 'Senda allar áminningar'}
+                            </Button>
+                        )}
                         {hasItems && showClaimButtons && (
                             <Button
                                 variant="outlined"
@@ -230,6 +276,11 @@ function CollectionPage() {
                     {claimMessage && (
                         <Alert severity={claimMessage.type} sx={{ mb: 2 }} onClose={() => setClaimMessage(null)}>
                             {claimMessage.text}
+                        </Alert>
+                    )}
+                    {reminderMessage && (
+                        <Alert severity={reminderMessage.type} sx={{ mb: 2 }} onClose={() => setReminderMessage(null)}>
+                            {reminderMessage.text}
                         </Alert>
                     )}
 
@@ -290,7 +341,7 @@ function CollectionPage() {
                                                         </Tooltip>
                                                     )}
                                                 </TableCell>
-                                                <TableCell align="right" sx={{ width: 40, pr: 1 }}>
+                                                <TableCell align="right" sx={{ width: 80, pr: 1, whiteSpace: 'nowrap' }}>
                                                     {row.status === 'PAID' && (
                                                         <Tooltip title="Aftengja greiðslu">
                                                             <IconButton size="small" onClick={() => handleUnmatch(row.collection_id)}>
@@ -299,11 +350,26 @@ function CollectionPage() {
                                                         </Tooltip>
                                                     )}
                                                     {row.status === 'PENDING' && (
-                                                        <Tooltip title="Tengja greiðslu">
-                                                            <IconButton size="small" onClick={() => setMatchTarget(row)}>
-                                                                <AddLinkIcon fontSize="small" sx={{ color: '#bbb' }} />
-                                                            </IconButton>
-                                                        </Tooltip>
+                                                        <>
+                                                            <Tooltip title="Senda áminningu um ógreidd húsgjöld">
+                                                                <span>
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => handleSendReminder(row.collection_id)}
+                                                                        disabled={remindingId === row.collection_id}
+                                                                    >
+                                                                        {remindingId === row.collection_id
+                                                                            ? <CircularProgress size={16} color="secondary" />
+                                                                            : <MailOutlineIcon fontSize="small" sx={{ color: '#bbb' }} />}
+                                                                    </IconButton>
+                                                                </span>
+                                                            </Tooltip>
+                                                            <Tooltip title="Tengja greiðslu">
+                                                                <IconButton size="small" onClick={() => setMatchTarget(row)}>
+                                                                    <AddLinkIcon fontSize="small" sx={{ color: '#bbb' }} />
+                                                                </IconButton>
+                                                            </Tooltip>
+                                                        </>
                                                     )}
                                                 </TableCell>
                                             </TableRow>

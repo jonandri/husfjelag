@@ -337,3 +337,146 @@ def build_budget_overview_email(association, budget, budget_items, payer_rows, g
         '</td></tr></table>'  # /outer
         '</body></html>'
     )
+
+
+_MONTHS_IS = [
+    "", "janúar", "febrúar", "mars", "apríl", "maí", "júní",
+    "júlí", "ágúst", "september", "október", "nóvember", "desember",
+]
+
+
+def _period_label(year, month):
+    """'maí 2026' — Icelandic month + year."""
+    name = _MONTHS_IS[month] if 1 <= int(month) <= 12 else str(month)
+    return f"{name} {year}"
+
+
+def build_payment_reminder_email(association, payer_name, payer_kennitala, items):
+    """
+    Build the HTML email reminding a payer about unpaid housing fees (húsgjöld).
+
+    Reuses the navy header/footer style of the budget overview email.
+
+    Args:
+        association: Association instance
+        payer_name: str — the payer's name
+        payer_kennitala: str — the payer's kennitala
+        items: list of dicts, ordered oldest-first, each with:
+               anr (apartment), year, month, amount (Decimal/number)
+
+    The email lists every unpaid period for this payer — the current one plus
+    any older outstanding invoices — with a total at the bottom.
+    """
+    assoc_name = _esc(association.name or "")
+    assoc_ssn = _esc(_kennitala(association.ssn))
+    name = _esc(payer_name or "")
+    kt = _esc(_kennitala(payer_kennitala))
+
+    total = sum(float(it["amount"]) for it in items)
+    has_older = len(items) > 1
+
+    # Build the table rows
+    item_rows = []
+    for i, it in enumerate(items):
+        last = i == len(items) - 1
+        border = "" if last else " border-bottom:1px solid #f0f0f0;"
+        item_rows.append(
+            '<tr>'
+            f'<td style="padding:11px 16px;{border}">'
+            f'<span style="font-family:{_SANS}; font-size:13.5px; color:#222; text-transform:capitalize;">{_esc(_period_label(it["year"], it["month"]))}</span></td>'
+            f'<td style="padding:11px 16px;{border}">'
+            f'<span style="font-family:{_SANS}; font-size:13.5px; color:#555;">Íbúð {_esc(str(it["anr"]))}</span></td>'
+            f'<td align="right" style="padding:11px 16px;{border}">'
+            f'<span style="font-family:{_MONO}; font-size:13.5px; font-weight:600; color:#111;">{_kr(it["amount"])}</span></td>'
+            '</tr>'
+        )
+
+    older_note = (
+        '<p style="margin:14px 0 0 0; font-size:13.5px; line-height:1.6; color:#b3760f; '
+        f'font-family:{_SANS};">Athugið að eldri húsgjöld eru einnig ógreidd og eru talin upp hér að ofan.</p>'
+        if has_older else ''
+    )
+
+    return (
+        '<!DOCTYPE html>'
+        '<html lang="is">'
+        '<head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        '<meta http-equiv="x-ua-compatible" content="IE=edge">'
+        f'<title>Áminning um húsgjöld — {assoc_name}</title>'
+        '</head>'
+        '<body style="margin:0; padding:0; background:#eef0f3;">'
+
+        # preheader
+        '<div style="display:none; max-height:0; overflow:hidden; opacity:0; font-size:1px; line-height:1px; color:#eef0f3;">'
+        'Áminning um ógreidd húsgjöld.'
+        '</div>'
+
+        # outer table
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef0f3;">'
+        '<tr><td align="center" style="padding:32px 16px;">'
+
+        # card
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0"'
+        f' style="width:600px; max-width:600px; background:#ffffff; border-radius:14px; overflow:hidden;'
+        f' box-shadow:0 1px 2px rgba(17,17,17,0.04), 0 8px 28px rgba(13,33,84,0.10);'
+        f' font-family:{_SANS};">'
+
+        # header
+        '<tr><td style="background:#1D366F; padding:30px 36px 26px 36px;" align="left">'
+        '<div style="font-size:25px; font-weight:600; color:#ffffff; line-height:1.25;">Áminning um húsgjöld</div>'
+        f'<div style="font-size:14px; color:#aebbda; padding-top:4px;">{assoc_name}'
+        f' · Kennitala <span style="font-family:{_MONO}; font-size:13px; color:#aebbda;">{assoc_ssn}</span></div>'
+        '</td></tr>'
+
+        # intro
+        '<tr><td style="padding:28px 36px 4px 36px;">'
+        f'<p style="margin:0; font-size:15px; line-height:1.6; color:#333333; font-family:{_SANS};">'
+        f'Sæl/l <strong style="color:#111111;">{name}</strong>'
+        f' <span style="color:#999; font-family:{_MONO}; font-size:13px;">({kt})</span>.<br>'
+        'Samkvæmt bókhaldi húsfélagsins eru eftirfarandi húsgjöld enn '
+        '<strong style="color:#111111;">ógreidd</strong>. '
+        'Vinsamlegast gerðu skil hið fyrsta.'
+        '</p></td></tr>'
+
+        # items table
+        '<tr><td style="padding:20px 36px 0 36px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"'
+        ' style="border:1px solid #e8e8e8; border-radius:12px; overflow:hidden;">'
+        '<tr>'
+        '<td style="background:#f5f5f5; padding:9px 16px; border-bottom:1px solid #e8e8e8;">'
+        '<span style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#888;">Tímabil</span></td>'
+        '<td style="background:#f5f5f5; padding:9px 16px; border-bottom:1px solid #e8e8e8;">'
+        '<span style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#888;">Íbúð</span></td>'
+        '<td align="right" style="background:#f5f5f5; padding:9px 16px; border-bottom:1px solid #e8e8e8;">'
+        '<span style="font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#888;">Upphæð</span></td>'
+        '</tr>'
+        + "".join(item_rows) +
+        '<tr>'
+        '<td colspan="2" style="padding:13px 16px; background:#f7f8fa; border-top:2px solid #dfe2e8;">'
+        f'<span style="font-family:{_SANS}; font-size:14px; font-weight:700; color:#111;">Samtals ógreitt</span></td>'
+        '<td align="right" style="padding:13px 16px; background:#f7f8fa; border-top:2px solid #dfe2e8;">'
+        f'<span style="font-family:{_MONO}; font-size:14px; font-weight:700; color:#c0392b;">{_kr(total)}</span></td>'
+        '</tr>'
+        '</table>'
+        f'{older_note}'
+        '</td></tr>'
+
+        # footer
+        '<tr><td style="padding:24px 36px 0 36px; font-size:0; line-height:0;">&nbsp;</td></tr>'
+        '<tr><td style="padding:30px 36px 34px 36px; background:#1D366F;">'
+        f'<p style="margin:0; font-size:13.5px; line-height:1.6; color:#c2cde6; font-family:{_SANS};">'
+        'Spurningar um húsgjöldin?<br>'
+        'Hafðu samband við stjórn húsfélagsins eða svaraðu þessum tölvupósti.'
+        '</p>'
+        f'<a href="https://husfjelag.is" target="_blank"'
+        f' style="display:inline-block; margin-top:20px; font-family:{_SANS}; font-size:14px;'
+        f' font-weight:600; color:#ffffff; text-decoration:none; letter-spacing:0.02em;">Húsfjelag.is</a>'
+        '</td></tr>'
+
+        '</table>'  # /card
+        '<div style="height:20px; line-height:20px;">&nbsp;</div>'
+        '</td></tr></table>'  # /outer
+        '</body></html>'
+    )
