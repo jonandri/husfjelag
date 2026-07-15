@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Box, Typography, Button, Collapse } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -12,6 +12,8 @@ import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 function CtaBar({ mini, onSignup }) {
     return (
@@ -551,9 +553,9 @@ function Footer({ onSignup }) {
 }
 
 export default function HomePage() {
-    const navigate = useNavigate();
     const [mini, setMini] = useState(false);
-    const onSignup = () => navigate('/login');
+    // Go straight to the IdP — skip the intermediate /login page.
+    const onSignup = () => { window.location.href = `${API_URL}/auth/login`; };
 
     useEffect(() => {
         const handler = () => setMini(window.scrollY > 60);

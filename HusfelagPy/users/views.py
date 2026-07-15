@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class LoginView(APIView):
-    """Legacy login — disabled. Use POST /auth/login (Kenni OIDC) instead."""
+    """Legacy login — disabled. Use GET /auth/login (Húsfjelag OIDC) instead."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -104,7 +104,7 @@ class TermsAcceptView(APIView):
 class OIDCLoginView(APIView):
     """
     GET /auth/login
-    Redirects the user to Kenni for authentication.
+    Redirects the user to id.husfjelag.is for authentication.
     A random state token is stored in a cookie to prevent CSRF.
     """
     permission_classes = [AllowAny]
@@ -122,7 +122,7 @@ class OIDCLoginView(APIView):
 class OIDCCallbackView(APIView):
     """
     GET /auth/callback
-    Kenni redirects here after authentication.
+    id.husfjelag.is redirects here after authentication.
     Validates state, exchanges code for tokens, creates/updates the User,
     then redirects to the frontend with a short-lived one-time exchange code
     (not the JWT itself — avoids token in URL / server logs).
@@ -142,7 +142,7 @@ class OIDCCallbackView(APIView):
         logger.info("OIDC callback — error=%s code_present=%s state_present=%s", error, bool(code), bool(state))
 
         if error:
-            logger.error("Kenni returned error: %s — %s", error, error_description)
+            logger.error("IdP returned error: %s — %s", error, error_description)
             return HttpResponseRedirect(f"{frontend_url}/?error={error}")
 
         # CSRF: validate state matches what we set in the cookie
@@ -167,9 +167,14 @@ class OIDCCallbackView(APIView):
             bugsnag.notify(exc, context="OIDC token exchange/validation")
             return HttpResponseRedirect(f"{frontend_url}/?error=token_error")
 
+        # Test users must never authenticate against production.
+        if not settings.DEBUG and claims.get("is_test_user"):
+            logger.error("Blocked is_test_user login in production")
+            return HttpResponseRedirect(f"{frontend_url}/?error=test_user_blocked")
+
         kennitala = (claims.get("national_id") or "").replace("-", "")
         name = claims.get("name") or ""
-        phone = claims.get("phone_number") or None  # None = not provided by Kenni
+        phone = claims.get("phone_number") or None  # None = not provided by the IdP
 
         if not kennitala:
             return HttpResponseRedirect(f"{frontend_url}/?error=no_national_id")

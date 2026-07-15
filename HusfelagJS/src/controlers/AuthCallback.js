@@ -6,7 +6,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 /**
  * /auth/callback
- * The backend redirects here after a successful Kenni login with:
+ * The backend redirects here after a successful id.husfjelag.is login with:
  *   ?code=<exchange_code>
  *
  * Exchanges the one-time code for a JWT via POST /auth/token,
