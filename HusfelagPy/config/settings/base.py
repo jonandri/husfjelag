@@ -102,14 +102,16 @@ CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 
-# Kenni OIDC
-KENNI_CLIENT_ID = env("KENNI_CLIENT_ID", default="@digit.is/husfjelag")
-KENNI_CLIENT_SECRET = env("KENNI_CLIENT_SECRET", default="")
-KENNI_ISSUER = "https://idp.kenni.is/digit.is"
-KENNI_AUTH_ENDPOINT = "https://idp.kenni.is/digit.is/oidc/auth"
-KENNI_TOKEN_ENDPOINT = "https://idp.kenni.is/digit.is/oidc/token"
-KENNI_JWKS_URI = "https://idp.kenni.is/digit.is/oidc/jwks"
-KENNI_REDIRECT_URI = env("KENNI_REDIRECT_URI", default="http://localhost:8003/auth/callback")
+# Húsfjelag OIDC (id.husfjelag.is) — Authorization Code + PKCE, client_secret_basic
+OIDC_CLIENT_ID = env("OIDC_CLIENT_ID", default="husfjelag-web")
+OIDC_CLIENT_SECRET = env("OIDC_CLIENT_SECRET", default="")
+OIDC_ISSUER = "https://id.husfjelag.is"
+OIDC_AUTH_ENDPOINT = "https://id.husfjelag.is/auth"
+OIDC_TOKEN_ENDPOINT = "https://id.husfjelag.is/token"
+OIDC_USERINFO_ENDPOINT = "https://id.husfjelag.is/me"
+OIDC_JWKS_URI = "https://id.husfjelag.is/jwks"
+OIDC_END_SESSION_ENDPOINT = "https://id.husfjelag.is/session/end"  # for future RP-initiated logout
+OIDC_REDIRECT_URI = env("OIDC_REDIRECT_URI", default="http://localhost:8010/auth/callback")
 
 # Skattur Cloud — Icelandic company registry API
 SKATTUR_CLOUD_API_KEY = env("SKATTUR_CLOUD_API_KEY", default="")

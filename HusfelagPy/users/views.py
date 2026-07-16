@@ -19,13 +19,13 @@ def _get_client_ip(request):
     if xff:
         return xff.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR')
-from .oidc import build_auth_url, exchange_code, generate_pkce_pair, generate_state, validate_id_token, create_access_token
+from .oidc import build_auth_url, build_end_session_url, exchange_code, generate_pkce_pair, generate_state, validate_id_token, create_access_token
 
 logger = logging.getLogger(__name__)
 
 
 class LoginView(APIView):
-    """Legacy login — disabled. Use POST /auth/login (Kenni OIDC) instead."""
+    """Legacy login — disabled. Use GET /auth/login (Húsfjelag OIDC) instead."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -104,7 +104,7 @@ class TermsAcceptView(APIView):
 class OIDCLoginView(APIView):
     """
     GET /auth/login
-    Redirects the user to Kenni for authentication.
+    Redirects the user to id.husfjelag.is for authentication.
     A random state token is stored in a cookie to prevent CSRF.
     """
     permission_classes = [AllowAny]
@@ -122,7 +122,7 @@ class OIDCLoginView(APIView):
 class OIDCCallbackView(APIView):
     """
     GET /auth/callback
-    Kenni redirects here after authentication.
+    id.husfjelag.is redirects here after authentication.
     Validates state, exchanges code for tokens, creates/updates the User,
     then redirects to the frontend with a short-lived one-time exchange code
     (not the JWT itself — avoids token in URL / server logs).
@@ -142,7 +142,7 @@ class OIDCCallbackView(APIView):
         logger.info("OIDC callback — error=%s code_present=%s state_present=%s", error, bool(code), bool(state))
 
         if error:
-            logger.error("Kenni returned error: %s — %s", error, error_description)
+            logger.error("IdP returned error: %s — %s", error, error_description)
             return HttpResponseRedirect(f"{frontend_url}/?error={error}")
 
         # CSRF: validate state matches what we set in the cookie
@@ -167,9 +167,14 @@ class OIDCCallbackView(APIView):
             bugsnag.notify(exc, context="OIDC token exchange/validation")
             return HttpResponseRedirect(f"{frontend_url}/?error=token_error")
 
+        # Test users must never authenticate against production.
+        if not settings.DEBUG and claims.get("is_test_user"):
+            logger.error("Blocked is_test_user login in production")
+            return HttpResponseRedirect(f"{frontend_url}/?error=test_user_blocked")
+
         kennitala = (claims.get("national_id") or "").replace("-", "")
         name = claims.get("name") or ""
-        phone = claims.get("phone_number") or None  # None = not provided by Kenni
+        phone = claims.get("phone_number") or None  # None = not provided by the IdP
 
         if not kennitala:
             return HttpResponseRedirect(f"{frontend_url}/?error=no_national_id")
@@ -199,7 +204,11 @@ class OIDCCallbackView(APIView):
         # The frontend exchanges this short code for the real token via POST /auth/token.
         # This keeps the JWT out of server logs and browser history.
         exchange_code_val = secrets.token_urlsafe(32)
-        cache.set(f"auth_code:{exchange_code_val}", jwt_token, timeout=60)
+        cache.set(
+            f"auth_code:{exchange_code_val}",
+            {"jwt": jwt_token, "id_token": tokens["id_token"]},
+            timeout=60,
+        )
 
         response = HttpResponseRedirect(
             f"{frontend_url}/auth/callback?code={exchange_code_val}"
@@ -225,13 +234,32 @@ class OIDCTokenExchangeView(APIView):
             return Response({"detail": "Missing code."}, status=status.HTTP_400_BAD_REQUEST)
 
         cache_key = f"auth_code:{exchange_code_val}"
-        jwt_token = cache.get(cache_key)
-        if not jwt_token:
+        cached = cache.get(cache_key)
+        if not cached:
             return Response({"detail": "Invalid or expired code."}, status=status.HTTP_400_BAD_REQUEST)
 
         # One-time use — delete immediately
         cache.delete(cache_key)
-        return Response({"token": jwt_token})
+        # id_token is returned for RP-initiated logout (used as id_token_hint).
+        return Response({"token": cached["jwt"], "id_token": cached["id_token"]})
+
+
+class OIDCLogoutView(APIView):
+    """
+    GET /auth/logout?id_token_hint=<id_token>
+    RP-initiated logout: redirects to the id.husfjelag.is end_session_endpoint
+    so the IdP clears its SSO session, then returns the user to the frontend.
+    Without this the IdP keeps its cookie and silently re-authenticates on the
+    next login (no prompt).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        id_token_hint = request.GET.get("id_token_hint", "")
+        if not id_token_hint:
+            # No hint (e.g. already-expired session) — just land on the frontend.
+            return HttpResponseRedirect(settings.FRONTEND_URL)
+        return HttpResponseRedirect(build_end_session_url(id_token_hint))
 
 
 class KennitalaLookupView(APIView):

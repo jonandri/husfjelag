@@ -6,7 +6,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8010';
 
 /**
  * /auth/callback
- * The backend redirects here after a successful Kenni login with:
+ * The backend redirects here after a successful id.husfjelag.is login with:
  *   ?code=<exchange_code>
  *
  * Exchanges the one-time code for a JWT via POST /auth/token,
@@ -46,7 +46,7 @@ function AuthCallback() {
                     return;
                 }
 
-                const { token } = await tokenResp.json();
+                const { token, id_token } = await tokenResp.json();
                 if (!token) {
                     navigate('/login?error=token_exchange_failed');
                     return;
@@ -63,7 +63,8 @@ function AuthCallback() {
 
                 if (profileResp.ok) {
                     const profile = await profileResp.json();
-                    const user = { ...profile, token };
+                    // id_token is kept for RP-initiated logout (id_token_hint).
+                    const user = { ...profile, token, id_token };
                     localStorage.setItem('user', JSON.stringify(user));
                     setUser(user);
                     if (!profile.terms_accepted) {
