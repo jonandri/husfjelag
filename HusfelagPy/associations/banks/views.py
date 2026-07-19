@@ -37,6 +37,14 @@ def _parse_landsbankinn_error(exc) -> str:
         return str(exc)
 
 
+def _parse_islandsbanki_error(exc) -> str:
+    """Extract a human-readable error message from an Íslandsbanki SOAP fault."""
+    from zeep.exceptions import Fault
+    if isinstance(exc, Fault):
+        return exc.message or str(exc)
+    return str(exc)
+
+
 def _require_chair_or_cfo(request, association):
     """Returns 403 Response if user is not CHAIR, CFO, or superadmin for this association."""
     user = request.user
@@ -324,7 +332,7 @@ class SendClaimView(APIView):
             detail = (
                 _parse_landsbankinn_error(exc)
                 if bank_settings.bank == BankProvider.LANDSBANKINN
-                else str(exc)
+                else _parse_islandsbanki_error(exc)
             )
             logger.error(
                 "SendClaimView: Landsbankinn error for collection %s: %s — %s",
@@ -422,7 +430,7 @@ class SendAllClaimsView(APIView):
                 detail = (
                     _parse_landsbankinn_error(exc)
                     if bank_settings.bank == BankProvider.LANDSBANKINN
-                    else str(exc)
+                    else _parse_islandsbanki_error(exc)
                 )
                 logger.error(
                     "SendAllClaimsView: Landsbankinn error for apt %s (assoc %s): %s",
