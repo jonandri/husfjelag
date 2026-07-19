@@ -1,22 +1,22 @@
-"""
-Íslandsbanki AIS client — Phase 3.
-Standard: PSD2
-Sandbox: https://developer.islandsbanki.is/apiportal/
-"""
-from .base_provider import BankProvider
+from datetime import date
+from associations.banks.provider_base import BankProvider
 
 
 class IslandsbankiProvider(BankProvider):
-    """Phase 3 — not yet implemented. See docs/superpowers/plans/ for Phase 3 plan."""
+    def discover_and_sync_accounts(self, association, settings) -> dict:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
 
-    def get_authorization_url(self, state: str, code_challenge: str) -> str:
-        raise NotImplementedError("Íslandsbanki integration coming in Phase 3")
+    def sync_account_transactions(self, account, from_date: date, to_date: date, settings) -> dict:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
 
-    def exchange_code(self, code: str, code_verifier: str) -> dict:
-        raise NotImplementedError("Íslandsbanki integration coming in Phase 3")
+    def create_claim(self, collection, settings) -> dict:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
 
-    def get_transactions(self, consent, from_date, to_date) -> list[dict]:
-        raise NotImplementedError("Íslandsbanki integration coming in Phase 3")
+    def get_claim_status(self, claim_id: str, settings) -> str:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
 
-    def get_balance(self, consent, account_id: str) -> dict:
-        raise NotImplementedError("Íslandsbanki integration coming in Phase 3")
+    def list_claims(self, association, settings, **filters) -> list[dict]:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
+
+    def fetch_incoming_claims(self, association, settings, due_date_from: date) -> list[dict]:
+        raise NotImplementedError("Íslandsbanki: implemented in a later task")
