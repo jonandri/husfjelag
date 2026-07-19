@@ -5,7 +5,7 @@ import bugsnag
 from celery import shared_task
 from django.utils.timezone import now as tz_now
 
-from associations.banks.landsbankinn import discover_and_sync_accounts, sync_account_transactions
+from associations.banks.dispatch import get_provider
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,12 @@ def sync_transactions(association_id: int) -> dict:
     if not api_key:
         return {"skipped": True, "reason": "api_key_missing"}
 
+    provider = get_provider(bank_settings)
+
     # Step 1: discover bank accounts from Landsbankinn, create missing ones,
     # update is_connected/bank_status on existing ones.
     try:
-        discovery = discover_and_sync_accounts(association, api_key)
+        discovery = provider.discover_and_sync_accounts(association, bank_settings)
         logger.info(
             "sync_transactions: account discovery assoc=%s created=%s connected=%s disconnected=%s",
             association_id, discovery["created"], discovery["connected"], discovery["disconnected"],
@@ -74,7 +76,7 @@ def sync_transactions(association_id: int) -> dict:
         to_date = today
 
         try:
-            result = sync_account_transactions(account, from_date, to_date, api_key)
+            result = provider.sync_account_transactions(account, from_date, to_date, bank_settings)
             total_created += result["created"]
             total_skipped += result["skipped"]
         except Exception as exc:
@@ -137,7 +139,8 @@ def sync_claim_statuses(association_id: int) -> dict:
         Association, AssociationBankSettings, BankClaim, BankClaimStatus,
         Collection, CollectionStatus,
     )
-    from associations.banks.landsbankinn import _get, get_claim_status
+    from associations.banks.dispatch import get_provider
+    from associations.banks.landsbankinn import _get
 
     try:
         association = Association.objects.get(id=association_id)
@@ -152,6 +155,8 @@ def sync_claim_statuses(association_id: int) -> dict:
 
     if not api_key:
         return {"skipped": True, "reason": "api_key_missing"}
+
+    provider = get_provider(bank_settings)
 
     unpaid_claims = BankClaim.objects.filter(
         collection__budget__association=association,
@@ -191,7 +196,7 @@ def sync_claim_statuses(association_id: int) -> dict:
             continue
 
         try:
-            new_status_raw = get_claim_status(claim.claim_id, association_id, api_key)
+            new_status_raw = provider.get_claim_status(claim.claim_id, bank_settings)
         except Exception as exc:
             logger.error(
                 "sync_claim_statuses: individual fetch failed for claim %s: %s",

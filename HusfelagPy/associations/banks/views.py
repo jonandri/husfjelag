@@ -315,11 +315,17 @@ class SendClaimView(APIView):
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
 
-        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        from associations.banks.dispatch import get_provider
+        from associations.banks.landsbankinn import _last_day_of_month
         try:
-            api_response = create_claim(collection, bank_settings)
+            provider = get_provider(bank_settings)
+            api_response = provider.create_claim(collection, bank_settings)
         except requests.HTTPError as exc:
-            detail = _parse_landsbankinn_error(exc)
+            detail = (
+                _parse_landsbankinn_error(exc)
+                if bank_settings.bank == BankProvider.LANDSBANKINN
+                else str(exc)
+            )
             logger.error(
                 "SendClaimView: Landsbankinn error for collection %s: %s — %s",
                 collection_id, exc.response.status_code if exc.response is not None else "?", detail,
@@ -398,7 +404,9 @@ class SendAllClaimsView(APIView):
             .exclude(bank_claim__isnull=False)
         )
 
-        from associations.banks.landsbankinn import create_claim, _last_day_of_month
+        from associations.banks.dispatch import get_provider
+        from associations.banks.landsbankinn import _last_day_of_month
+        provider = get_provider(bank_settings)
         sent = 0
         skipped = 0
         errors = []
@@ -409,9 +417,13 @@ class SendAllClaimsView(APIView):
                 continue
 
             try:
-                api_response = create_claim(collection, bank_settings)
+                api_response = provider.create_claim(collection, bank_settings)
             except requests.HTTPError as exc:
-                detail = _parse_landsbankinn_error(exc)
+                detail = (
+                    _parse_landsbankinn_error(exc)
+                    if bank_settings.bank == BankProvider.LANDSBANKINN
+                    else str(exc)
+                )
                 logger.error(
                     "SendAllClaimsView: Landsbankinn error for apt %s (assoc %s): %s",
                     collection.apartment.anr, association_id, detail,
@@ -762,7 +774,7 @@ class IncomingClaimsView(APIView):
 
     def get(self, request, association_id):
         from datetime import date, timedelta
-        from associations.banks.landsbankinn import fetch_incoming_claims
+        from associations.banks.dispatch import get_provider
 
         try:
             association = Association.objects.get(id=association_id)
@@ -789,7 +801,8 @@ class IncomingClaimsView(APIView):
             due_date_from = year_ago
 
         try:
-            claims = fetch_incoming_claims(association.id, settings.get_api_key(), association.ssn, due_date_from)
+            provider = get_provider(settings)
+            claims = provider.fetch_incoming_claims(association, settings, due_date_from)
             return Response({"claims": claims, "configured": True})
         except Exception as exc:
             logger.exception("fetch_incoming_claims failed for association %s", association_id)
