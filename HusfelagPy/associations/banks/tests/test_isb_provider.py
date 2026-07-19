@@ -63,24 +63,20 @@ def test_list_claims_normalizes_rows():
 
 
 @pytest.mark.django_db
-def test_create_claim_persists_bankclaim():
+def test_create_claim_returns_id_without_persisting(django_user_model):
     from associations.models import Budget, Apartment, Collection, BankClaim
     from users.models import User
+    from decimal import Decimal
     a = Association.objects.create(ssn="1000000000", name="I", address="A", postal_code="101", city="Rvk")
     bs = AssociationBankSettings.objects.create(association=a, bank="islandsbanki", isb_username="u", isb_claim_account="0133-66-000001")
     payer = User.objects.create(kennitala="2345678901", name="Payer")
     budget = Budget.objects.create(association=a, year=2026)
     apt = Apartment.objects.create(association=a, anr="01", fnr="F1")
-    coll = Collection.objects.create(
-        budget=budget, apartment=apt, payer=payer, month=7,
-        amount_shared=Decimal("15000.00"), amount_equal=Decimal("0.00"), amount_total=Decimal("15000.00"),
-    )
+    coll = Collection.objects.create(budget=budget, apartment=apt, payer=payer, month=7,
+                                     amount_total=Decimal("15000.00"), amount_shared=Decimal("15000.00"), amount_equal=Decimal("0.00"))
     with patch("associations.banks.islandsbanki.isb_soap.invoke", return_value=None) as inv:
         out = IslandsbankiProvider().create_claim(coll, bs)
     assert inv.call_args.args[1] == "krofur" and inv.call_args.args[2] == "StofnaKrofu"
-    bc = BankClaim.objects.get(collection=coll)
-    expected_key = f"133:66:{coll.id}:2026-07-31"
-    assert bc.claim_id == expected_key
-    assert bc.payor_national_id == "2345678901" and bc.amount == Decimal("15000.00")
-    assert bc.due_date.isoformat() == "2026-07-31"
-    assert out["claim_id"] == expected_key
+    assert inv.call_args.kwargs["krafa"]["Krofunumer"] == coll.id
+    assert out == {"id": f"133:66:{coll.id}:2026-07-31"}
+    assert not BankClaim.objects.filter(collection=coll).exists()   # provider does not persist; the view does

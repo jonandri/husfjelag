@@ -11,6 +11,7 @@ from django.utils.timezone import now as tz_now
 logger = logging.getLogger(__name__)
 
 import requests
+import zeep.exceptions
 
 from associations.models import (
     Association, AssociationAccess, AssociationRole,
@@ -328,7 +329,7 @@ class SendClaimView(APIView):
         try:
             provider = get_provider(bank_settings)
             api_response = provider.create_claim(collection, bank_settings)
-        except requests.HTTPError as exc:
+        except (requests.HTTPError, zeep.exceptions.Fault) as exc:
             detail = (
                 _parse_landsbankinn_error(exc)
                 if bank_settings.bank == BankProvider.LANDSBANKINN
@@ -336,7 +337,7 @@ class SendClaimView(APIView):
             )
             logger.error(
                 "SendClaimView: Landsbankinn error for collection %s: %s — %s",
-                collection_id, exc.response.status_code if exc.response is not None else "?", detail,
+                collection_id, exc.response.status_code if getattr(exc, "response", None) is not None else "?", detail,
             )
             bugsnag.notify(exc, context="send_claim", extra_data={"collection_id": collection_id, "detail": detail})
             return Response({"detail": detail}, status=status.HTTP_502_BAD_GATEWAY)
@@ -426,7 +427,7 @@ class SendAllClaimsView(APIView):
 
             try:
                 api_response = provider.create_claim(collection, bank_settings)
-            except requests.HTTPError as exc:
+            except (requests.HTTPError, zeep.exceptions.Fault) as exc:
                 detail = (
                     _parse_landsbankinn_error(exc)
                     if bank_settings.bank == BankProvider.LANDSBANKINN

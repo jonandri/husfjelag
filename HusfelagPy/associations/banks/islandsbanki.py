@@ -38,29 +38,13 @@ class IslandsbankiProvider(BankProvider):
         return {"created": created, "skipped": skipped}
 
     def create_claim(self, collection, settings) -> dict:
-        from associations.models import BankClaim
-        from django.utils.timezone import now
         payload = isb_mappers.build_stofnakrofu_payload(collection, settings)
-        # StofnaKrofu wraps all Krafa fields in a single complex `krafa` param (confirmed
-        # against krofur.wsdl: <s:element name="krafa" type="s0:Krafa"/>), unlike the
-        # flattened kwargs used by SaekjaKrofu/SaekjaKrofur/SaekjaReikningsyfirlit.
-        # The response body is empty (StofnaKrofuResponse has no fields) — success = no SOAP fault.
-        response = isb_soap.invoke(settings, "krofur", "StofnaKrofu", krafa=payload)
+        # StofnaKrofu takes a single complex `krafa` param; empty response = success (no SOAP fault).
+        isb_soap.invoke(settings, "krofur", "StofnaKrofu", krafa=payload)
         claim_key = isb_mappers.build_claim_key(
             payload["Bankanumer"], payload["Hofudbok"], payload["Krofunumer"], payload["Gjalddagi"][:10]
         )
-        BankClaim.objects.update_or_create(
-            collection=collection,
-            defaults={
-                "claim_id": claim_key,
-                "payor_national_id": payload["KennitalaGreidanda"],
-                "amount": collection.amount_total,
-                "due_date": isb_mappers.parse_claim_key(claim_key)[3],   # (banki, hofudbok, krofunumer, DATE)
-                "status": "UNPAID",
-                "sent_at": now(),
-            },
-        )
-        return {"claim_id": claim_key, "raw": response}
+        return {"id": claim_key}
 
     def get_claim_status(self, claim_id, settings) -> str:
         banki, hofudbok, krofunumer, gjalddagi = isb_mappers.parse_claim_key(claim_id)
