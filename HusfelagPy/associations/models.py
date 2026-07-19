@@ -399,6 +399,9 @@ class AssociationBankSettings(models.Model):
     )
     api_key     = models.TextField(blank=True)  # Fernet-encrypted per-association Landsbankinn client_id
     template_id = models.CharField(max_length=64, blank=True)   # Landsbankinn claims template
+    isb_username      = models.CharField(max_length=64, blank=True)   # WS-Security UsernameToken user
+    isb_password      = models.TextField(blank=True)                  # Fernet-encrypted
+    isb_claim_account = models.CharField(max_length=32, blank=True)   # claimant collection account (ledger 66)
     claim_mode  = models.CharField(
         max_length=16, choices=ClaimMode.choices, default=ClaimMode.DIRECT_API
     )
@@ -419,6 +422,14 @@ class AssociationBankSettings(models.Model):
 
     def set_api_key(self, plaintext: str) -> None:
         self.api_key = _get_fernet().encrypt(plaintext.encode()).decode() if plaintext else ""
+
+    def get_isb_password(self) -> str:
+        if not self.isb_password:
+            return ""
+        return _get_fernet().decrypt(self.isb_password.encode()).decode()
+
+    def set_isb_password(self, plaintext: str) -> None:
+        self.isb_password = _get_fernet().encrypt(plaintext.encode()).decode() if plaintext else ""
 
 
 class BankClaimStatus(models.TextChoices):
