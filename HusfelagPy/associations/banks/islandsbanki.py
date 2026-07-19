@@ -7,16 +7,21 @@ from associations.banks import isb_mappers
 class IslandsbankiProvider(BankProvider):
     def discover_and_sync_accounts(self, association, settings) -> dict:
         from associations.models import BankAccount
-        checked = ok = 0
         today = date.today()
-        for acc in BankAccount.objects.filter(association=association, is_connected=True):
-            checked += 1
+        connected = disconnected = 0
+        for acc in BankAccount.objects.filter(association=association, deleted=False):
             try:
-                self.sync_account_transactions(acc, today, today, settings)
-                ok += 1
+                self.sync_account_transactions(acc, today, today, settings)   # validating probe
+                if not acc.is_connected:
+                    acc.is_connected = True
+                    acc.save(update_fields=["is_connected"])
+                connected += 1
             except Exception:
-                pass
-        return {"created": 0, "connected": ok, "disconnected": checked - ok}
+                if acc.is_connected:
+                    acc.is_connected = False
+                    acc.save(update_fields=["is_connected"])
+                disconnected += 1
+        return {"created": 0, "connected": connected, "disconnected": disconnected}
 
     def sync_account_transactions(self, account, from_date: date, to_date: date, settings) -> dict:
         from associations.models import Transaction, TransactionSource

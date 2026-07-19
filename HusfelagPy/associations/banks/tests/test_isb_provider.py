@@ -29,16 +29,25 @@ def test_sync_creates_and_dedupes_transactions():
 
 
 @pytest.mark.django_db
-def test_discover_and_sync_accounts_validates_connected_accounts():
-    a = Association.objects.create(ssn="1000000001", name="I2", address="A", postal_code="101", city="Rvk")
+def test_discover_connects_valid_and_disconnects_invalid_isb_accounts():
+    from associations.models import BankAccount
+    a = Association.objects.create(ssn="1000000005", name="I", address="A", postal_code="101", city="Rvk")
     bs = AssociationBankSettings.objects.create(association=a, bank="islandsbanki", isb_username="u")
-    bs.set_isb_password("p"); bs.save()
-    BankAccount.objects.create(association=a, account_number="0133-26-000123", name="Aðal", is_connected=True)
+    good = BankAccount.objects.create(association=a, account_number="0133-26-000001", name="Good", is_connected=False)
+    bad  = BankAccount.objects.create(association=a, account_number="0133-26-000002", name="Bad", is_connected=True)
 
-    with patch.object(IslandsbankiProvider, "sync_account_transactions", return_value={"created": 0, "skipped": 0}):
+    def fake_sync(account, from_date, to_date, settings):
+        if account.account_number.endswith("000002"):
+            raise RuntimeError("bank rejected")
+        return {"created": 0, "skipped": 0}
+
+    with patch.object(IslandsbankiProvider, "sync_account_transactions", side_effect=fake_sync):
         result = IslandsbankiProvider().discover_and_sync_accounts(a, bs)
 
-    assert result == {"created": 0, "connected": 1, "disconnected": 0}
+    good.refresh_from_db(); bad.refresh_from_db()
+    assert good.is_connected is True      # manual account validated → connected
+    assert bad.is_connected is False      # failing account → disconnected
+    assert result == {"created": 0, "connected": 1, "disconnected": 1}
 
 
 @pytest.mark.django_db

@@ -21,7 +21,7 @@ def sync_transactions(association_id: int) -> dict:
     - to_date = today
     Updates AssociationBankSettings.last_sync_at on success.
     """
-    from associations.models import Association, AssociationBankSettings, BankAccount, Transaction
+    from associations.models import Association, AssociationBankSettings, BankAccount, BankProvider, Transaction
 
     try:
         association = Association.objects.get(id=association_id)
@@ -34,9 +34,12 @@ def sync_transactions(association_id: int) -> dict:
     except AssociationBankSettings.DoesNotExist:
         return {"skipped": True, "reason": "bank_not_configured"}
 
-    api_key = bank_settings.get_api_key()
-    if not api_key:
-        return {"skipped": True, "reason": "api_key_missing"}
+    if bank_settings.bank == BankProvider.LANDSBANKINN:
+        if not bank_settings.get_api_key():
+            return {"skipped": True, "reason": "api_key_missing"}
+    elif bank_settings.bank == BankProvider.ISLANDSBANKI:
+        if not (bank_settings.isb_username and bank_settings.isb_password):
+            return {"skipped": True, "reason": "isb_credentials_missing"}
 
     provider = get_provider(bank_settings)
 
