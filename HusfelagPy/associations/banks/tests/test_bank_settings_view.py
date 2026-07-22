@@ -91,3 +91,31 @@ def test_post_islandsbanki_settings_sets_creds(chair_client, association, chair_
     assert data["isb_username"] == "svc"
     assert data["isb_password_set"] is True
     assert data["isb_claim_account"] == "0133-66-000001"
+
+
+@pytest.mark.django_db
+def test_post_partial_update_does_not_clobber_bank(chair_client, association, chair_access):
+    """Saving ISB credentials WITHOUT a `bank` field (as the frontend does) must not
+    reset the association's bank back to the landsbankinn default."""
+    # Select Íslandsbanki first
+    chair_client.post(
+        f"/associations/{association.id}/bank/settings",
+        data=json.dumps({"bank": "islandsbanki"}),
+        content_type="application/json",
+    )
+    # Then save credentials with NO bank in the body
+    resp = chair_client.post(
+        f"/associations/{association.id}/bank/settings",
+        data=json.dumps({
+            "isb_username": "svc",
+            "isb_password": "pw",
+            "isb_claim_account": "0133-66-000001",
+        }),
+        content_type="application/json",
+    )
+    assert resp.status_code == 200
+    assert resp.json()["bank"] == "islandsbanki"       # not clobbered to landsbankinn
+    from associations.models import AssociationBankSettings
+    bs = AssociationBankSettings.objects.get(association=association)
+    assert bs.bank == "islandsbanki"
+    assert bs.isb_username == "svc" and bs.get_isb_password() == "pw"

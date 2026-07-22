@@ -232,14 +232,17 @@ class AssociationBankSettingsView(APIView):
         if err:
             return err
 
-        bank = request.data.get("bank", BankProvider.LANDSBANKINN).strip()
-        if bank not in BankProvider.values:
-            return Response(
-                {"detail": f"Ógildur banki. Veldu: {', '.join(BankProvider.values)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        defaults = {"bank": bank}
+        # Only set `bank` when explicitly provided — partial updates (saving
+        # credentials, template, or claim_mode) must NOT reset it to the default.
+        defaults = {}
+        if "bank" in request.data:
+            bank = request.data["bank"].strip()
+            if bank not in BankProvider.values:
+                return Response(
+                    {"detail": f"Ógildur banki. Veldu: {', '.join(BankProvider.values)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            defaults["bank"] = bank
         if "template_id" in request.data:
             defaults["template_id"] = request.data["template_id"].strip()
         if "claim_mode" in request.data:
