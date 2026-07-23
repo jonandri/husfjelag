@@ -166,7 +166,7 @@ This project is built for the Icelandic market.
 
 - **Kennitala** — 10-digit national ID number, used as the primary identifier for both users and building associations
 - **Auðkennisappið** — Icelandic government authentication app (login method 1, planned)
-- **Búnaðarskilríki** — mTLS client certificate used by Digit ehf. to authenticate against Landsbankinn
+- **Búnaðarskilríki** — X.509 client certificate used by Digit ehf. for bank connections: mTLS transport auth to Landsbankinn, and WS-Security message signing to Íslandsbanki
 
 ## Development with Claude
 

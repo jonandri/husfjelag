@@ -64,17 +64,23 @@ Services used by the Húsfjelag platform. Update costs and documentation links a
 
 Used to sync transactions and send payment claims (innheimta) to owners' bank accounts.
 
+Routing is by `AssociationBankSettings.bank` via `associations/banks/dispatch.py:get_provider()`; each bank implements `provider_base.py:BankProvider`.
+
 ### Landsbankinn
+
+**Protocol:** REST/JSON — mTLS `client_credentials` + `apikey` header. Auto-discovers accounts.
 
 **Documentation:** https://developers.landsbankinn.is/
 
-**Used in:** `associations/banks/landsbankinn.py`
+**Used in:** `associations/banks/landsbankinn.py` (+ `landsbankinn_provider.py` wrapper)
 
 ### Íslandsbanki
 
-**Documentation:** TBD
+**Protocol:** SOAP/XML via `zeep` + `xmlsec` — WS-Security `UsernameToken` (per-association `isb_username`/`isb_password`) + X.509 message signing with the shared `BUNADARSKILRIKI` PFX. Proprietary `yfirlit` (statements: `SaekjaReikningsyfirlit`) + `krofur` (claims: `StofnaKrofu`/`SaekjaKrofu`/`SaekjaKrofur`) services. No account auto-discovery (manual entry).
 
-**Used in:** `associations/banks/islandsbanki.py`
+**WSDLs:** `{BANK_ISLANDSBANKI_BASE}wsdl/yfirlit.wsdl`, `{...}wsdl/krofur.wsdl` — TEST `https://ws-test.isb.is/adgerdirv1/`, PROD `https://ws.isb.is/adgerdirv1/`. Note the WSDL's `soap:address` points at prod, so the endpoint is overridden in code.
+
+**Used in:** `associations/banks/islandsbanki.py`, `isb_soap.py`, `isb_mappers.py`
 
 ### Arion
 
