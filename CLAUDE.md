@@ -93,7 +93,7 @@ All backend commands in local dev must be wrapped: `doppler run -- poetry run py
 - `TermsAcceptance` — one-to-one with User; created once when user accepts terms; fields: kennitala, name (denormalised for audit durability), accepted_at, ip_address. Never updated.
 - `AuditLog` — append-only event log; fields: created_at, user (FK, SET_NULL), association (FK, SET_NULL, nullable), action (choice), value (str). Actions: `login`, `chair_changed`, `cfo_changed`, `association_new`, `budget_new`, `owner_new`.
 - `BankProvider(TextChoices)` — `LANDSBANKINN`, `ISLANDSBANKI`, `ARION`
-- `AssociationBankSettings` — one-to-one with Association; fields: `bank` (BankProvider choice), `api_key` (per-association Landsbankinn client ID), `template_id`, `last_sync_at` (updated after each successful transaction sync), `created_at`, `updated_at`
+- `AssociationBankSettings` — one-to-one with Association; fields: `bank` (BankProvider choice), `claim_mode` (`ClaimMode`: DIRECT_API = system creates claims / BANK_SERVICE = bank's húsfélagaþjónusta handles collection), `api_key` (per-association Landsbankinn client ID, Fernet), `template_id` (Landsbankinn claims template **and** Íslandsbanki `Auðkenni`), `isb_username` / `isb_password` (Íslandsbanki WS-Security creds, password Fernet-encrypted), `isb_bank_number` (Íslandsbanki `Bankanumer`, e.g. "0500"), `last_sync_at`, `created_at`, `updated_at`. Helpers: `get/set_api_key`, `get/set_isb_password`.
 - `BankTokenCache` — cached OAuth tokens per `(bank, client_id)` unique pair; tokens stored Fernet-encrypted; `expires_at` used to avoid refreshing valid tokens (60 s early-expiry buffer)
 - `AssociationEvent` — calendar event/task for an association (annual meeting, statement, budget prep, collection, other). Fields: `title`, `description`, `event_type` (`EventType`: MEETING/STATEMENT/BUDGET/COLLECTION/OTHER), `event_date`, `event_time` (nullable), `visibility` (`EventVisibility`: ALL/BOARD), `reminder_days` (nullable; email N days before), `reminder_sent_at` (nullable; set once a reminder fires), `created_by` (FK User, SET_NULL), `created_at`, `deleted` (soft-delete). Defaults are seeded per association on creation (`associations/events.py:seed_default_events`); existing associations backfilled by migration `0036`.
 
@@ -237,6 +237,18 @@ Note: components live in `src/controlers/` (intentional misspelling).
 - `get_access_token(api_key: str) -> str` — api_key is required; tokens cached per `(bank, client_id)` in `BankTokenCache`; refreshed 60 s before expiry
 - All `_get`, `_post`, `sync_account_transactions`, `get_claim_status` require `api_key` as explicit arg
 - Each association supplies its own `api_key` via `AssociationBankSettings.api_key` — no global fallback key
+
+**Bank provider dispatch (`associations/banks/`):**
+- `provider_base.py:BankProvider` (ABC) + `dispatch.py:get_provider(settings) -> BankProvider` route views/tasks by `settings.bank`. `LandsbankinnProvider` wraps the existing REST module; `IslandsbankiProvider` is SOAP. Every provider method takes the `AssociationBankSettings` object.
+- **Landsbankinn** = REST/JSON (mTLS `client_credentials` + `apikey` header); auto-discovers accounts.
+- **Íslandsbanki** = SOAP/XML via `zeep` + `xmlsec` (`isb_soap.py`): WS-Security `UsernameToken` (per-association `isb_username`/`isb_password`) **+** X.509 message signing with the shared `BUNADARSKILRIKI` PFX. Proprietary `yfirlit`/`krofur` services. Key gotchas baked into `isb_soap.py`: the `<wsse:BinarySecurityToken>` is moved before `<ds:Signature>` in `apply()`; a `WsseBundle` wraps the two handlers; the endpoint is overridden via `create_service` because the WSDL's `soap:address` points at prod. Never log the outgoing envelope (cleartext password). No account auto-discovery → accounts entered manually.
+  - **Transaction sync** — `SaekjaReikningsyfirlit`; dedup on a composite `external_id` hash (no bank-provided tx id).
+  - **Claims** — create via `StofnaKrofu` (caller-assigned `Krofunumer` = `Collection.id`, `Bankanumer` = `isb_bank_number`, `Auðkenni` = `template_id`, `Hofudbok`=66, fees zeroed; empty response = success). `create_claim` returns `{"id": <claimKey>}` and the **view** persists `BankClaim` (same contract as Landsbankinn); claim key = `"{banki}:66:{krofunumer}:{gjalddagi}"`. Retrieve/status via `SaekjaKrofu`/`SaekjaKrofur`.
+- **Env vars:** `BANK_ISLANDSBANKI_BASE` (single host for WSDL + `.asmx` endpoints; TEST `ws-test.isb.is`, PROD set to `https://ws.isb.is/adgerdirv1/`), `BANK_ISLANDSBANKI_EMAIL` (húsfélagaþjónusta inbox for BANK_SERVICE budget email; PROD `husfelag@islandsbanki.is`). Signing reuses `BUNADARSKILRIKI`.
+
+**Claim mode (`ClaimMode`, per association):**
+- `DIRECT_API` — the system creates claims through the bank's API each month (needs Landsbankinn `template_id`, or Íslandsbanki `template_id`+`isb_bank_number`).
+- `BANK_SERVICE` — the bank's húsfélagaþjónusta handles collection; the association emails its budget to the bank inbox (`NotifyBudgetView`/`SendBudgetOverviewView`, per-bank `BANK_*_EMAIL`). No claims sent from the system.
 
 **Audit log:** `AuditLog.objects.create(user=..., association=..., action=..., value=...)` — call directly at event sites. `association` is nullable (login events have no association context). `value` carries event-specific data: kennitala for role changes, association SSN for new associations, budget ID for new budgets, `"{apartment_id}:{kennitala}"` for new owners.
 

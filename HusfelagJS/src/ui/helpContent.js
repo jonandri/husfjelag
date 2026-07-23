@@ -91,31 +91,39 @@ export const HELP = {
 
     'bank-settings': {
         title: 'Bankastillingar',
-        intro: 'Hér tengir þú húsfélagið við Landsbankann. Tengingin leyfir kerfinu að sækja bankafærslur sjálfkrafa og, eftir innheimtuaðferð, senda eða tilkynna um mánaðarlegar húsgjaldakröfur.',
+        intro: 'Hér tengir þú húsfélagið við bankann sinn. Kerfið styður Landsbankann og Íslandsbanka. Tengingin leyfir kerfinu að sækja bankafærslur sjálfkrafa og, eftir innheimtuaðferð, að senda innheimtukröfur beint eða tilkynna bankanum um mánaðarleg húsgjöld.',
         items: [
             {
-                heading: 'API lykill',
-                body: 'API lykillinn er gefinn út af Landsbankanum og auðkennir húsfélagið þitt í samskiptum við bankann. Til að fá lykilinn þarft þú að fylla út umsóknareyðublað Landsbankans og senda það á ft@landsbankinn.is. Kerfið notar lykillinn eingöngu til að lesa bankafærslur — engar millifærslur eða breytingar á reikningum eru mögulegar.',
+                heading: 'Veldu banka',
+                body: 'Byrjaðu á að velja bankann sem húsfélagið er í viðskiptum við — Landsbankann eða Íslandsbanka. Uppsetningin er örlítið ólík eftir banka, en innheimtuvalkostirnir eru þeir sömu. Þú getur skipt um banka síðar með „Velja annan banka".',
+            },
+            {
+                heading: 'Landsbankinn — API lykill',
+                body: 'API lykillinn er gefinn út af Landsbankanum og auðkennir húsfélagið í samskiptum við bankann. Til að fá lykilinn fyllir þú út umsóknareyðublað Landsbankans og sendir það á ft@landsbankinn.is. Kerfið notar lykilinn eingöngu til að lesa bankafærslur — engar millifærslur eru mögulegar. Landsbankinn finnur bankareikninga húsfélagsins sjálfkrafa.',
+            },
+            {
+                heading: 'Íslandsbanki — innskráning',
+                body: 'Fyrir Íslandsbanka skráir þú notandanafn og lykilorð húsfélagsins að vefþjónustu Íslandsbanka (fást hjá bankanum). Þegar innskráningin er vistuð hefst samstilling sjálfkrafa. Ólíkt Landsbankanum þarf að skrá bankareikninga handvirkt (undir „Bankareikningar" á yfirlitssíðu húsfélagsins) þar sem Íslandsbanki styður ekki sjálfvirka leit að reikningum.',
             },
             {
                 heading: 'Innheimtuaðferð',
-                body: 'Þú velur á milli tveggja leiða til að innheimta húsgjöld í gegnum Landsbankann.',
+                body: 'Óháð banka velur þú á milli tveggja leiða til að innheimta húsgjöld: að kerfið stofni kröfurnar sjálft, eða að bankinn sjái um innheimtuna.',
             },
             {
                 heading: 'Stofna innheimtukröfur frá husfjelag.is',
-                body: 'Kerfið sendir kröfur beint í gegnum Landsbankinn API í hverjum mánuði. Þetta krefst þess að þú stofnir innheimtusniðmát í Netbankanum og skráir auðkenni þess hér. Þegar kröfur eru sendar fær greiðandinn tilkynningu frá Landsbankanum og getur greitt í Netbankanum eða með greiðsluseðli.',
+                body: 'Kerfið sendir kröfur beint í gegnum vefþjónustu bankans í hverjum mánuði. Greiðandinn fær tilkynningu frá bankanum og getur greitt í netbanka eða með greiðsluseðli. Þetta krefst þess að þú skráir innheimtusniðmát (sjá að neðan).',
             },
             {
                 heading: 'Nota húsfélagaþjónustu bankans',
-                body: 'Landsbankinn sér um alla innheimtu á vegum húsfélagsins. Þegar áætlun er virkjuð sendir þú hana til Landsbankans með einum hnappi — bankinn stofnar svo greiðsluseðla og sendir þá til eigenda mánaðarlega. Þú þarft ekki innheimtusniðmát og kröfur eru ekki sendar beint úr kerfinu.',
+                body: 'Bankinn sér um alla innheimtu á vegum húsfélagsins. Þegar áætlun er virkjuð sendir þú hana til bankans með einum hnappi — bankinn stofnar svo greiðsluseðla og sendir þá til eigenda mánaðarlega. Þú þarft ekki innheimtusniðmát og kröfur eru ekki sendar beint úr kerfinu.',
             },
             {
                 heading: 'Innheimtusniðmát',
-                body: 'Krafist er ef þú velur beinan API-ham. Stofnaðu sniðmát í Netbanka Landsbankans undir „Innheimta" og sláðu inn auðkennið (t.d. A37) hér. Sniðmátið skilgreinir skilmála kröfunnar, þar á meðal seinkanagjöld og fresti.',
+                body: 'Krafist ef þú velur að kerfið stofni kröfurnar. Hjá Landsbankanum stofnar þú sniðmát í Netbanka Landsbankans undir „Innheimta" og slærð inn auðkenni þess (t.d. A37). Hjá Íslandsbanka slærð þú inn auðkennið (t.d. IBB) sem bankinn úthlutar við skráningu kröfuhafa, ásamt bankanúmeri innheimtureikningsins (t.d. 0500). Auðkennið segir til um hvaða reikning greiðslur eiga að renna á.',
             },
             {
                 heading: 'Sjálfvirk samstilling',
-                body: 'Þegar lykillinn er stilltur sækir kerfið bankafærslur sjálfkrafa á hverju kvöldi. Þú getur einnig ýtt á „Samstilla núna" til að sækja færslur strax. Nýjar færslur birtast undir Færslur og eru sjálfkrafa paraðar við innheimtukröfur þar sem mögulegt er.',
+                body: 'Þegar tengingin er stillt sækir kerfið bankafærslur sjálfkrafa á hverju kvöldi. Þú getur einnig ýtt á „Samstilla núna" til að sækja strax. Nýjar færslur birtast undir Færslur og eru sjálfkrafa paraðar við innheimtukröfur þar sem mögulegt er. „Staða tengingar" sýnir hvenær síðast var samstillt.',
             },
         ],
     },
