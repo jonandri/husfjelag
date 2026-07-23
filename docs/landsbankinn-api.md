@@ -325,70 +325,66 @@ Returned fields per claim: `id`, `claimantName`, `dueDate`, `totalAmountDue` (or
 
 ---
 
-## How to Add the Next Bank
+## How to Add the Next Bank (e.g. Arion)
 
-Adding support for a new bank (Íslandsbanki, Arion, or other) follows this pattern:
+Banks route through a **provider dispatch layer** — `associations/banks/dispatch.py:get_provider(settings)` returns the right `provider_base.py:BankProvider` implementation based on `settings.bank`. Landsbankinn (REST) and Íslandsbanki (SOAP) each implement that interface; use whichever is the closer template for the new bank. Arion is already stubbed: `arion.py:ArionProvider` subclasses the ABC with every method raising `NotImplementedError`, and `BankProvider.ARION` already exists — so the wiring below is mostly filling in bodies.
 
-### 1. Backend module
+### The `BankProvider` interface (`provider_base.py`)
 
-Create `HusfelagPy/associations/banks/<bankname>.py` mirroring the structure of `landsbankinn.py`:
-
-- `BANK = "BANKNAME"` constant (must match the `BankProvider` value).
-- `get_access_token(association_id, api_key) -> str` — handles whatever auth the bank uses (OAuth, API key header, session, etc.). Cache tokens in `BankTokenCache` using the same `(BANK, association_id)` unique key and Fernet encryption.
-- `_get(path, association_id, api_key, **params) -> dict` — authenticated GET.
-- `_post(path, association_id, api_key, body) -> dict` — authenticated POST.
-- `discover_and_sync_accounts(association, api_key) -> dict` — creates/updates `BankAccount` rows. Must convert the bank's account format to our `XXXX-XX-XXXXXX` format.
-- `sync_account_transactions(account, from_date, to_date, api_key) -> dict` — fetches and upserts `Transaction` rows. Use the bank's transaction ID as `external_id` for deduplication.
-- `fetch_opening_balance(association_id, api_key, ...)` — optional; fetch Dec 31 balance for new accounts.
-- `create_claim(collection, settings_obj) -> dict` — only if the bank has a claims API.
-- `get_claim_status(claim_id, association_id, api_key) -> str` — only if the bank has claim polling.
-
-### 2. Add to `BankProvider`
-
-In `associations/models.py`:
-```python
-class BankProvider(models.TextChoices):
-    LANDSBANKINN = "landsbankinn", "Landsbankinn"
-    ISLANDSBANKI = "islandsbanki", "Íslandsbanki"   # ← add
-    ARION        = "arion",        "Arion"
-```
-
-No migration needed — `BankProvider` is just a TextChoices validator, not a DB-level constraint.
-
-### 3. Wire into tasks
-
-In `associations/banks/tasks.py`, `sync_transactions` and `sync_claim_statuses` currently import `landsbankinn` directly. Refactor to dispatch based on `bank_settings.bank`:
+Every method takes the `AssociationBankSettings` object as `settings` (so the provider pulls its own creds/cert):
 
 ```python
-if bank_settings.bank == BankProvider.LANDSBANKINN:
-    from associations.banks.landsbankinn import discover_and_sync_accounts, sync_account_transactions
-elif bank_settings.bank == BankProvider.ISLANDSBANKI:
-    from associations.banks.islandsbanki import discover_and_sync_accounts, sync_account_transactions
+class BankProvider(ABC):
+    def discover_and_sync_accounts(self, association, settings) -> dict: ...
+    def sync_account_transactions(self, account, from_date, to_date, settings) -> dict: ...   # {"created", "skipped"}
+    def create_claim(self, collection, settings) -> dict: ...          # returns {"id": <claim id>} — the VIEW persists BankClaim
+    def get_claim_status(self, claim_id, settings) -> str: ...         # lowercased status
+    def list_claims(self, association, settings, **filters) -> list[dict]: ...
+    def fetch_incoming_claims(self, association, settings, due_date_from) -> list[dict]: ...
 ```
 
-Or introduce a `get_bank_module(bank)` helper that returns the right module.
+Two provider styles already exist:
+- **`LandsbankinnProvider`** (`landsbankinn_provider.py`) is a thin wrapper adapting `settings` → the module functions in `landsbankinn.py` (REST + `BankTokenCache` OAuth tokens).
+- **`IslandsbankiProvider`** (`islandsbanki.py`) implements the methods directly over the SOAP seam (`isb_soap.py`) + pure mappers (`isb_mappers.py`); no token cache (WS-Security signs every call).
 
-### 4. Environment variables
+### 1. Implement the provider
 
-Add the bank-specific vars to `config/settings/base.py` and `.env.example`, following the `BANK_<BANKNAME>_*` naming convention.
+Fill in `arion.py:ArionProvider` (or create `<bank>_provider.py` + a client module if you prefer to keep transport separate, like Íslandsbanki). Whatever the transport (OAuth/REST, mTLS, SOAP), the six methods must honour the contracts above — especially: `create_claim` returns `{"id": <bank claim id>}` (the view persists the `BankClaim`, uniformly across banks), and `sync_account_transactions` returns `{"created", "skipped"}` deduping on a stable per-account `external_id` (use the bank's tx id, or a composite hash if it has none — see `isb_mappers.compute_external_id`).
 
-### 5. Frontend
+### 2. Register in dispatch
 
-In `BankSettingsPage.js`:
-- The `BANKS` array already lists Íslandsbanki and Arion — the picker is already there.
-- Replace the "not yet implemented" `Alert` in the `else` branch of the bank-specific setup section with the new bank's setup UI (API key input, any bank-specific fields).
+`BankProvider.ARION` already exists in `associations/models.py` (TextChoices — no migration). Add the branch in `dispatch.py:get_provider()`:
+```python
+if settings.bank == BankChoice.ARION:
+    return ArionProvider()
+```
 
-### 6. Credentials and certificate
+### 3. Bank-aware sync guard
 
-Each bank will have its own auth flow — check whether it requires:
-- mTLS (like Landsbankinn) — store certificate in Doppler, load via a `cert.py` module
-- API key only — store in `AssociationBankSettings.api_key` (Fernet-encrypted, same pattern)
-- OAuth client credentials without mTLS — token caching works the same way
+`tasks.py:sync_transactions` already routes through `get_provider(settings)`. Add a credential check to its bank-aware guard (mirrors Landsbankinn's `api_key` / Íslandsbanki's `isb_username`+`isb_password`); banks with no branch fall through to `{"skipped": True, "reason": "bank_not_supported"}`.
 
-### Key invariants to maintain across banks
+### 4. Model fields + migration
 
-- `api_key` on `AssociationBankSettings` is always Fernet-encrypted. Never store or log plaintext.
-- `BankTokenCache` is keyed by `(bank, association_id)` — one cached token per association per bank.
-- `external_id` on `Transaction` is globally unique per bank account — always check before inserting.
-- `is_connected` on `BankAccount` controls whether sync runs — always set it based on the bank's validity criteria (owner match + open status or equivalent).
-- Bugsnag `context` strings follow the pattern `"celery:sync_transactions"`, `"send_claim"` etc. — keep them consistent for searchability.
+Add any bank-specific credential/config fields to `AssociationBankSettings` (Fernet-encrypt secrets via `_get_fernet()`, with `get_/set_` helpers, like `isb_password`). Generate a migration. Then wire them into the bank-settings endpoint (`views.py` `AssociationBankSettingsView` GET/POST — accept + return them, **never echo secrets**).
+
+### 5. Environment variables
+
+Add `BANK_<BANK>_*` to `config/settings/base.py` and `.env.example`. If claim collection can be delegated to the bank (`BANK_SERVICE` mode), add the bank's inbox to the `_BANK_EMAIL_SETTING` map in `SendBudgetOverviewView` (and the branch in `NotifyBudgetView`).
+
+### 6. Frontend
+
+In `BankSettingsPage.js`, replace the "coming soon" `Alert` in the Arion branch with a real settings section. The Landsbankinn and Íslandsbanki branches are the templates (collapsible credential box, `Innheimtuaðferð` claim-mode radio, `Innheimtusniðmát`, `Staða tengingar`). Follow `docs/style.md`; keep `CI=true npm run build` warning-free.
+
+### 7. Credentials & certificate
+
+- mTLS transport (Landsbankinn) → `requests_pkcs12` with the shared `BUNADARSKILRIKI` PFX (`cert.load()`).
+- XML message signing (Íslandsbanki) → `cert.load_pem()` for the key/cert, `xmlsec` via `isb_soap.py`.
+- API key / OAuth → store per-association in `AssociationBankSettings` (Fernet-encrypted); cache tokens in `BankTokenCache` keyed by `(bank, association_id)` if the bank issues bearer tokens.
+
+### Key invariants across banks
+
+- Per-association secrets on `AssociationBankSettings` are always Fernet-encrypted; never store or log plaintext (and never log a SOAP envelope that carries a password).
+- `create_claim` returns `{"id": ...}`; the **view** persists the `BankClaim` — do not self-persist in the provider.
+- `external_id` on `Transaction` is unique per bank account — always check before inserting.
+- `is_connected` on `BankAccount` gates sync — set it from the bank's validity criteria (Landsbankinn: owner-match + open; Íslandsbanki: a validating probe on manually-added accounts).
+- Bugsnag `context` strings follow the `"celery:sync_transactions"` / `"send_claim"` pattern — keep them consistent for searchability.
